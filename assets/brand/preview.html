@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mechana Brand Assets</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #0D1117;
+      --panel: #141b24;
+      --border: #2b3644;
+      --text: #f7f8fa;
+      --muted: #9aa5b1;
+      --coral: #FF6B6F;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--ink);
+      color: var(--text);
+    }
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 48px 0 72px;
+    }
+    h1 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); }
+    .intro { color: var(--muted); margin: 8px 0 36px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+    .canvas {
+      display: grid;
+      place-items: center;
+      min-height: 260px;
+      padding: 28px;
+    }
+    .canvas.light { background: white; }
+    .canvas.dark { background: var(--ink); }
+    .canvas.checker {
+      background-color: #e7e9ed;
+      background-image:
+        linear-gradient(45deg, #d8dbe0 25%, transparent 25%),
+        linear-gradient(-45deg, #d8dbe0 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #d8dbe0 75%),
+        linear-gradient(-45deg, transparent 75%, #d8dbe0 75%);
+      background-size: 24px 24px;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+    }
+    img { max-width: 100%; height: auto; display: block; }
+    .mark { width: min(260px, 70%); }
+    .label {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .85rem;
+    }
+    .wide { grid-column: 1 / -1; }
+    @media (max-width: 760px) {
+      .grid { grid-template-columns: 1fr; }
+      .wide { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Mechana Brand Assets</h1>
+  <p class="intro">Canonical logo system · bold wordmark · no horizontal cross-piece</p>
+
+  <section class="grid">
+    <article class="card wide">
+      <div class="canvas dark">
+        <img src="mechana-lockup-horizontal-transparent-dark.svg" alt="Mechana horizontal logo on dark background">
+      </div>
+      <div class="label">mechana-lockup-horizontal-transparent-dark.svg</div>
+    </article>
+
+    <article class="card wide">
+      <div class="canvas light">
+        <img src="mechana-lockup-horizontal-transparent-light.svg" alt="Mechana horizontal logo on light background">
+      </div>
+      <div class="label">mechana-lockup-horizontal-transparent-light.svg</div>
+    </article>
+
+    <article class="card">
+      <div class="canvas dark">
+        <img class="mark" src="mechana-mark-color-dark.svg" alt="Mechana mark for dark backgrounds">
+      </div>
+      <div class="label">mechana-mark-color-dark.svg</div>
+    </article>
+
+    <article class="card">
+      <div class="canvas light">
+        <img class="mark" src="mechana-mark-color-light.svg" alt="Mechana mark for light backgrounds">
+      </div>
+      <div class="label">mechana-mark-color-light.svg</div>
+    </article>
+
+    <article class="card">
+      <div class="canvas light" style="color:#0D1117">
+        <img class="mark" src="mechana-mark-monochrome.svg" alt="Mechana monochrome mark">
+      </div>
+      <div class="label">mechana-mark-monochrome.svg</div>
+    </article>
+
+    <article class="card">
+      <div class="canvas checker">
+        <img class="mark" src="mechana-app-icon-dark.svg" alt="Mechana dark application icon">
+      </div>
+      <div class="label">mechana-app-icon-dark.svg</div>
+    </article>
+
+    <article class="card">
+      <div class="canvas dark">
+        <img class="mark" src="mechana-lockup-stacked-dark.svg" alt="Mechana stacked dark logo">
+      </div>
+      <div class="label">mechana-lockup-stacked-dark.svg</div>
+    </article>
+
+    <article class="card">
+      <div class="canvas light">
+        <img class="mark" src="mechana-lockup-stacked-light.svg" alt="Mechana stacked light logo">
+      </div>
+      <div class="label">mechana-lockup-stacked-light.svg</div>
+    </article>
+  </section>
+</main>
+</body>
+</html>

@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
-  <title id="title">Mechana mark</title>
-  <desc id="desc">A hexagon containing a three-node distributed execution symbol.</desc>
-  <rect x="0" y="0" width="256" height="256" rx="44" fill="#FFFFFF"/>
-  <path d="M128 18 L222 72.5 L222 181.5 L128 236 L34 181.5 L34 72.5 Z" fill="none" stroke="#FF6B6F" stroke-width="14" stroke-linejoin="round"/>
-  <path d="M128 84 L82 166" fill="none" stroke="#0D1117" stroke-width="10" stroke-linecap="round"/>
-  <path d="M128 84 L174 166" fill="none" stroke="#0D1117" stroke-width="10" stroke-linecap="round"/>
+  <title id="title">Mechana application icon</title>
+  <desc id="desc">The Mechana mark on a rounded square background.</desc>
+  <rect width="256" height="256" rx="44" fill="#FFFFFF"/>
+<path d="M128 18 L222 72.5 L222 181.5 L128 236 L34 181.5 L34 72.5 Z" fill="none" stroke="#FF6B6F" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M128 84 L82 166" fill="none" stroke="#0D1117" stroke-width="16" stroke-linecap="round"/>
+  <path d="M128 84 L174 166" fill="none" stroke="#0D1117" stroke-width="16" stroke-linecap="round"/>
   <circle cx="128" cy="76" r="18" fill="#FF6B6F"/>
   <circle cx="78" cy="172" r="17" fill="#0D1117"/>
   <circle cx="178" cy="172" r="17" fill="#0D1117"/>
