@@ -11,18 +11,51 @@
         content="Mechana is a plugin-driven distributed execution platform for Java."
     >
 
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Mechana">
+    <meta
+        property="og:description"
+        content="A plugin-driven distributed execution platform for Java."
+    >
+    <meta property="og:url" content="https://mechana.io">
+
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Mechana">
+    <meta
+        name="twitter:description"
+        content="A plugin-driven distributed execution platform for Java."
+    >
+
+    <link
+        rel="icon"
+        type="image/svg+xml"
+        href="/assets/brand/favicon.svg"
+    >
+
+    <link
+        rel="shortcut icon"
+        href="/assets/brand/favicon.svg"
+    >
+
     <style>
         :root {
             color-scheme: dark;
-            --background: #0b0f14;
-            --surface: #111821;
-            --surface-hover: #17212d;
-            --text: #f2f5f8;
-            --muted: #a9b4c0;
-            --border: #273342;
-            --accent: #e88f98;
-            --accent-strong: #f4a3aa;
-            --max-width: 1120px;
+
+            --background: #0d1117;
+            --surface: #141b24;
+            --surface-hover: #1a2430;
+            --surface-soft: rgba(20, 27, 36, 0.72);
+
+            --text: #f7f8fa;
+            --muted: #9aa5b1;
+
+            --border: #2b3644;
+
+            --accent: #ff6b6f;
+            --accent-hover: #ff7f82;
+            --accent-text: #180e10;
+
+            --max-width: 1160px;
         }
 
         * {
@@ -36,6 +69,7 @@
         body {
             margin: 0;
             min-height: 100vh;
+
             font-family:
                 Inter,
                 ui-sans-serif,
@@ -44,15 +78,21 @@
                 BlinkMacSystemFont,
                 "Segoe UI",
                 sans-serif;
+
+            color: var(--text);
             background:
                 radial-gradient(
-                    circle at 20% 10%,
-                    rgba(232, 143, 152, 0.12),
-                    transparent 32rem
+                    circle at 18% 8%,
+                    rgba(255, 107, 111, 0.12),
+                    transparent 34rem
                 ),
                 var(--background);
-            color: var(--text);
+
             line-height: 1.6;
+        }
+
+        img {
+            max-width: 100%;
         }
 
         a {
@@ -64,119 +104,143 @@
             margin-inline: auto;
         }
 
-        header {
+        .site-header {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+
             border-bottom: 1px solid var(--border);
-            background: rgba(11, 15, 20, 0.86);
+
+            background: rgba(13, 17, 23, 0.88);
             backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
         }
 
-        nav {
+        .navigation {
             min-height: 72px;
+
             display: flex;
             align-items: center;
             justify-content: space-between;
+
             gap: 2rem;
         }
 
         .brand {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 0.8rem;
+            gap: 0.75rem;
+
             text-decoration: none;
-            font-size: 1.15rem;
-            font-weight: 750;
+            font-weight: 800;
             letter-spacing: -0.02em;
         }
 
-        .mark {
-            width: 34px;
-            height: 34px;
-            display: grid;
-            place-items: center;
-            border: 1px solid rgba(232, 143, 152, 0.7);
-            border-radius: 9px;
-            background: rgba(232, 143, 152, 0.14);
-            color: var(--accent-strong);
-            font-weight: 850;
+        .brand-mark {
+            width: 38px;
+            height: 38px;
+            display: block;
+        }
+
+        .brand-name {
+            font-size: 1.1rem;
         }
 
         .nav-links {
             display: flex;
             align-items: center;
-            gap: 1.25rem;
+            gap: 1.35rem;
         }
 
         .nav-links a {
             color: var(--muted);
             text-decoration: none;
             font-size: 0.95rem;
+            font-weight: 600;
         }
 
-        .nav-links a:hover {
+        .nav-links a:hover,
+        .nav-links a:focus-visible {
             color: var(--text);
         }
 
         main {
-            padding: 7rem 0 5rem;
+            padding: 5.5rem 0 4rem;
         }
 
         .hero {
-            max-width: 800px;
+            max-width: 980px;
         }
 
-        .eyebrow {
+        .status {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 1.4rem;
-            padding: 0.4rem 0.75rem;
+            gap: 0.55rem;
+
+            margin-bottom: 2rem;
+            padding: 0.42rem 0.78rem;
+
             border: 1px solid var(--border);
             border-radius: 999px;
+
             color: var(--muted);
-            background: rgba(17, 24, 33, 0.72);
-            font-size: 0.85rem;
+            background: var(--surface-soft);
+
+            font-size: 0.86rem;
+            font-weight: 600;
         }
 
         .status-dot {
             width: 8px;
             height: 8px;
+
             border-radius: 50%;
+
             background: var(--accent);
-            box-shadow: 0 0 14px rgba(232, 143, 152, 0.65);
+            box-shadow: 0 0 14px rgba(255, 107, 111, 0.65);
         }
 
-        h1 {
+        .hero-logo {
+            display: block;
+
+            width: min(100%, 920px);
+            height: auto;
+
             margin: 0;
-            max-width: 760px;
-            font-size: clamp(3.2rem, 9vw, 6.8rem);
-            line-height: 0.96;
-            letter-spacing: -0.065em;
         }
 
-        .subtitle {
-            max-width: 720px;
+        .hero-copy {
+            max-width: 800px;
+
             margin: 2rem 0 0;
+
             color: var(--muted);
-            font-size: clamp(1.15rem, 2.4vw, 1.5rem);
+            font-size: clamp(1.1rem, 2.2vw, 1.45rem);
         }
 
         .actions {
             display: flex;
             flex-wrap: wrap;
             gap: 0.9rem;
-            margin-top: 2.25rem;
+
+            margin-top: 2.4rem;
         }
 
         .button {
+            min-height: 48px;
+
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-height: 48px;
-            padding: 0.75rem 1.1rem;
+
+            padding: 0.75rem 1.15rem;
+
             border: 1px solid var(--border);
             border-radius: 9px;
+
             text-decoration: none;
-            font-weight: 700;
+            font-weight: 750;
+
             transition:
                 transform 140ms ease,
                 background 140ms ease,
@@ -188,41 +252,65 @@
         }
 
         .button-primary {
+            color: var(--accent-text);
             background: var(--accent);
             border-color: var(--accent);
-            color: #171013;
         }
 
         .button-primary:hover {
-            background: var(--accent-strong);
+            background: var(--accent-hover);
+            border-color: var(--accent-hover);
         }
 
         .button-secondary {
+            color: var(--text);
             background: var(--surface);
         }
 
         .button-secondary:hover {
             background: var(--surface-hover);
-            border-color: #3a495b;
+            border-color: #3c4b5e;
         }
 
         .features {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 1rem;
+
             margin-top: 6rem;
         }
 
         .feature {
-            padding: 1.4rem;
+            padding: 1.45rem;
+
             border: 1px solid var(--border);
-            border-radius: 12px;
-            background: rgba(17, 24, 33, 0.68);
+            border-radius: 13px;
+
+            background: var(--surface-soft);
+        }
+
+        .feature-number {
+            display: inline-block;
+
+            margin-bottom: 0.9rem;
+
+            color: var(--accent);
+
+            font-family:
+                ui-monospace,
+                SFMono-Regular,
+                Menlo,
+                Monaco,
+                Consolas,
+                monospace;
+
+            font-size: 0.82rem;
+            font-weight: 800;
         }
 
         .feature h2 {
-            margin: 0 0 0.6rem;
-            font-size: 1rem;
+            margin: 0 0 0.65rem;
+            font-size: 1.05rem;
         }
 
         .feature p {
@@ -234,14 +322,21 @@
         .architecture {
             margin-top: 5rem;
             padding: 2rem;
+
             border: 1px solid var(--border);
             border-radius: 14px;
+
             background: var(--surface);
         }
 
         .architecture h2 {
-            margin-top: 0;
+            margin: 0 0 0.5rem;
             font-size: 1.35rem;
+        }
+
+        .architecture-copy {
+            margin: 0 0 1.6rem;
+            color: var(--muted);
         }
 
         .flow {
@@ -249,7 +344,7 @@
             flex-wrap: wrap;
             align-items: center;
             gap: 0.7rem;
-            color: var(--muted);
+
             font-family:
                 ui-monospace,
                 SFMono-Regular,
@@ -260,35 +355,60 @@
         }
 
         .node {
-            padding: 0.6rem 0.8rem;
+            padding: 0.62rem 0.85rem;
+
             border: 1px solid var(--border);
             border-radius: 8px;
+
             color: var(--text);
             background: var(--background);
         }
 
         .arrow {
             color: var(--accent);
+            font-weight: 800;
         }
 
         footer {
             margin-top: 6rem;
             padding: 2rem 0;
+
             border-top: 1px solid var(--border);
+
             color: var(--muted);
             font-size: 0.9rem;
         }
 
-        @media (max-width: 760px) {
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .footer-content a {
+            color: var(--muted);
+            text-decoration: none;
+        }
+
+        .footer-content a:hover {
+            color: var(--text);
+        }
+
+        @media (max-width: 780px) {
             main {
-                padding-top: 4.5rem;
+                padding-top: 4rem;
+            }
+
+            .brand-name {
+                display: none;
             }
 
             .nav-links {
-                gap: 0.8rem;
+                gap: 0.9rem;
             }
 
-            .nav-links .optional {
+            .nav-optional {
                 display: none;
             }
 
@@ -302,21 +422,45 @@
                 padding: 1.35rem;
             }
         }
+
+        @media (prefers-reduced-motion: reduce) {
+            html {
+                scroll-behavior: auto;
+            }
+
+            .button {
+                transition: none;
+            }
+        }
     </style>
 </head>
 
 <body>
-<header>
-    <nav class="container" aria-label="Primary navigation">
-        <a class="brand" href="/">
-            <span class="mark">M</span>
-            <span>Mechana</span>
+<header class="site-header">
+    <nav class="navigation container" aria-label="Primary navigation">
+        <a class="brand" href="/" aria-label="Mechana home">
+            <img
+                class="brand-mark"
+                src="/assets/brand/mechana-mark-color-dark.svg"
+                alt=""
+                width="38"
+                height="38"
+            >
+
+            <span class="brand-name">Mechana</span>
         </a>
 
         <div class="nav-links">
             <a
-                class="optional"
-                href="https://github.com/mechana-dev/mechana"
+                class="nav-optional"
+                href="https://github.com/mechana-dev/mechana#readme"
+            >
+                Overview
+            </a>
+
+            <a
+                class="nav-optional"
+                href="https://github.com/mechana-dev/mechana/tree/main/docs"
             >
                 Documentation
             </a>
@@ -330,17 +474,22 @@
 
 <main class="container">
     <section class="hero">
-        <div class="eyebrow">
-            <span class="status-dot"></span>
+        <div class="status">
+            <span class="status-dot" aria-hidden="true"></span>
             Early development
         </div>
 
-        <h1>Distributed execution, without coupling to the work.</h1>
+        <img
+            class="hero-logo"
+            src="/assets/brand/mechana-lockup-horizontal-transparent-dark.svg"
+            alt="Mechana — Distributed execution for Java"
+        >
 
-        <p class="subtitle">
-            Mechana is a plugin-driven distributed execution platform for Java.
-            It coordinates arbitrary workloads across workers while keeping the
-            infrastructure independent of the work being performed.
+        <p class="hero-copy">
+            Mechana is a plugin-driven distributed execution platform for
+            Java. It coordinates arbitrary workloads across workers while
+            keeping the infrastructure independent of the work being
+            performed.
         </p>
 
         <div class="actions">
@@ -362,15 +511,21 @@
 
     <section class="features" aria-label="Project characteristics">
         <article class="feature">
+            <span class="feature-number">01</span>
+
             <h2>Plugin driven</h2>
+
             <p>
-                Workloads implement a stable plugin API. Mechana does not need
-                to understand their internal purpose or domain.
+                Workloads implement a stable plugin API. Mechana remains
+                independent of their domain, implementation, and purpose.
             </p>
         </article>
 
         <article class="feature">
+            <span class="feature-number">02</span>
+
             <h2>Distributed by design</h2>
+
             <p>
                 Coordinator and worker responsibilities are separated around
                 explicit execution state, attempts, progress, and results.
@@ -378,33 +533,49 @@
         </article>
 
         <article class="feature">
+            <span class="feature-number">03</span>
+
             <h2>Built for clarity</h2>
+
             <p>
-                The project emphasizes predictable state transitions,
-                structured contracts, observability, and testable components.
+                The project emphasizes predictable transitions, structured
+                contracts, observability, and components that are easy to test.
             </p>
         </article>
     </section>
 
     <section class="architecture">
-        <h2>Conceptual model</h2>
+        <h2>Conceptual execution flow</h2>
+
+        <p class="architecture-copy">
+            Infrastructure orchestrates execution while plugins define the
+            actual work.
+        </p>
 
         <div class="flow" aria-label="Conceptual execution flow">
             <span class="node">Client</span>
-            <span class="arrow">→</span>
+            <span class="arrow" aria-hidden="true">→</span>
             <span class="node">Coordinator</span>
-            <span class="arrow">→</span>
+            <span class="arrow" aria-hidden="true">→</span>
             <span class="node">Worker</span>
-            <span class="arrow">→</span>
+            <span class="arrow" aria-hidden="true">→</span>
             <span class="node">Plugin</span>
-            <span class="arrow">→</span>
+            <span class="arrow" aria-hidden="true">→</span>
             <span class="node">Result</span>
         </div>
     </section>
-
-    <footer>
-        <span>Mechana is open-source software licensed under Apache 2.0.</span>
-    </footer>
 </main>
+
+<footer>
+    <div class="footer-content container">
+        <span>
+            Mechana is open-source software licensed under Apache 2.0.
+        </span>
+
+        <a href="https://github.com/mechana-dev/mechana">
+            github.com/mechana-dev/mechana
+        </a>
+    </div>
+</footer>
 </body>
 </html>
