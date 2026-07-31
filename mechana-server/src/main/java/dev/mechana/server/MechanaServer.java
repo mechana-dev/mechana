@@ -36,6 +36,8 @@ import java.util.concurrent.TimeUnit;
 public final class MechanaServer implements AutoCloseable {
 
 	private static final String PLUGIN_PATH = "/api/plugins/sleep/1.0.0";
+	private static final long WORKER_TIMEOUT_MILLIS = 3_000;
+	private static final long HEARTBEAT_CHECK_MILLIS = 1_000;
 
 	private final ObjectMapper json = new ObjectMapper();
 	private final Scheduler scheduler;
@@ -65,8 +67,8 @@ public final class MechanaServer implements AutoCloseable {
 
 	public void start() {
 		http.start();
-		leaseReaper.scheduleAtFixedRate(this::reapExpiredWorkersAndLeases, scheduler.leaseMillis(),
-				Math.max(250, scheduler.leaseMillis() / 2), TimeUnit.MILLISECONDS);
+		leaseReaper.scheduleAtFixedRate(this::reapExpiredWorkersAndLeases, HEARTBEAT_CHECK_MILLIS,
+				HEARTBEAT_CHECK_MILLIS, TimeUnit.MILLISECONDS);
 	}
 
 	public int port() {
@@ -127,6 +129,10 @@ public final class MechanaServer implements AutoCloseable {
 					lease(exchange, segments[3]);
 					return;
 				}
+				if (segments.length == 5 && "disconnect".equals(segments[4])) {
+					disconnect(exchange, segments[3]);
+					return;
+				}
 				if (segments.length == 7 && "tasks".equals(segments[4])) {
 					updateTask(exchange, segments[3], segments[5], segments[6]);
 					return;
@@ -153,6 +159,14 @@ public final class MechanaServer implements AutoCloseable {
 			} else {
 				sendEmpty(exchange, 204);
 			}
+		}
+
+		private void disconnect(HttpExchange exchange, String workerId) throws IOException {
+			requirePost(exchange);
+			if (workerLastSeen.remove(workerId) != null) {
+				System.out.printf("Worker %s disconnected (graceful shutdown)%n", workerId);
+			}
+			sendEmpty(exchange, 204);
 		}
 
 		private void updateTask(HttpExchange exchange, String workerId, String taskId, String action)
@@ -212,7 +226,7 @@ public final class MechanaServer implements AutoCloseable {
 		if (expiredTasks > 0) {
 			System.out.printf("Requeued %d task(s) after worker lease expiration%n", expiredTasks);
 		}
-		long disconnectedBefore = System.currentTimeMillis() - scheduler.leaseMillis() * 2;
+		long disconnectedBefore = System.currentTimeMillis() - WORKER_TIMEOUT_MILLIS;
 		workerLastSeen.forEach((workerId, lastSeen) -> {
 			if (lastSeen < disconnectedBefore && workerLastSeen.remove(workerId, lastSeen)) {
 				System.out.printf("Worker %s disconnected (heartbeat timeout)%n", workerId);

@@ -36,6 +36,7 @@ public final class WorkerAgent {
 	private final URI server;
 	private final String workerId;
 	private final Set<String> supportedPlugins;
+	private final AtomicBoolean running = new AtomicBoolean(true);
 
 	public WorkerAgent(URI server, String workerId, Set<String> supportedPlugins) {
 		this.server = URI.create(stripTrailingSlash(Objects.requireNonNull(server, "server").toString()));
@@ -44,10 +45,10 @@ public final class WorkerAgent {
 	}
 
 	public void runForever() {
-		while (!Thread.currentThread().isInterrupted()) {
+		while (running.get() && !Thread.currentThread().isInterrupted()) {
 			try {
 				register();
-				while (!Thread.currentThread().isInterrupted()) {
+				while (running.get() && !Thread.currentThread().isInterrupted()) {
 					if (!runOne()) {
 						sleep(500);
 					}
@@ -60,6 +61,13 @@ public final class WorkerAgent {
 				Thread.currentThread().interrupt();
 			}
 		}
+	}
+
+	public void disconnect() throws IOException, InterruptedException {
+		running.set(false);
+		Response response = post("/api/workers/" + workerId + "/disconnect", Set.of());
+		requireStatus(response, 204);
+		System.out.printf("Worker %s disconnected from server%n", workerId);
 	}
 
 	public void register() throws IOException, InterruptedException {
