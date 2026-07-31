@@ -8,8 +8,8 @@
     <version>0.1.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>mechana-worker</artifactId>
-  <name>Mechana :: Worker</name>
+  <artifactId>mechana-server</artifactId>
+  <name>Mechana :: Server</name>
 
   <dependencies>
     <dependency>
@@ -18,7 +18,7 @@
     </dependency>
     <dependency>
       <groupId>dev.mechana</groupId>
-      <artifactId>mechana-api</artifactId>
+      <artifactId>mechana-coordinator</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -41,7 +41,7 @@
         <version>3.6.0</version>
         <configuration>
           <createDependencyReducedPom>false</createDependencyReducedPom>
-          <finalName>mechana-worker</finalName>
+          <finalName>mechana-server</finalName>
         </configuration>
         <executions>
           <execution>
@@ -52,7 +52,7 @@
             <configuration>
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>dev.mechana.worker.WorkerMain</mainClass>
+                  <mainClass>dev.mechana.server.ServerMain</mainClass>
                 </transformer>
               </transformers>
             </configuration>
