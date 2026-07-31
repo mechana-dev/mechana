@@ -1,5 +1,6 @@
 package dev.mechana.worker;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Set;
@@ -20,6 +21,18 @@ public final class WorkerMain {
 		String workerId = args.length > 2 ? args[2] : UUID.randomUUID().toString();
 
 		System.out.printf("Worker %s connecting to %s with capabilities %s%n", workerId, server, plugins);
-		new WorkerAgent(server, workerId, plugins).runForever();
+		WorkerAgent worker = new WorkerAgent(server, workerId, plugins);
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			try {
+				worker.disconnect();
+			} catch (InterruptedException interrupted) {
+				Thread.currentThread().interrupt();
+				System.err.printf("Worker %s could not notify server of shutdown: interrupted%n", workerId);
+			} catch (IOException failure) {
+				System.err.printf("Worker %s could not notify server of shutdown: %s%n", workerId,
+						failure.getMessage());
+			}
+		}, "mechana-worker-shutdown"));
+		worker.runForever();
 	}
 }
