@@ -19,18 +19,35 @@ public final class SegmentExecutor {
 
 	public void execute(Path input, VideoTypes.Plan plan, CancellationToken cancellation,
 			BiConsumer<Integer, String> progress) throws IOException, InterruptedException {
+		execute(input, plan, cancellation, new VideoJobObserver() {
+			@Override
+			public void onSegmentProgress(int segment, String update) {
+				progress.accept(segment, update);
+			}
+		});
+	}
+
+	public void execute(Path input, VideoTypes.Plan plan, CancellationToken cancellation, VideoJobObserver observer)
+			throws IOException, InterruptedException {
 		Files.createDirectories(plan.scratchRoot().resolve("segments"));
 		try (var pool = Executors.newFixedThreadPool(plan.options().parallelism())) {
 			List<Callable<Void>> tasks = plan.segments().stream().<Callable<Void>>map(segment -> () -> {
-				var result = runner.run(commands.segment(input, segment, plan.options()),
-						plan.options().processTimeout(), cancellation, line -> {
-							if (line.startsWith("out_time") || line.equals("progress=end"))
-								progress.accept(segment.index(), line);
-						});
-				MediaProbe.requireSuccess(result, "segment " + segment.index());
-				if (!Files.isRegularFile(segment.output()) || Files.size(segment.output()) == 0)
-					throw new IOException("Segment produced no output: " + segment.index());
-				return null;
+				observer.onSegmentStarted(segment.index());
+				try {
+					var result = runner.run(commands.segment(input, segment, plan.options()),
+							plan.options().processTimeout(), cancellation, line -> {
+								if (line.startsWith("out_time") || line.equals("progress=end"))
+									observer.onSegmentProgress(segment.index(), line);
+							});
+					MediaProbe.requireSuccess(result, "segment " + segment.index());
+					if (!Files.isRegularFile(segment.output()) || Files.size(segment.output()) == 0)
+						throw new IOException("Segment produced no output: " + segment.index());
+					observer.onSegmentCompleted(segment.index());
+					return null;
+				} catch (IOException | InterruptedException | RuntimeException failure) {
+					observer.onSegmentFailed(segment.index(), failure.getMessage());
+					throw failure;
+				}
 			}).toList();
 			try {
 				for (var future : pool.invokeAll(tasks))

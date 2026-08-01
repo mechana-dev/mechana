@@ -22,6 +22,9 @@ This file reports repository evidence, not desired future status.
   keyframe-aware deterministic planning, bounded parallel H.265 segment execution,
   separate whole-stream audio handling, concat/remux assembly, final validation,
   scratch estimation, runtime probing, process cancellation/timeouts, and a CLI.
+- A loopback-only live HTTP dashboard for one local video job, backed by the
+  plugin's lifecycle/progress observer. It shows weighted overall progress,
+  configured/active local workers, segment status, elapsed time, and recent events.
 
 ## Not established by current repository evidence
 
@@ -29,6 +32,8 @@ This file reports repository evidence, not desired future status.
 - Scratch-space advertisement, reservations, or capacity-aware matching.
 - Distributed media scheduling, artifact transfer, or reserved worker scratch.
 - Durable scheduler/job persistence, authentication, or production isolation.
+- Distributed job monitoring, worker telemetry, durable monitoring history, or
+  authenticated/remote dashboard access.
 
 These are accepted direction where listed in [decisions](decisions.md) and planned
 work where listed in [roadmap](roadmap.md); they must not be described as shipped.

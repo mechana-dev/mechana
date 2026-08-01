@@ -10,9 +10,12 @@ public final class SegmentPlanner {
 		List<Double> boundaries = new ArrayList<>();
 		boundaries.add(0.0);
 		double target = options.targetSegmentDuration().toMillis() / 1000.0;
+		double minimumSegment = target / 2.0;
+		double maximumSegment = target * 1.5;
 		for (double desired = target; desired < input.durationSeconds(); desired += target) {
-			double chosen = nearestAfter(keyframes, desired, boundaries.getLast());
-			if (chosen > boundaries.getLast() + 0.001 && chosen < input.durationSeconds() - 0.001)
+			double chosen = nearestEligible(keyframes, desired, boundaries.getLast(), input.durationSeconds(),
+					minimumSegment, maximumSegment);
+			if (!Double.isNaN(chosen))
 				boundaries.add(chosen);
 		}
 		boundaries.add(input.durationSeconds());
@@ -23,8 +26,14 @@ public final class SegmentPlanner {
 		return new VideoTypes.Plan(input, options, segments, scratch);
 	}
 
-	private static double nearestAfter(List<Double> keyframes, double desired, double previous) {
-		return keyframes.stream().filter(k -> k > previous + 0.001)
-				.min((a, b) -> Double.compare(Math.abs(a - desired), Math.abs(b - desired))).orElse(Double.NaN);
+	private static double nearestEligible(List<Double> keyframes, double desired, double previous, double duration,
+			double minimumSegment, double maximumSegment) {
+		return keyframes.stream().filter(keyframe -> Math.abs(keyframe - desired) <= minimumSegment)
+				.filter(keyframe -> keyframe - previous >= minimumSegment)
+				.filter(keyframe -> keyframe - previous <= maximumSegment)
+				.filter(keyframe -> duration - keyframe >= minimumSegment).min((left, right) -> {
+					int distance = Double.compare(Math.abs(left - desired), Math.abs(right - desired));
+					return distance != 0 ? distance : Double.compare(left, right);
+				}).orElse(Double.NaN);
 	}
 }

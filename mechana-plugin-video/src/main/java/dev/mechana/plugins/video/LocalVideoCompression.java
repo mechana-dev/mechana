@@ -19,6 +19,17 @@ public final class LocalVideoCompression {
 	public VideoTypes.MediaInfo run(Path input, Path output, Path scratch, VideoTypes.Options options,
 			CancellationToken cancellation, BiConsumer<Integer, String> progress)
 			throws IOException, InterruptedException {
+		return run(input, output, scratch, options, cancellation, new VideoJobObserver() {
+			@Override
+			public void onSegmentProgress(int segment, String update) {
+				progress.accept(segment, update);
+			}
+		});
+	}
+
+	public VideoTypes.MediaInfo run(Path input, Path output, Path scratch, VideoTypes.Options options,
+			CancellationToken cancellation, VideoJobObserver observer) throws IOException, InterruptedException {
+		observer.onStage("PROBING");
 		RuntimeProbe runtimeProbe = new RuntimeProbe(commands, runner);
 		var capabilities = runtimeProbe.inspect();
 		if (!capabilities.usable())
@@ -27,16 +38,23 @@ public final class LocalVideoCompression {
 		MediaProbe probe = new MediaProbe(commands, runner);
 		VideoTypes.MediaInfo inputInfo = probe.inspect(input, options.processTimeout());
 		new VideoPluginDescriptor().validate(input, output, inputInfo, options);
+		observer.onStage("PLANNING");
 		VideoTypes.Plan plan = new SegmentPlanner().plan(inputInfo, options,
 				probe.keyframes(input, options.processTimeout()), scratch);
+		observer.onPlan(plan);
 		long usable = Files.getFileStore(scratch).getUsableSpace();
 		long required = new ScratchEstimator().estimateBytes(inputInfo);
 		if (usable < required)
 			throw new IOException("Insufficient scratch: need " + required + " bytes, available " + usable);
 		persistPlan(plan);
-		new SegmentExecutor(commands, runner).execute(input, plan, cancellation, progress);
+		observer.onStage("TRANSCODING");
+		new SegmentExecutor(commands, runner).execute(input, plan, cancellation, observer);
+		observer.onStage("ASSEMBLING");
 		new VideoAssembler(commands, runner).assemble(input, output, plan, cancellation);
-		return new FinalValidator(probe).validate(output, plan);
+		observer.onStage("VALIDATING");
+		VideoTypes.MediaInfo result = new FinalValidator(probe).validate(output, plan);
+		observer.onStage("SUCCEEDED");
+		return result;
 	}
 
 	private static void persistPlan(VideoTypes.Plan plan) throws IOException {
