@@ -48,3 +48,22 @@ Append-only record of material Mechana project changes and accepted decisions.
   enforcement from exactly JDK 25 to JDK 25 or newer.
 - This permits the normal Homebrew Maven environment running on JDK 26 without
   changing the produced Java 25 bytecode target.
+
+## 2026-08-01 11:20:00 EDT — Harden sparse-keyframe video planning
+
+- A real 20-second Ring-camera test exposed clustered keyframes near the end of
+  the source, which previously produced one long segment followed by tiny tails.
+- Planning now accepts a boundary only near its target and only when both adjacent
+  segments remain useful sizes; sparse inputs may honestly remain one work unit.
+- Added regression coverage using the observed sparse-keyframe shape.
+
+## 2026-08-01 14:15:00 EDT — Add live local video-job monitoring
+
+- Added an observer contract for video workflow stages and per-segment FFmpeg
+  progress without coupling media execution to the HTTP server.
+- Added a thread-safe one-job status model and loopback HTTP dashboard with
+  duration-weighted overall progress, configured/active workers, a segment table,
+  elapsed time, recent events, and a machine-readable JSON endpoint.
+- Added a monitored local entry point and unit/HTTP coverage that does not require
+  FFmpeg. The page intentionally monitors only the bounded in-process executor;
+  distributed worker telemetry and durable job history remain future work.

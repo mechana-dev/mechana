@@ -28,6 +28,13 @@ Segmentation is time-based and keyframe-aware. Segment duration is a planning go
 not permission to cut at unsafe boundaries or divide by equal byte count. Boundary
 ownership must avoid gaps and duplicate presentation time.
 
+The planner accepts a keyframe boundary only when it is within half the target
+duration of the desired boundary and leaves both adjacent segments at least half
+the target duration; the preceding segment also cannot exceed one and a half times
+the target. Sparse or badly clustered source keyframes may therefore
+produce fewer segments, including a single segment, rather than misleadingly
+creating tiny or severely unbalanced work units.
+
 ## Runtime and process invariants
 
 - The initial job uses the same codec/container-affecting runtime signature for
@@ -55,3 +62,11 @@ ownership must avoid gaps and duplicate presentation time.
   cluster scheduling, leases, artifact transport, or scratch reservations.
 - FFmpeg progress is parsed from `-progress pipe:1`; cancellation, timeouts, and
   forced process termination are supported.
+- The workflow emits stage, plan, segment-start, machine-readable progress,
+  completion, and failure events through a small observer contract. The local
+  server turns those events into a thread-safe one-job status model.
+- `VideoJobMain` serves a live dashboard and JSON status endpoint on loopback.
+  It reports overall duration-weighted progress, configured and active local
+  workers, completed work units, per-segment ranges/state/progress/elapsed time,
+  recent events, and terminal errors. This is local observability, not cluster
+  scheduling or a durable job-history API.

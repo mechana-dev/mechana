@@ -35,3 +35,9 @@ The video-plugin demo uses a bounded in-process `ExecutorService` after checking
 conservative scratch estimate against local usable space. This is deliberately not
 scheduler integration: it neither advertises nor reserves capacity, assigns remote
 workers, retries attempts, nor changes lease ownership.
+
+The server's video dashboard observes that same local executor. Its configured
+worker count is the executor parallelism and its active-worker count is the number
+of currently running segments; neither value represents registered or leased
+cluster workers. Distributed progress aggregation and worker inventory remain
+scheduler/platform work.
