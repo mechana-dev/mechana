@@ -70,3 +70,7 @@ creating tiny or severely unbalanced work units.
   workers, completed work units, per-segment ranges/state/progress/elapsed time,
   recent events, and terminal errors. This is local observability, not cluster
   scheduling or a durable job-history API.
+- Each segment-start event carries a worker address, shown in the JSON status and
+  dashboard table. Local execution resolves the host address by default and may
+  override it with `MECHANA_WORKER_ADDRESS`; remote schedulers must supply the
+  authoritative assigned-worker address.

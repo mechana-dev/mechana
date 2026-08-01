@@ -20,8 +20,8 @@ class VideoJobMonitorTest {
 				new VideoTypes.Plan(media, options, List.of(new VideoTypes.Segment(0, 0, 10, Path.of("segment-0.mkv")),
 						new VideoTypes.Segment(1, 10, 20, Path.of("segment-1.mkv"))), Path.of("scratch")));
 		monitor.onStage("TRANSCODING");
-		monitor.onSegmentStarted(0);
-		monitor.onSegmentStarted(1);
+		monitor.onSegmentStarted(0, "192.0.2.10");
+		monitor.onSegmentStarted(1, "192.0.2.11");
 		monitor.onSegmentProgress(0, "out_time_us=5000000");
 		monitor.onSegmentCompleted(1);
 
@@ -31,5 +31,7 @@ class VideoJobMonitorTest {
 		assertEquals(1, snapshot.activeWorkers());
 		assertEquals(1, snapshot.completedSegments());
 		assertEquals(2, snapshot.totalSegments());
+		assertEquals("192.0.2.10", snapshot.segments().get(0).workerAddress());
+		assertEquals("192.0.2.11", snapshot.segments().get(1).workerAddress());
 	}
 }

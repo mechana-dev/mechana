@@ -14,6 +14,10 @@ public interface VideoJobObserver {
 	default void onSegmentStarted(int segment) {
 	}
 
+	default void onSegmentStarted(int segment, String workerAddress) {
+		onSegmentStarted(segment);
+	}
+
 	default void onSegmentProgress(int segment, String update) {
 	}
 
