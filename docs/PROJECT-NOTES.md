@@ -26,3 +26,25 @@ Append-only record of material Mechana project changes and accepted decisions.
   [architecture](../brain/architecture.md), [decisions](../brain/decisions.md),
   [current state](../brain/current-state.md), and
   [glossary](../brain/glossary.md) without claiming implementation progress.
+
+## 2026-08-01 06:04:00 EDT — Implement local distributed-video proof slice
+
+- Added `mechana-plugin-video` with modular discovery/validation, runtime probing,
+  scratch estimation, keyframe-aware planning, segment execution, assembly, and
+  final-result validation.
+- Added bounded local parallel segment transcoding through external FFmpeg, robust
+  progress parsing, cancellation/timeouts, and child-process termination.
+- Chose video-only Matroska intermediates and one whole-stream audio-copy step,
+  followed by concat/remux into MP4 or Matroska and authoritative FFprobe checks.
+- Added a local CLI, unit tests independent of FFmpeg, and an integration test that
+  generates its own fixture and skips unless FFmpeg, FFprobe, and libx265 exist.
+- Moved the build to the accepted Java 25 release and enforcement range.
+- This increment does not add cluster scheduling, uploads, object storage, remote
+  artifact movement, or client-side assembly.
+
+## 2026-08-01 08:20:00 EDT — Allow newer JDKs to build Java 25 target
+
+- Kept the compiler target at Java release 25 while changing build-environment
+  enforcement from exactly JDK 25 to JDK 25 or newer.
+- This permits the normal Homebrew Maven environment running on JDK 26 without
+  changing the produced Java 25 bytecode target.

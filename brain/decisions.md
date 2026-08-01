@@ -6,7 +6,7 @@ This is the concise decision index. Detailed implications live in the linked fil
 
 | Decision | Accepted outcome |
 | --- | --- |
-| Toolchain | Java 25 with Maven; IntelliJ IDEA on macOS is the primary development setup. |
+| Toolchain | Target Java release 25 with Maven; builds may run on JDK 25 or newer. IntelliJ IDEA on macOS is the primary development setup. |
 | License | Apache License 2.0; design and docs should support outside contributors. |
 | Core model | Plugin-driven and task-agnostic. Domain semantics stay in plugins. |
 | Plugin contract | A plugin encapsulates supported input/output descriptions, processing options, authoritative validation, planning/decomposition, per-work-unit execution, resource estimation, assembly/reassembly, and final-result validation. |
@@ -20,6 +20,8 @@ This is the concise decision index. Detailed implications live in the linked fil
 | Media | FFmpeg/FFprobe run as external processes in the media plugin. |
 | Video profile | All partitions in a video job initially share one runtime signature. |
 | Segmentation | Keyframe-aware and time-based; correctness at boundaries outranks equal byte sizes. |
+| Initial audio path | Transcode video in parallel segments; copy optional audio once as a whole stream before final mux. |
+| Video quality | Default CRF-based visually lossless mode makes no mathematical-losslessness claim; x265 bit-exact lossless is explicit and may increase size. |
 | Worker storage | Workers advertise scratch space; the scheduler reserves before assignment. |
 | Project record | Append material updates to timestamped `docs/PROJECT-NOTES.md`. |
 
