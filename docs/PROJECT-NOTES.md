@@ -67,3 +67,12 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Added a monitored local entry point and unit/HTTP coverage that does not require
   FFmpeg. The page intentionally monitors only the bounded in-process executor;
   distributed worker telemetry and durable job history remain future work.
+
+## 2026-08-01 15:45:00 EDT — Identify workers in video monitoring
+
+- Extended segment-start monitoring events with a worker address and exposed it
+  in both status JSON and the live dashboard segment table.
+- Local execution reports its resolved host address by default, with an explicit
+  `MECHANA_WORKER_ADDRESS` override for stable LAN or tailnet identity.
+- This labels observed execution locations without claiming distributed scheduler
+  assignment, which remains future work.
