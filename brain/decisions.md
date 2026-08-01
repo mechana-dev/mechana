@@ -9,9 +9,11 @@ This is the concise decision index. Detailed implications live in the linked fil
 | Toolchain | Java 25 with Maven; IntelliJ IDEA on macOS is the primary development setup. |
 | License | Apache License 2.0; design and docs should support outside contributors. |
 | Core model | Plugin-driven and task-agnostic. Domain semantics stay in plugins. |
+| Plugin contract | A plugin encapsulates supported input/output descriptions, processing options, authoritative validation, planning/decomposition, per-work-unit execution, resource estimation, assembly/reassembly, and final-result validation. |
+| Responsibility boundary | Plugins describe what must happen; Mechana determines where, when, and under which attempt it happens and owns platform lifecycle concerns. |
 | Milestone 1 | In-process execution before distributed transport. |
 | Transport | HTTP+JSON later, as an adapter around core contracts. |
-| Work graph | `plan -> parallel partitions -> assemble`. |
+| Work graph | Constrained to `plan -> parallel work units -> assemble`; no generic DAG engine. |
 | Plan/assembly topology | Server-side initially; preserve a path to later client-side assembly. |
 | Planes | Separate control-plane metadata from data-plane artifact bytes. |
 | Artifacts | Use a storage-neutral artifact abstraction and stable artifact identities. |
@@ -31,6 +33,12 @@ This is the concise decision index. Detailed implications live in the linked fil
 - Capacity is not merely observed: reserved scratch is deducted until released.
 - Artifact bytes do not flow through scheduler/control-plane message objects.
 - Plugin-specific fields do not leak into generic scheduler policies.
+- Plugins do not own IDs, persistence, scheduling, worker selection, scratch
+  reservations, artifact transfer/integrity, leases, retries, attempt fencing,
+  cancellation propagation, progress aggregation, invocation placement, cleanup,
+  or retention.
+- Plugin resource estimates inform Mechana's decisions but do not confer placement
+  or reservation authority on the plugin.
 - External-process failures are bounded, captured, and translated into plugin task
   results without crashing the host process.
 
