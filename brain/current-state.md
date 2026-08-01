@@ -1,6 +1,6 @@
 # Current state
 
-Verified: 2026-08-01 on branch `agent/distributed-execution-first-pass`
+Verified: 2026-08-01 on branch `agent/add-project-brain`
 
 This file reports repository evidence, not desired future status.
 
@@ -8,8 +8,8 @@ This file reports repository evidence, not desired future status.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   sleep-plugin, server, and client modules.
-- The root POM currently compiles with release 21 and enforces Java 21+ and Maven
-  3.9+; this differs from the accepted Java 25 target.
+- The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
+  Maven 3.9+.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
   expired-work requeueing, and stale-completion rejection.
 - A preliminary HTTP/JSON server/client/worker distributed slice described in
@@ -18,13 +18,16 @@ This file reports repository evidence, not desired future status.
   loading, and temporary-file cleanup in the distributed slice.
 - Spotless and SpotBugs checks bound to Maven `verify`.
 - Apache License 2.0 text in `../LICENSE`.
+- A modular FFmpeg/FFprobe video plugin local slice with H.264 MP4/MKV validation,
+  keyframe-aware deterministic planning, bounded parallel H.265 segment execution,
+  separate whole-stream audio handling, concat/remux assembly, final validation,
+  scratch estimation, runtime probing, process cancellation/timeouts, and a CLI.
 
 ## Not established by current repository evidence
 
-- Java 25 build configuration.
 - A generic plan/partition/assemble API or artifact abstraction.
 - Scratch-space advertisement, reservations, or capacity-aware matching.
-- A media plugin, FFmpeg/FFprobe integration, segmentation, or assembly.
+- Distributed media scheduling, artifact transfer, or reserved worker scratch.
 - Durable scheduler/job persistence, authentication, or production isolation.
 
 These are accepted direction where listed in [decisions](decisions.md) and planned

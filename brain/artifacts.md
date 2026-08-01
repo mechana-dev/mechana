@@ -21,3 +21,9 @@ Local files may back Milestone 1, but local paths are an adapter detail.
   authoritative artifacts follow provider retention rules.
 - The API must support server-side assembly now and later client-side assembly
   without changing artifact meaning.
+
+The video-plugin local slice currently adapts artifacts to paths beneath an
+attempt-specific scratch tree. Segment files, concat manifest, separated audio,
+and assembled video are intermediates; the requested MP4/MKV path is the final
+artifact. This proves the lifecycle locally but is not the storage-neutral artifact
+provider or atomic publication contract described above.

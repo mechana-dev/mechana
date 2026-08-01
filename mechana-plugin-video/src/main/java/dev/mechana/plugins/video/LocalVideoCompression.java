@@ -1,0 +1,60 @@
+package dev.mechana.plugins.video;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.function.BiConsumer;
+
+public final class LocalVideoCompression {
+	private final FfmpegCommands commands;
+	private final ExternalProcessRunner runner;
+	public LocalVideoCompression(FfmpegCommands commands) {
+		this.commands = commands;
+		this.runner = new ExternalProcessRunner();
+	}
+
+	public VideoTypes.MediaInfo run(Path input, Path output, Path scratch, VideoTypes.Options options,
+			CancellationToken cancellation, BiConsumer<Integer, String> progress)
+			throws IOException, InterruptedException {
+		RuntimeProbe runtimeProbe = new RuntimeProbe(commands, runner);
+		var capabilities = runtimeProbe.inspect();
+		if (!capabilities.usable())
+			throw new IOException("FFmpeg runtime is unavailable or lacks libx265: " + capabilities);
+		Files.createDirectories(scratch);
+		MediaProbe probe = new MediaProbe(commands, runner);
+		VideoTypes.MediaInfo inputInfo = probe.inspect(input, options.processTimeout());
+		new VideoPluginDescriptor().validate(input, output, inputInfo, options);
+		VideoTypes.Plan plan = new SegmentPlanner().plan(inputInfo, options,
+				probe.keyframes(input, options.processTimeout()), scratch);
+		long usable = Files.getFileStore(scratch).getUsableSpace();
+		long required = new ScratchEstimator().estimateBytes(inputInfo);
+		if (usable < required)
+			throw new IOException("Insufficient scratch: need " + required + " bytes, available " + usable);
+		persistPlan(plan);
+		new SegmentExecutor(commands, runner).execute(input, plan, cancellation, progress);
+		new VideoAssembler(commands, runner).assemble(input, output, plan, cancellation);
+		return new FinalValidator(probe).validate(output, plan);
+	}
+
+	private static void persistPlan(VideoTypes.Plan plan) throws IOException {
+		var document = new LinkedHashMap<String, Object>();
+		document.put("inputDurationSeconds", plan.input().durationSeconds());
+		document.put("qualityMode", plan.options().qualityMode().name());
+		document.put("crf", plan.options().crf());
+		document.put("preset", plan.options().preset());
+		document.put("targetSegmentDurationMillis", plan.options().targetSegmentDuration().toMillis());
+		document.put("segments", plan.segments().stream().map(segment -> {
+			var item = new LinkedHashMap<String, Object>();
+			item.put("index", segment.index());
+			item.put("startSeconds", segment.startSeconds());
+			item.put("endSeconds", segment.endSeconds());
+			item.put("output", segment.output().toString());
+			return item;
+		}).toList());
+		new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
+				.writeValue(plan.scratchRoot().resolve("plan.json").toFile(), document);
+	}
+}

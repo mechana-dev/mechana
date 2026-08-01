@@ -18,6 +18,7 @@
     <module>mechana-worker</module>
     <module>mechana-runtime</module>
     <module>mechana-plugin-sleep</module>
+    <module>mechana-plugin-video</module>
     <module>mechana-server</module>
     <module>mechana-client</module>
   </modules>
@@ -25,7 +26,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <maven.compiler.release>21</maven.compiler.release>
+    <maven.compiler.release>25</maven.compiler.release>
     <maven.compiler.parameters>true</maven.compiler.parameters>
 
     <junit.version>5.11.3</junit.version>
@@ -103,7 +104,7 @@
             <configuration>
               <rules>
                 <requireJavaVersion>
-                  <version>[21,)</version>
+                  <version>[25,)</version>
                 </requireJavaVersion>
                 <requireMavenVersion>
                   <version>[3.9.0,)</version>
