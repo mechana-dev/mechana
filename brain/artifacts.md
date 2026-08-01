@@ -27,3 +27,9 @@ attempt-specific scratch tree. Segment files, concat manifest, separated audio,
 and assembled video are intermediates; the requested MP4/MKV path is the final
 artifact. This proves the lifecycle locally but is not the storage-neutral artifact
 provider or atomic publication contract described above.
+
+The manual two-host proof copies its input to a fixed remote scratch directory and
+copies completed remote Matroska segments back to the initiating host before
+assembly. Those SCP operations are explicit test scaffolding: they do not provide
+stable artifact identities, checksums, atomic publication, or provider-managed
+retention.

@@ -74,3 +74,13 @@ creating tiny or severely unbalanced work units.
   dashboard table. Local execution resolves the host address by default and may
   override it with `MECHANA_WORKER_ADDRESS`; remote schedulers must supply the
   authoritative assigned-worker address.
+- `TwoHostVideoJobMain` is a deliberately manual proof runner that assigns four
+  of eight planned segments locally and four to one SSH-accessible host. It feeds
+  local and remote machine-readable FFmpeg progress into the same dashboard and
+  copies remote segment artifacts back before local assembly. This is test
+  scaffolding, not scheduler-based distribution.
+- The manual runner offers a size-constrained bitrate mode derived from a target
+  fraction of the input size and reserves room for copied audio and container
+  overhead. The final validator rejects any result that is not smaller than its
+  input. This is an acceptance guarantee, not a promise that every requested
+  target can encode successfully, and it is distinct from the perceptual CRF mode.

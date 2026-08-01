@@ -28,6 +28,14 @@ public final class FinalValidator {
 			fail("Output is empty");
 		return actual;
 	}
+
+	public VideoTypes.MediaInfo validateSmallerThanInput(Path output, VideoTypes.Plan plan)
+			throws IOException, InterruptedException {
+		VideoTypes.MediaInfo actual = validate(output, plan);
+		if (actual.inputBytes() >= plan.input().inputBytes())
+			fail("Output is not smaller than input: " + actual.inputBytes() + " >= " + plan.input().inputBytes());
+		return actual;
+	}
 	private static void fail(String message) throws IOException {
 		throw new IOException("Final validation failed: " + message);
 	}

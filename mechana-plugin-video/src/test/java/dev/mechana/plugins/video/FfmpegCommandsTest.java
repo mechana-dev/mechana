@@ -29,4 +29,15 @@ class FfmpegCommandsTest {
 		assertTrue(command.contains("lossless=1"));
 		assertFalse(command.contains("-crf"));
 	}
+
+	@Test
+	void buildsSizeConstrainedSegmentWithExplicitRateControls() {
+		var options = new VideoTypes.Options(VideoTypes.Container.MKV, VideoTypes.QualityMode.VISUALLY_LOSSLESS, 28,
+				"slow", Duration.ofSeconds(10), 8, Duration.ofMinutes(1));
+		var command = new FfmpegCommands("ffmpeg", "ffprobe").bitrateSegment(Path.of("input.mp4"),
+				new VideoTypes.Segment(3, 30, 40, Path.of("segment.mkv")), options, 1_500_000);
+		assertTrue(command.containsAll(java.util.List.of("-b:v", "1500000", "-maxrate", "1500000", "-bufsize",
+				"3000000", "-progress", "pipe:1")));
+		assertFalse(command.contains("-crf"));
+	}
 }

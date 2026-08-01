@@ -62,6 +62,7 @@ public final class VideoJobDashboardServer implements AutoCloseable {
 	private static void send(HttpExchange exchange, int status, String type, String body) throws IOException {
 		byte[] content = body.getBytes(StandardCharsets.UTF_8);
 		exchange.getResponseHeaders().set("Content-Type", type);
+		exchange.getResponseHeaders().set("Cache-Control", "no-store");
 		exchange.sendResponseHeaders(status, content.length);
 		try (var output = exchange.getResponseBody()) {
 			output.write(content);
