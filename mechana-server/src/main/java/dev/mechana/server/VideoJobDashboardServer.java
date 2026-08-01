@@ -62,6 +62,7 @@ public final class VideoJobDashboardServer implements AutoCloseable {
 	private static void send(HttpExchange exchange, int status, String type, String body) throws IOException {
 		byte[] content = body.getBytes(StandardCharsets.UTF_8);
 		exchange.getResponseHeaders().set("Content-Type", type);
+		exchange.getResponseHeaders().set("Cache-Control", "no-store");
 		exchange.sendResponseHeaders(status, content.length);
 		try (var output = exchange.getResponseBody()) {
 			output.write(content);
@@ -76,10 +77,10 @@ public final class VideoJobDashboardServer implements AutoCloseable {
 			</style></head><body><h1>Mechana Video Job</h1><div class="muted" id="paths"></div>
 			<div class="cards"><div class="card"><div class="muted">Stage</div><div class="value" id="stage">—</div></div><div class="card"><div class="muted">Overall</div><div class="value" id="overall">0%</div></div><div class="card"><div class="muted">Workers</div><div class="value" id="workers">0 / 0</div></div><div class="card"><div class="muted">Elapsed</div><div class="value" id="elapsed">00:00:00</div></div></div>
 			<section><div class="bar"><div class="fill" id="overallBar"></div></div><p id="summary"></p><p class="FAILED" id="error"></p></section>
-			<section><h2>Segments</h2><table><thead><tr><th>#</th><th>Range</th><th>State</th><th>Progress</th><th>Elapsed</th></tr></thead><tbody id="segments"></tbody></table></section>
+			<section><h2>Segments</h2><table><thead><tr><th>#</th><th>Range</th><th>Worker IP</th><th>State</th><th>Progress</th><th>Elapsed</th></tr></thead><tbody id="segments"></tbody></table></section>
 			<section><h2>Recent events</h2><ul id="events"></ul></section><script>
 			const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-			async function refresh(){try{const s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());stage.textContent=s.stage;overall.textContent=s.progress+'%';workers.textContent=s.activeWorkers+' / '+s.configuredWorkers;elapsed.textContent=s.elapsed;overallBar.style.width=s.progress+'%';summary.textContent=`${s.completedSegments} of ${s.totalSegments} segments complete`;error.textContent=s.error||'';paths.innerHTML=`Input: <code>${esc(s.input)}</code><br>Output: <code>${esc(s.output)}</code>`;segments.innerHTML=s.segments.map(x=>`<tr><td>${x.index}</td><td>${x.startSeconds.toFixed(1)}–${x.endSeconds.toFixed(1)}s</td><td class="${x.state}">${x.state}</td><td><div class="bar"><div class="fill" style="width:${x.progress}%"></div></div> ${x.progress}%</td><td>${x.elapsed}</td></tr>`).join('');events.innerHTML=s.events.map(e=>`<li>${esc(e)}</li>`).join('');}catch(e){error.textContent=e;}setTimeout(refresh,1000)}refresh();
+			async function refresh(){try{const s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());stage.textContent=s.stage;overall.textContent=s.progress+'%';workers.textContent=s.activeWorkers+' / '+s.configuredWorkers;elapsed.textContent=s.elapsed;overallBar.style.width=s.progress+'%';summary.textContent=`${s.completedSegments} of ${s.totalSegments} segments complete`;error.textContent=s.error||'';paths.innerHTML=`Input: <code>${esc(s.input)}</code><br>Output: <code>${esc(s.output)}</code>`;segments.innerHTML=s.segments.map(x=>`<tr><td>${x.index}</td><td>${x.startSeconds.toFixed(1)}–${x.endSeconds.toFixed(1)}s</td><td><code>${esc(x.workerAddress)}</code></td><td class="${x.state}">${x.state}</td><td><div class="bar"><div class="fill" style="width:${x.progress}%"></div></div> ${x.progress}%</td><td>${x.elapsed}</td></tr>`).join('');events.innerHTML=s.events.map(e=>`<li>${esc(e)}</li>`).join('');}catch(e){error.textContent=e;}setTimeout(refresh,1000)}refresh();
 			</script></body></html>
 			""";
 }

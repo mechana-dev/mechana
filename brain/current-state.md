@@ -1,6 +1,6 @@
 # Current state
 
-Verified: 2026-08-01 on branch `agent/add-project-brain`
+Verified: 2026-08-01
 
 This file reports repository evidence, not desired future status.
 
@@ -25,12 +25,17 @@ This file reports repository evidence, not desired future status.
 - A loopback-only live HTTP dashboard for one local video job, backed by the
   plugin's lifecycle/progress observer. It shows weighted overall progress,
   configured/active local workers, segment status, elapsed time, and recent events.
+- A manual two-host video proof entry point can assign four of eight segments to
+  the local host and four over SSH, aggregate both hosts' FFmpeg progress into the
+  one-job dashboard, retrieve remote artifacts, and enforce a smaller-than-input
+  final-size gate. It is not integrated with the scheduler.
 
 ## Not established by current repository evidence
 
 - A generic plan/partition/assemble API or artifact abstraction.
 - Scratch-space advertisement, reservations, or capacity-aware matching.
-- Distributed media scheduling, artifact transfer, or reserved worker scratch.
+- Scheduler-managed media distribution, durable artifact transfer, or reserved
+  worker scratch.
 - Durable scheduler/job persistence, authentication, or production isolation.
 - Distributed job monitoring, worker telemetry, durable monitoring history, or
   authenticated/remote dashboard access.

@@ -16,7 +16,7 @@ import java.util.Map;
 /** Thread-safe read model for one local video job. */
 public final class VideoJobMonitor implements VideoJobObserver {
 	public record SegmentSnapshot(int index, String state, double startSeconds, double endSeconds, int progress,
-			String elapsed) {
+			String elapsed, String workerAddress) {
 	}
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "Snapshot lists are immutable defensive copies")
@@ -58,10 +58,16 @@ public final class VideoJobMonitor implements VideoJobObserver {
 
 	@Override
 	public synchronized void onSegmentStarted(int segment) {
+		onSegmentStarted(segment, "unknown");
+	}
+
+	@Override
+	public synchronized void onSegmentStarted(int segment, String workerAddress) {
 		SegmentState state = requireSegment(segment);
 		state.state = "RUNNING";
 		state.startedAt = Instant.now();
-		addEvent("Segment " + segment + " started");
+		state.workerAddress = workerAddress;
+		addEvent("Segment " + segment + " started on " + workerAddress);
 	}
 
 	@Override
@@ -118,9 +124,9 @@ public final class VideoJobMonitor implements VideoJobObserver {
 			totalDuration += value.duration();
 			segmentSnapshots.add(new SegmentSnapshot(entry.getKey(), value.state, value.startSeconds, value.endSeconds,
 					value.progress,
-					formatDuration(value.startedAt == null
-							? Duration.ZERO
-							: Duration.between(value.startedAt, Instant.now()))));
+					formatDuration(
+							value.startedAt == null ? Duration.ZERO : Duration.between(value.startedAt, Instant.now())),
+					value.workerAddress));
 		}
 		int progress = totalDuration == 0 ? 0 : (int) Math.round(weightedProgress / totalDuration);
 		if ("ASSEMBLING".equals(stage) || "VALIDATING".equals(stage))
@@ -156,6 +162,7 @@ public final class VideoJobMonitor implements VideoJobObserver {
 		private String state = "QUEUED";
 		private int progress;
 		private Instant startedAt;
+		private String workerAddress = "—";
 
 		private SegmentState(double startSeconds, double endSeconds) {
 			this.startSeconds = startSeconds;

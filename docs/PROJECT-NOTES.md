@@ -67,3 +67,29 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Added a monitored local entry point and unit/HTTP coverage that does not require
   FFmpeg. The page intentionally monitors only the bounded in-process executor;
   distributed worker telemetry and durable job history remain future work.
+
+## 2026-08-01 15:45:00 EDT — Identify workers in video monitoring
+
+- Extended segment-start monitoring events with a worker address and exposed it
+  in both status JSON and the live dashboard segment table.
+- Local execution reports its resolved host address by default, with an explicit
+  `MECHANA_WORKER_ADDRESS` override for stable LAN or tailnet identity.
+- This labels observed execution locations without claiming distributed scheduler
+  assignment, which remains future work.
+
+## 2026-08-01 19:05:00 EDT — Add monitored two-host size-constrained proof
+
+- Added a manual two-host runner that plans eight keyframe-aligned video segments,
+  executes four locally and four through SSH, and aggregates machine-readable
+  progress and worker addresses into the existing live dashboard.
+- Added bitrate-constrained HEVC segment commands and a final validation gate that
+  rejects output unless it is smaller than the input.
+- Kept audio as a separate whole-stream copy and assembly on the initiating host.
+  The SSH runner and direct artifact copy are proof scaffolding, not production
+  scheduling, leases, transport, authentication, or retry behavior.
+- Verified the proof with a five-minute H.264/AAC source: four segments ran on an
+  Apple-silicon MacBook Air and four on an Intel Mac Mini. The assembled HEVC/AAC
+  Matroska result retained 1920x800 dimensions and 300.094-second duration while
+  shrinking from 119,175,998 bytes to 71,778,716 bytes (39.8 percent smaller).
+- The full Maven verification suite, including the generated-media FFmpeg
+  integration test, passed before the proof run.

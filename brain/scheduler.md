@@ -41,3 +41,9 @@ worker count is the executor parallelism and its active-worker count is the numb
 of currently running segments; neither value represents registered or leased
 cluster workers. Distributed progress aggregation and worker inventory remain
 scheduler/platform work.
+
+`TwoHostVideoJobMain` goes one step farther only as a manual operational proof: it
+uses a fixed four-local/four-SSH assignment and aggregates both processes' FFmpeg
+progress. It does not call the scheduler, discover capacity, acquire leases,
+reserve scratch, fence attempts, or retry failed work, so it must not be treated as
+evidence that distributed media scheduling is implemented.

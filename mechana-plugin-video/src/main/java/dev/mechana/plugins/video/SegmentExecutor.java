@@ -1,6 +1,8 @@
 package dev.mechana.plugins.video;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -12,9 +14,15 @@ import java.util.function.BiConsumer;
 public final class SegmentExecutor {
 	private final FfmpegCommands commands;
 	private final ExternalProcessRunner runner;
+	private final String workerAddress;
 	public SegmentExecutor(FfmpegCommands commands, ExternalProcessRunner runner) {
+		this(commands, runner, resolveWorkerAddress());
+	}
+
+	public SegmentExecutor(FfmpegCommands commands, ExternalProcessRunner runner, String workerAddress) {
 		this.commands = commands;
 		this.runner = runner;
+		this.workerAddress = workerAddress;
 	}
 
 	public void execute(Path input, VideoTypes.Plan plan, CancellationToken cancellation,
@@ -32,7 +40,7 @@ public final class SegmentExecutor {
 		Files.createDirectories(plan.scratchRoot().resolve("segments"));
 		try (var pool = Executors.newFixedThreadPool(plan.options().parallelism())) {
 			List<Callable<Void>> tasks = plan.segments().stream().<Callable<Void>>map(segment -> () -> {
-				observer.onSegmentStarted(segment.index());
+				observer.onSegmentStarted(segment.index(), workerAddress);
 				try {
 					var result = runner.run(commands.segment(input, segment, plan.options()),
 							plan.options().processTimeout(), cancellation, line -> {
@@ -62,6 +70,17 @@ public final class SegmentExecutor {
 					throw new IOException("Segment execution failed", runtime);
 				throw new IOException("Segment execution failed", cause);
 			}
+		}
+	}
+
+	private static String resolveWorkerAddress() {
+		String configured = System.getenv("MECHANA_WORKER_ADDRESS");
+		if (configured != null && !configured.isBlank())
+			return configured;
+		try {
+			return InetAddress.getLocalHost().getHostAddress();
+		} catch (UnknownHostException unavailable) {
+			return "unknown";
 		}
 	}
 }

@@ -44,6 +44,17 @@ public final class FfmpegCommands {
 		return List.copyOf(c);
 	}
 
+	public List<String> bitrateSegment(Path input, VideoTypes.Segment segment, VideoTypes.Options options,
+			long videoBitrate) {
+		List<String> c = base();
+		c.addAll(List.of("-ss", decimal(segment.startSeconds()), "-i", input.toString(), "-t",
+				decimal(segment.durationSeconds()), "-map", "0:v:0", "-an", "-sn", "-c:v", "libx265", "-preset",
+				options.preset(), "-b:v", Long.toString(videoBitrate), "-maxrate", Long.toString(videoBitrate),
+				"-bufsize", Long.toString(Math.multiplyExact(videoBitrate, 2)), "-progress", "pipe:1", "-nostats", "-f",
+				"matroska", segment.output().toString()));
+		return List.copyOf(c);
+	}
+
 	public List<String> extractAudio(Path input, Path output) {
 		List<String> c = base();
 		c.addAll(List.of("-i", input.toString(), "-map", "0:a:0", "-vn", "-c:a", "copy", "-progress", "pipe:1",
