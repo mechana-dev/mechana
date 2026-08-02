@@ -15,6 +15,7 @@
 
   <modules>
     <module>fractal-render-plugin</module>
+    <module>ocr-tesseract-plugin</module>
     <module>sleep-plugin</module>
     <module>video-ffmpeg-plugin</module>
   </modules>

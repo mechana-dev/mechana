@@ -58,7 +58,7 @@ Pass a comma-separated capability list and worker ID to accept multiple job type
 
 ```shell
 java -jar mechana-worker/target/mechana-worker.jar http://localhost:8787 \
-  sleep,video-ffmpeg,fractal-render worker-1
+  sleep,video-ffmpeg,fractal-render,ocr-tesseract worker-1
 ```
 
 Submit a job containing four five-second tasks:
@@ -109,6 +109,31 @@ without an input artifact and uploads one lease-fenced batch. Successful assembl
 publishes every PNG, `manifest.json`, `contact-sheet.png`, and
 `fractal-collection.zip` as durable job artifacts.
 
+For OCR workers, install Tesseract 5 and verify the requested language before
+advertising `ocr-tesseract`:
+
+```shell
+tesseract --version
+tesseract --list-langs
+```
+
+Submit a PDF OCR job from the server host:
+
+```shell
+java -cp mechana-client/target/mechana-client.jar dev.mechana.client.OcrClientMain \
+  http://localhost:8787 /absolute/path/book.pdf 12 300 eng "Book title" 1 40
+```
+
+The server renders grayscale PNG pages and divides them across the requested task
+count. Workers download only assigned pages, invoke Tesseract, and upload page-text
+batches. Assembly publishes `document.md`, Unicode `document.tex`, and every raw
+page text file. The TeX source uses `fontspec` and can be compiled separately with
+XeLaTeX; it includes a TeXShop directive that selects that engine automatically.
+A TeX installation is not required by the server or workers. Task count
+`0` automatically chooses up to two batches per connected OCR worker. The final two
+arguments select the first PDF page and number of pages; page count `0` means the
+rest of the document.
+
 For a client running on the server host, the client prints a loopback-only
 dashboard URL such as `http://localhost:8787/dashboard/jobs/<job-id>`. The same
 generic dashboard model is used by scheduler-managed sleep work and the local
@@ -128,7 +153,7 @@ The server is authoritative for plugin code. A worker advertises the plugin IDs 
 assigned plugin JAR into temporary storage, verifies its SHA-256 checksum, loads it for that execution, and deletes
 the temporary artifact afterward.
 
-Server arguments are `[port] [sleep-plugin-jar] [public-server-url] [data-directory] [video-plugin-jar] [fractal-plugin-jar]`.
+Server arguments are `[port] [sleep-plugin-jar] [public-server-url] [data-directory] [video-plugin-jar] [fractal-plugin-jar] [ocr-plugin-jar]`.
 The default data directory is `.mechana/server`; it is ignored by Git. When workers connect over a network, set the
 public URL to an address they can reach:
 

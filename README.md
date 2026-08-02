@@ -6,5 +6,6 @@ plugin contract remains in [`mechana-api/`](mechana-api/), separate from plugin
 implementations and infrastructure modules.
 
 Current concrete demonstrations include distributed sleep work, FFmpeg video
-compression, and deterministic Mandelbrot/Julia collection rendering. See
+compression, deterministic Mandelbrot/Julia collection rendering, and distributed
+Tesseract OCR of server-rendered PDF pages. See
 [`DEVELOPMENT.md`](DEVELOPMENT.md) for runnable server, worker, and client examples.

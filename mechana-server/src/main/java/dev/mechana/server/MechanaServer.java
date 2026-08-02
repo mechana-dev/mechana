@@ -14,6 +14,7 @@ import dev.mechana.protocol.Messages.JobSubmission;
 import dev.mechana.protocol.Messages.JobSubmitRequest;
 import dev.mechana.protocol.Messages.FractalJobSubmitRequest;
 import dev.mechana.protocol.Messages.LeaseRequest;
+import dev.mechana.protocol.Messages.OcrJobSubmitRequest;
 import dev.mechana.protocol.Messages.ProgressUpdate;
 import dev.mechana.protocol.Messages.TaskCompletion;
 import dev.mechana.protocol.Messages.TaskFailure;
@@ -23,6 +24,7 @@ import dev.mechana.protocol.Messages.WorkerRegistration;
 import dev.mechana.protocol.Messages.WorkerRegistrationResponse;
 import dev.mechana.protocol.Messages.VideoJobSubmitRequest;
 import dev.mechana.plugins.fractal.FractalCollectionAssembler;
+import dev.mechana.plugins.ocr.OcrMarkdownAssembler;
 import dev.mechana.plugins.video.CancellationToken;
 import dev.mechana.plugins.video.ExternalProcessRunner;
 import dev.mechana.plugins.video.FfmpegCommands;
@@ -55,6 +57,11 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import javax.imageio.ImageIO;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
 
 /** HTTP adapter around the scheduler and authoritative plugin registry. */
 public final class MechanaServer implements AutoCloseable {
@@ -62,9 +69,13 @@ public final class MechanaServer implements AutoCloseable {
 	private static final String PLUGIN_PATH = "/api/plugins/sleep/1.0.0";
 	private static final String VIDEO_PLUGIN_PATH = "/api/plugins/video-ffmpeg/1.0.0";
 	private static final String FRACTAL_PLUGIN_PATH = "/api/plugins/fractal-render/1.0.0";
+	private static final String OCR_PLUGIN_PATH = "/api/plugins/ocr-tesseract/1.0.0";
 	private static final String FRACTAL_PLUGIN_ID = "fractal-render";
 	private static final String FRACTAL_PLUGIN_VERSION = "1.0.0";
 	private static final String FRACTAL_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.fractal.FractalTaskPlugin";
+	private static final String OCR_PLUGIN_ID = "ocr-tesseract";
+	private static final String OCR_PLUGIN_VERSION = "1.0.0";
+	private static final String OCR_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.ocr.TesseractOcrPlugin";
 	private static final long WORKER_TIMEOUT_MILLIS = 15_000;
 	private static final long HEARTBEAT_CHECK_MILLIS = 1_000;
 
@@ -80,11 +91,15 @@ public final class MechanaServer implements AutoCloseable {
 	private final PluginLocation videoPluginLocation;
 	private final Path fractalPluginJar;
 	private final PluginLocation fractalPluginLocation;
+	private final Path ocrPluginJar;
+	private final PluginLocation ocrPluginLocation;
 	private final Path workRoot;
 	private final String publicUrl;
 	private final ConcurrentMap<String, Path> videoInputs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, VideoJob> videoJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, FractalJob> fractalJobs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, Path> ocrInputs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, OcrJob> ocrJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, WorkerPresence> workers = new ConcurrentHashMap<>();
 	private volatile Runnable restartAction;
 	private final ScheduledExecutorService leaseReaper = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -109,6 +124,12 @@ public final class MechanaServer implements AutoCloseable {
 
 	public MechanaServer(int port, String publicUrl, Path pluginJar, Path videoPluginJar, Path fractalPluginJar,
 			long leaseMillis, Path dataDirectory) throws IOException {
+		this(port, publicUrl, pluginJar, videoPluginJar, fractalPluginJar, fractalPluginJar, leaseMillis,
+				dataDirectory);
+	}
+
+	public MechanaServer(int port, String publicUrl, Path pluginJar, Path videoPluginJar, Path fractalPluginJar,
+			Path ocrPluginJar, long leaseMillis, Path dataDirectory) throws IOException {
 		this.scheduler = new Scheduler(leaseMillis);
 		this.completedJobs = new CompletedJobStore(dataDirectory, json);
 		this.workRoot = dataDirectory.toAbsolutePath().normalize().resolve("work");
@@ -124,6 +145,8 @@ public final class MechanaServer implements AutoCloseable {
 		this.fractalPluginJar = fractalPluginJar.toAbsolutePath().normalize();
 		this.fractalPluginLocation = new PluginLocation(this.publicUrl + FRACTAL_PLUGIN_PATH,
 				sha256(this.fractalPluginJar));
+		this.ocrPluginJar = ocrPluginJar.toAbsolutePath().normalize();
+		this.ocrPluginLocation = new PluginLocation(this.publicUrl + OCR_PLUGIN_PATH, sha256(this.ocrPluginJar));
 		this.http = HttpServer.create(new InetSocketAddress(port), 0);
 		this.http.createContext("/api/jobs", new JobsHandler());
 		this.http.createContext("/api/dashboard", this::serveServerDashboardStatus);
@@ -135,7 +158,10 @@ public final class MechanaServer implements AutoCloseable {
 				exchange -> servePlugin(exchange, this.videoPluginJar, this.videoPluginLocation));
 		this.http.createContext(FRACTAL_PLUGIN_PATH,
 				exchange -> servePlugin(exchange, this.fractalPluginJar, this.fractalPluginLocation));
+		this.http.createContext(OCR_PLUGIN_PATH,
+				exchange -> servePlugin(exchange, this.ocrPluginJar, this.ocrPluginLocation));
 		this.http.createContext("/api/video-inputs", this::serveVideoInput);
+		this.http.createContext("/api/ocr-inputs", this::serveOcrInput);
 		this.http.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
 	}
 
@@ -176,6 +202,12 @@ public final class MechanaServer implements AutoCloseable {
 					FractalJobSubmitRequest request = read(exchange, FractalJobSubmitRequest.class);
 					String jobId = submitFractal(request);
 					sendJson(exchange, 202, new JobSubmission(jobId));
+					return;
+				}
+				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs/ocr".equals(path)) {
+					requireLoopback(exchange);
+					OcrJobSubmitRequest request = read(exchange, OcrJobSubmitRequest.class);
+					sendJson(exchange, 202, new JobSubmission(submitOcr(request)));
 					return;
 				}
 				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs".equals(path)) {
@@ -462,6 +494,8 @@ public final class MechanaServer implements AutoCloseable {
 						assembleVideo(status.jobId());
 					else if (fractalJobs.containsKey(status.jobId()))
 						assembleFractal(status.jobId());
+					else if (ocrJobs.containsKey(status.jobId()))
+						assembleOcr(status.jobId());
 				}
 				archiveIfTerminal(status.jobId());
 				if (!"heartbeat".equals(action)) {
@@ -489,11 +523,14 @@ public final class MechanaServer implements AutoCloseable {
 			String jobId = scheduler.statusForTask(taskId).jobId();
 			VideoJob video = videoJobs.get(jobId);
 			FractalJob fractal = fractalJobs.get(jobId);
+			OcrJob ocr = ocrJobs.get(jobId);
 			Path artifactRoot;
 			if (video != null && name.matches("segment-[0-9]{5}\\.mkv"))
 				artifactRoot = video.scratch().resolve("segments");
 			else if (fractal != null && name.matches("batch-[0-9]{5}\\.zip"))
 				artifactRoot = fractal.scratch().resolve("batches");
+			else if (ocr != null && name.matches("ocr-batch-[0-9]{5}\\.zip"))
+				artifactRoot = ocr.scratch().resolve("batches");
 			else
 				throw new IllegalArgumentException("Unexpected task artifact");
 			Path destination = artifactRoot.resolve(name).normalize();
@@ -628,6 +665,80 @@ public final class MechanaServer implements AutoCloseable {
 		}
 	}
 
+	private String submitOcr(OcrJobSubmitRequest request) throws IOException {
+		Path source = Path.of(request.sourcePath()).toAbsolutePath().normalize();
+		if (!Files.isRegularFile(source))
+			throw new IllegalArgumentException("PDF source does not exist: " + source);
+		Path scratch = workRoot.resolve(UUID.randomUUID().toString());
+		Path pages = scratch.resolve("pages");
+		Files.createDirectories(pages);
+		Files.createDirectories(scratch.resolve("batches"));
+		List<String> inputTokens = new java.util.ArrayList<>();
+		boolean retained = false;
+		try (PDDocument document = Loader.loadPDF(source.toFile())) {
+			int documentPages = document.getNumberOfPages();
+			if (documentPages < 1)
+				throw new IllegalArgumentException("PDF contains no pages");
+			if (request.firstPage() > documentPages)
+				throw new IllegalArgumentException("firstPage exceeds PDF page count");
+			int pageCount = request.pageCount() == 0
+					? documentPages - request.firstPage() + 1
+					: Math.min(request.pageCount(), documentPages - request.firstPage() + 1);
+			PDFRenderer renderer = new PDFRenderer(document);
+			List<Path> rendered = new java.util.ArrayList<>(pageCount);
+			for (int index = 0; index < pageCount; index++) {
+				int documentPage = request.firstPage() + index;
+				Path page = pages.resolve("page-%06d.png".formatted(documentPage));
+				if (!ImageIO.write(renderer.renderImageWithDPI(documentPage - 1, request.dpi(), ImageType.GRAY), "png",
+						page.toFile()))
+					throw new IOException("PNG writer is unavailable");
+				rendered.add(page);
+			}
+			long compatibleWorkers = workers.values().stream().filter(WorkerPresence::connected)
+					.filter(worker -> worker.capabilities().contains(OCR_PLUGIN_ID)).count();
+			int taskCount = request.taskCount() > 0
+					? Math.min(request.taskCount(), pageCount)
+					: Math.min(pageCount, Math.max(1, Math.toIntExact(compatibleWorkers * 2)));
+			List<WorkSpec> work = new java.util.ArrayList<>(taskCount);
+			int base = pageCount / taskCount;
+			int remainder = pageCount % taskCount;
+			int start = 0;
+			for (int batch = 0; batch < taskCount; batch++) {
+				int count = base + (batch < remainder ? 1 : 0);
+				Map<String, String> parameters = new HashMap<>();
+				parameters.put("startPage", Integer.toString(request.firstPage() + start));
+				parameters.put("pageCount", Integer.toString(count));
+				parameters.put("batchIndex", Integer.toString(batch));
+				parameters.put("language", request.language());
+				for (int offset = 0; offset < count; offset++) {
+					String token = UUID.randomUUID().toString();
+					ocrInputs.put(token, rendered.get(start + offset));
+					inputTokens.add(token);
+					parameters.put("pageUrl." + offset, publicUrl + "/api/ocr-inputs/" + token);
+				}
+				int batchFirstPage = request.firstPage() + start;
+				work.add(new WorkSpec(count, parameters, "Pages " + batchFirstPage + "–" + (batchFirstPage + count - 1),
+						Map.of("pages", batchFirstPage + "–" + (batchFirstPage + count - 1), "language",
+								request.language())));
+				start += count;
+			}
+			String jobId = scheduler.submitPlugin(OCR_PLUGIN_ID, OCR_PLUGIN_VERSION, OCR_PLUGIN_ENTRYPOINT, work,
+					Map.of("source", source.toString(), "pages",
+							request.firstPage() + "–" + (request.firstPage() + pageCount - 1), "taskCount",
+							Integer.toString(taskCount), "dpi", Integer.toString(request.dpi()), "language",
+							request.language(), "title", request.title()),
+					ocrPluginLocation);
+			ocrJobs.put(jobId, new OcrJob(List.copyOf(inputTokens), scratch, request.firstPage(), pageCount, request));
+			retained = true;
+			return jobId;
+		} finally {
+			if (!retained) {
+				inputTokens.forEach(ocrInputs::remove);
+				deleteTree(scratch);
+			}
+		}
+	}
+
 	private static VideoTypes.Plan exactSegmentPlan(VideoTypes.MediaInfo input, VideoTypes.Options options,
 			List<Double> keyframes, Path scratch, int segmentCount) throws IOException {
 		List<Double> candidates = keyframes.stream().filter(keyframe -> keyframe >= 0.5)
@@ -677,6 +788,29 @@ public final class MechanaServer implements AutoCloseable {
 		}
 	}
 
+	private void serveOcrInput(HttpExchange exchange) throws IOException {
+		serveMappedInput(exchange, "/api/ocr-inputs/", ocrInputs, "image/png");
+	}
+
+	private static void serveMappedInput(HttpExchange exchange, String prefix, Map<String, Path> inputs,
+			String contentType) throws IOException {
+		if (!"GET".equals(exchange.getRequestMethod())) {
+			sendEmpty(exchange, 405);
+			return;
+		}
+		String path = exchange.getRequestURI().getPath();
+		Path input = path.startsWith(prefix) ? inputs.get(path.substring(prefix.length())) : null;
+		if (input == null || !Files.isRegularFile(input)) {
+			sendEmpty(exchange, 404);
+			return;
+		}
+		exchange.getResponseHeaders().set("Content-Type", contentType);
+		exchange.sendResponseHeaders(200, Files.size(input));
+		try (var output = exchange.getResponseBody()) {
+			Files.copy(input, output);
+		}
+	}
+
 	private void assembleVideo(String jobId) {
 		VideoJob video = videoJobs.get(jobId);
 		if (video == null)
@@ -711,6 +845,23 @@ public final class MechanaServer implements AutoCloseable {
 			scheduler.finishAssembly(jobId, null);
 		} catch (IOException failure) {
 			scheduler.finishAssembly(jobId, "Fractal assembly failed: " + failure.getMessage());
+		}
+	}
+
+	private void assembleOcr(String jobId) {
+		OcrJob ocr = ocrJobs.get(jobId);
+		if (ocr == null)
+			return;
+		try {
+			List<Path> batches;
+			try (var paths = Files.list(ocr.scratch().resolve("batches"))) {
+				batches = paths.filter(Files::isRegularFile).sorted().toList();
+			}
+			new OcrMarkdownAssembler().assemble(batches, ocr.scratch().resolve("result"), ocr.firstPage(),
+					ocr.pageCount(), ocr.request().title());
+			scheduler.finishAssembly(jobId, null);
+		} catch (IOException failure) {
+			scheduler.finishAssembly(jobId, "OCR assembly failed: " + failure.getMessage());
 		}
 	}
 
@@ -766,6 +917,16 @@ public final class MechanaServer implements AutoCloseable {
 								image);
 				}
 			}
+			OcrJob ocr = ocrJobs.get(jobId);
+			if (ocr != null && "SUCCEEDED".equals(snapshot.stage())) {
+				Path result = ocr.scratch().resolve("result");
+				completedJobs.storeArtifact(jobId, "document.md", result.resolve("document.md"));
+				completedJobs.storeArtifact(jobId, "document.tex", result.resolve("document.tex"));
+				try (var pages = Files.list(result.resolve("pages"))) {
+					for (Path page : pages.filter(Files::isRegularFile).sorted().toList())
+						completedJobs.storeArtifact(jobId, Objects.requireNonNull(page.getFileName()).toString(), page);
+				}
+			}
 		} catch (IOException failure) {
 			System.err.printf("Could not archive completed job %s: %s%n", jobId, failure.getMessage());
 		} finally {
@@ -777,6 +938,11 @@ public final class MechanaServer implements AutoCloseable {
 			FractalJob fractal = fractalJobs.remove(jobId);
 			if (fractal != null)
 				deleteTree(fractal.scratch());
+			OcrJob ocr = ocrJobs.remove(jobId);
+			if (ocr != null) {
+				ocr.inputTokens().forEach(ocrInputs::remove);
+				deleteTree(ocr.scratch());
+			}
 		}
 	}
 
@@ -995,6 +1161,10 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private record FractalJob(Path scratch, FractalJobSubmitRequest request) {
+	}
+
+	private record OcrJob(List<String> inputTokens, Path scratch, int firstPage, int pageCount,
+			OcrJobSubmitRequest request) {
 	}
 
 	private record WorkerActivity(String jobId, String plugin, int progress) {

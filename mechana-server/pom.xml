@@ -23,6 +23,11 @@
       <artifactId>jackson-databind</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>${pdfbox.version}</version>
+    </dependency>
+    <dependency>
       <groupId>dev.mechana</groupId>
       <artifactId>mechana-coordinator</artifactId>
       <version>${project.version}</version>
@@ -35,6 +40,11 @@
     <dependency>
       <groupId>dev.mechana</groupId>
       <artifactId>mechana-plugin-fractal-render</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.mechana</groupId>
+      <artifactId>mechana-plugin-ocr-tesseract</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
