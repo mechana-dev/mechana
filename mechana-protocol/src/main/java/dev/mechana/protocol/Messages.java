@@ -44,6 +44,18 @@ public final class Messages {
 		}
 	}
 
+	public record FractalJobSubmitRequest(int imageCount, int taskCount, int width, int height, int maxIterations,
+			long seed) {
+		public FractalJobSubmitRequest {
+			if (imageCount < 1 || taskCount < 0 || taskCount > imageCount)
+				throw new IllegalArgumentException("Invalid fractal image or task count");
+			if (width < 64 || height < 64 || width > 8192 || height > 8192)
+				throw new IllegalArgumentException("Fractal dimensions must be between 64 and 8192 pixels");
+			if (maxIterations < 16 || maxIterations > 100_000)
+				throw new IllegalArgumentException("maxIterations must be between 16 and 100000");
+		}
+	}
+
 	public record TaskStatus(String taskId, String state, int progress, int attempt, String workerId) {
 		public TaskStatus {
 			Objects.requireNonNull(taskId, "taskId");

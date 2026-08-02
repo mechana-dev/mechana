@@ -281,3 +281,31 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Reconciled the brain with the configurable scheduled segment count and prepared
   the cumulative dashboard, lifecycle, liveness, and distributed-video changes for
   reactor verification and pull-request review.
+
+## 2026-08-02 07:22 EDT — Add distributed fractal collection plugin
+
+- Added a pure-Java `fractal-render` plugin for deterministic, no-input,
+  CPU-intensive Mandelbrot and Julia collection jobs.
+- Added explicit or fleet-derived task counts, deterministic batched image ranges,
+  scanline progress, cancellation, and lease-fenced batch artifact publication.
+- Added plugin-owned final assembly that validates the complete PNG set and
+  publishes individual images, a JSON manifest, contact sheet, and collection ZIP
+  through the durable generic artifact view.
+- Added client submission support, server/plugin composition wiring, focused
+  renderer/assembler coverage, server-level artifact-flow coverage, development
+  instructions, and the durable design summary in `brain/fractal-plugin.md`.
+- Process-smoke-tested the dynamically downloaded plugin on an isolated server and
+  worker: two batches produced four PNGs, live progress, a manifest, contact sheet,
+  collection ZIP, and durable completed-job artifact links.
+
+## 2026-08-02 08:04 EDT — Validate fractal plugin across the two-host fleet
+
+- Completed a 120-image 1080p run across 12 ten-image tasks and all eight MBA/Mini
+  workers, including four queued follow-on tasks and durable final collection.
+- Completed a 160-image 4K run across 16 ten-image tasks in 12 minutes 34 seconds.
+  The terminal job contained 163 artifacts: every PNG, manifest, contact sheet,
+  job summary, and a 476,201,792-byte collection ZIP.
+- Corrected the live server's advertised plugin URL from loopback to its LAN address
+  before the accepted runs so Mini workers downloaded the authoritative plugin from
+  the MBA server; the invalid configuration attempt was cancelled and not treated
+  as validation evidence.

@@ -8,7 +8,7 @@ This file reports repository evidence, not desired future status.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing the sleep
-  and FFmpeg video plugin implementations.
+  FFmpeg video, and fractal-render plugin implementations.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
@@ -72,6 +72,13 @@ This file reports repository evidence, not desired future status.
   chunk through the server, accepts lease-fenced
   segment uploads, assembles and validates a smaller HEVC result, and archives it
   as a downloadable job artifact.
+- A scheduler-managed pure-Java `fractal-render` path accepts no input artifact,
+  deterministically divides a requested image count across an explicit or
+  fleet-derived task count, renders batched Mandelbrot/Julia PNGs on compatible
+  workers, and reports scanline/image progress through the generic dashboard.
+  Lease-fenced batch ZIPs are assembled and validated server-side through plugin
+  code. Completed jobs publish every PNG plus a manifest, contact sheet, and
+  complete collection ZIP as durable downloadable artifacts.
 
 ## Not established by current repository evidence
 

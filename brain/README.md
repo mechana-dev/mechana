@@ -15,6 +15,7 @@ loaded through the root `AGENTS.md` and does not affect other repositories.
 - [Artifacts](artifacts.md): artifact identity and movement
 - [Scheduler](scheduler.md): leases, capabilities, scratch reservations
 - [Media plugin](media-plugin.md): FFmpeg partitioned-video design
+- [Fractal plugin](fractal-plugin.md): deterministic no-input rendering design
 - [Glossary](glossary.md): shared terminology
 
 ## Maintenance

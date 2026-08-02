@@ -24,26 +24,33 @@ public final class ServerMain {
 		Path videoPluginJar = args.length > 4
 				? Path.of(args[4])
 				: Path.of("plugins/video-ffmpeg-plugin/target/mechana-plugin-video-0.1.0-SNAPSHOT.jar");
+		Path fractalPluginJar = args.length > 5
+				? Path.of(args[5])
+				: Path.of("plugins/fractal-render-plugin/target/mechana-plugin-fractal-render-0.1.0-SNAPSHOT.jar");
 
-		MechanaServer server = new MechanaServer(port, publicUrl, pluginJar, videoPluginJar, 5_000, dataDirectory);
-		server.onRestart(() -> restart(server, port, pluginJar, publicUrl, dataDirectory, videoPluginJar));
+		MechanaServer server = new MechanaServer(port, publicUrl, pluginJar, videoPluginJar, fractalPluginJar, 5_000,
+				dataDirectory);
+		server.onRestart(
+				() -> restart(server, port, pluginJar, publicUrl, dataDirectory, videoPluginJar, fractalPluginJar));
 		server.start();
 		Runtime.getRuntime().addShutdownHook(new Thread(server::close, "mechana-shutdown"));
 		System.out.printf("Mechana server listening on %s%n", publicUrl);
 		System.out.printf("Server dashboard: http://127.0.0.1:%d/dashboard%n", server.port());
 		System.out.printf("Serving sleep plugin from %s%n", pluginJar.toAbsolutePath());
 		System.out.printf("Serving video plugin from %s%n", videoPluginJar.toAbsolutePath());
+		System.out.printf("Serving fractal plugin from %s%n", fractalPluginJar.toAbsolutePath());
 		System.out.printf("Persisting completed jobs under %s%n", dataDirectory.toAbsolutePath());
 		new CountDownLatch(1).await();
 	}
 
 	@SuppressFBWarnings(value = "DM_EXIT", justification = "The restart action replaces this dedicated server JVM")
 	private static void restart(MechanaServer server, int port, Path pluginJar, String publicUrl, Path dataDirectory,
-			Path videoPluginJar) {
+			Path videoPluginJar, Path fractalPluginJar) {
 		server.close();
 		try {
-			new ProcessBuilder(restartCommand(port, pluginJar, publicUrl, dataDirectory, videoPluginJar)).inheritIO()
-					.start();
+			new ProcessBuilder(
+					restartCommand(port, pluginJar, publicUrl, dataDirectory, videoPluginJar, fractalPluginJar))
+					.inheritIO().start();
 			System.exit(0);
 		} catch (IOException | URISyntaxException failure) {
 			System.err.printf("Could not restart Mechana server: %s%n", failure.getMessage());
@@ -52,6 +59,11 @@ public final class ServerMain {
 
 	static List<String> restartCommand(int port, Path pluginJar, String publicUrl, Path dataDirectory,
 			Path videoPluginJar) throws URISyntaxException {
+		return restartCommand(port, pluginJar, publicUrl, dataDirectory, videoPluginJar, videoPluginJar);
+	}
+
+	static List<String> restartCommand(int port, Path pluginJar, String publicUrl, Path dataDirectory,
+			Path videoPluginJar, Path fractalPluginJar) throws URISyntaxException {
 		List<String> command = new ArrayList<>();
 		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
 		Path codeSource = Path.of(ServerMain.class.getProtectionDomain().getCodeSource().getLocation().toURI());
@@ -68,6 +80,7 @@ public final class ServerMain {
 		command.add(publicUrl);
 		command.add(dataDirectory.toAbsolutePath().normalize().toString());
 		command.add(videoPluginJar.toAbsolutePath().normalize().toString());
+		command.add(fractalPluginJar.toAbsolutePath().normalize().toString());
 		return List.copyOf(command);
 	}
 }

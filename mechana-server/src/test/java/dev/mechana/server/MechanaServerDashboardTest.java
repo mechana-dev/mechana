@@ -6,14 +6,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mechana.protocol.Messages.JobSubmission;
 import dev.mechana.protocol.Messages.TaskLease;
+import java.awt.image.BufferedImage;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -277,6 +282,61 @@ class MechanaServerDashboardTest {
 							HttpResponse.BodyHandlers.ofString())
 					.body();
 			assertTrue(detail.contains("\"resumedFromJobId\":\"" + jobId + "\""));
+		}
+	}
+
+	@Test
+	void assemblesFractalBatchesIntoDurableArtifacts(@TempDir java.nio.file.Path temporary) throws Exception {
+		var plugin = temporary.resolve("plugin.jar");
+		Files.writeString(plugin, "plugin");
+		ObjectMapper json = new ObjectMapper();
+		try (MechanaServer server = new MechanaServer(0, "http://localhost", plugin, plugin, plugin, 5_000, temporary);
+				HttpClient client = HttpClient.newHttpClient()) {
+			server.start();
+			URI base = URI.create("http://127.0.0.1:" + server.port());
+			HttpRequest submit = HttpRequest.newBuilder(base.resolve("/api/jobs/fractal"))
+					.header("Content-Type", "application/json")
+					.POST(HttpRequest.BodyPublishers.ofString(
+							"{\"imageCount\":2,\"taskCount\":1,\"width\":64,\"height\":64,\"maxIterations\":32,\"seed\":7}"))
+					.build();
+			String jobId = json
+					.readValue(client.send(submit, HttpResponse.BodyHandlers.ofString()).body(), JobSubmission.class)
+					.jobId();
+			HttpRequest leaseRequest = HttpRequest.newBuilder(base.resolve("/api/workers/worker-1/lease"))
+					.header("Content-Type", "application/json")
+					.POST(HttpRequest.BodyPublishers
+							.ofString("{\"workerAddress\":\"192.0.2.10\",\"supportedPlugins\":[\"fractal-render\"]}"))
+					.build();
+			TaskLease lease = json.readValue(client.send(leaseRequest, HttpResponse.BodyHandlers.ofString()).body(),
+					TaskLease.class);
+			Path batch = temporary.resolve("batch-00000.zip");
+			try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(batch))) {
+				for (int index = 0; index < 2; index++) {
+					output.putNextEntry(new ZipEntry("fractal-%05d.png".formatted(index)));
+					ImageIO.write(new BufferedImage(64, 64, BufferedImage.TYPE_INT_RGB), "png", output);
+					output.closeEntry();
+				}
+			}
+			HttpRequest upload = HttpRequest
+					.newBuilder(base
+							.resolve("/api/workers/worker-1/tasks/" + lease.taskId() + "/artifacts/batch-00000.zip"))
+					.header("X-Mechana-Lease", lease.leaseToken()).PUT(HttpRequest.BodyPublishers.ofFile(batch))
+					.build();
+			assertEquals(204, client.send(upload, HttpResponse.BodyHandlers.discarding()).statusCode());
+			HttpRequest complete = HttpRequest
+					.newBuilder(base.resolve("/api/workers/worker-1/tasks/" + lease.taskId() + "/complete"))
+					.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers
+							.ofString(json.writeValueAsString(Map.of("leaseToken", lease.leaseToken()))))
+					.build();
+			assertEquals(204, client.send(complete, HttpResponse.BodyHandlers.discarding()).statusCode());
+			String detail = client
+					.send(HttpRequest.newBuilder(base.resolve("/api/jobs/" + jobId + "/dashboard")).build(),
+							HttpResponse.BodyHandlers.ofString())
+					.body();
+			assertTrue(detail.contains("\"stage\":\"SUCCEEDED\""));
+			assertTrue(detail.contains("fractal-collection.zip"));
+			assertTrue(detail.contains("contact-sheet.png"));
+			assertTrue(detail.contains("fractal-00000.png"));
 		}
 	}
 
