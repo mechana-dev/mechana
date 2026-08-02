@@ -41,6 +41,10 @@ public final class MechanaClient {
 		return json.readValue(response.body(), JobStatusResponse.class);
 	}
 
+	public URI dashboard(String jobId) {
+		return server.resolve("/dashboard/jobs/" + jobId);
+	}
+
 	public JobStatusResponse waitForCompletion(String jobId, long pollMillis) throws IOException, InterruptedException {
 		while (true) {
 			JobStatusResponse current = status(jobId);

@@ -1,6 +1,6 @@
 # Plugin model
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-02
 
 ## Accepted contract
 
@@ -56,6 +56,9 @@ wires that plugin into a runnable application.
 - Plugin versions and runtime signatures needed for compatibility are explicit.
 - Cancellation, timeout, progress, and external-process failure have defined task
   outcomes.
+- Plugins report stages and normalized work-unit lifecycle/progress through the
+  generic `JobObserver`. Optional display details remain opaque to scheduling and
+  dashboard aggregation.
 
 The sleep plugin in the current branch is an implementation slice, not the full
 accepted plan/partition/assemble contract. See [media plugin](media-plugin.md) for

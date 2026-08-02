@@ -33,3 +33,10 @@ copies completed remote Matroska segments back to the initiating host before
 assembly. Those SCP operations are explicit test scaffolding: they do not provide
 stable artifact identities, checksums, atomic publication, or provider-managed
 retention.
+
+The distributed sleep/server slice now has a small server-local retention adapter:
+each terminal job owns a directory containing an atomically published dashboard
+snapshot and an `artifacts/` subtree. The detailed dashboard enumerates regular
+files in that subtree as downloads, and purge deletes the whole owned job directory.
+This establishes restart persistence and ownership-aware cleanup, but it is not yet
+the storage-neutral, checksum-addressed artifact provider accepted above.

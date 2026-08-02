@@ -2,6 +2,8 @@ package dev.mechana.server;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import dev.mechana.api.WorkUnit;
+import dev.mechana.coordinator.InMemoryJobMonitor;
 import dev.mechana.plugins.video.CancellationToken;
 import dev.mechana.plugins.video.ExternalProcessRunner;
 import dev.mechana.plugins.video.FfmpegCommands;
@@ -18,6 +20,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -47,8 +51,9 @@ public final class TwoHostVideoJobMain {
 		if (targetRatio <= 0 || targetRatio >= 1)
 			throw new IllegalArgumentException("Target size ratio must be between zero and one");
 
-		VideoJobMonitor monitor = new VideoJobMonitor(input, output);
-		VideoJobDashboardServer dashboard = new VideoJobDashboardServer(dashboardPort, monitor);
+		InMemoryJobMonitor monitor = new InMemoryJobMonitor(UUID.randomUUID().toString(), "video-ffmpeg-two-host",
+				Map.of("input", input.toString(), "output", output.toString()));
+		JobDashboardServer dashboard = new JobDashboardServer(dashboardPort, monitor);
 		dashboard.start();
 		Runtime.getRuntime().addShutdownHook(new Thread(dashboard::close, "two-host-dashboard-shutdown"));
 		System.out.printf("Live two-host dashboard: http://localhost:%d/%n", dashboard.port());
@@ -64,7 +69,7 @@ public final class TwoHostVideoJobMain {
 	}
 
 	private static void run(Path input, Path output, Path scratch, String remoteHost, int remotePort,
-			String localAddress, String remoteAddress, double targetRatio, VideoJobMonitor monitor)
+			String localAddress, String remoteAddress, double targetRatio, InMemoryJobMonitor monitor)
 			throws IOException, InterruptedException {
 		FfmpegCommands commands = new FfmpegCommands("ffmpeg", "ffprobe");
 		ExternalProcessRunner runner = new ExternalProcessRunner();
@@ -79,7 +84,12 @@ public final class TwoHostVideoJobMain {
 				probe.keyframes(input, options.processTimeout()), scratch);
 		if (plan.segments().size() != 8)
 			throw new IOException("Expected exactly eight segments, planned " + plan.segments().size());
-		monitor.onPlan(plan);
+		monitor.onPlan(8,
+				plan.segments().stream()
+						.map(segment -> new WorkUnit(Integer.toString(segment.index()), "Segment " + segment.index(),
+								segment.durationSeconds(),
+								Map.of("range", "%.1f–%.1fs".formatted(segment.startSeconds(), segment.endSeconds()))))
+						.toList());
 		Files.createDirectories(scratch.resolve("segments"));
 		long bitrate = targetVideoBitrate(inputInfo, targetRatio);
 		persistPlan(plan, bitrate, targetRatio, localAddress, remoteAddress);
@@ -103,7 +113,7 @@ public final class TwoHostVideoJobMain {
 
 	private static void executeSegments(Path input, VideoTypes.Plan plan, FfmpegCommands commands,
 			ExternalProcessRunner runner, String remoteHost, int remotePort, String localAddress, String remoteAddress,
-			long bitrate, VideoJobMonitor monitor) throws IOException, InterruptedException {
+			long bitrate, InMemoryJobMonitor monitor) throws IOException, InterruptedException {
 		try (var pool = Executors.newFixedThreadPool(8)) {
 			List<Callable<Void>> tasks = new ArrayList<>();
 			for (VideoTypes.Segment segment : plan.segments()) {
@@ -125,16 +135,18 @@ public final class TwoHostVideoJobMain {
 
 	private static void executeSegment(Path input, VideoTypes.Segment segment, VideoTypes.Plan plan,
 			FfmpegCommands commands, ExternalProcessRunner runner, String remoteHost, int remotePort,
-			String workerAddress, long bitrate, boolean local, VideoJobMonitor monitor)
+			String workerAddress, long bitrate, boolean local, InMemoryJobMonitor monitor)
 			throws IOException, InterruptedException {
-		monitor.onSegmentStarted(segment.index(), workerAddress);
+		String workUnitId = Integer.toString(segment.index());
+		monitor.onWorkUnitStarted(workUnitId, workerAddress);
 		try {
 			List<String> command = local
 					? commands.bitrateSegment(input, segment, plan.options(), bitrate)
 					: remoteCommand(segment, plan.options(), remoteHost, remotePort, bitrate);
 			var result = runner.run(command, plan.options().processTimeout(), CancellationToken.NEVER, line -> {
 				if (line.startsWith("out_time") || line.equals("progress=end"))
-					monitor.onSegmentProgress(segment.index(), line);
+					monitor.onWorkUnitProgress(workUnitId, progressPercent(line, segment),
+							Map.of("ffmpegProgress", line));
 			});
 			if (result.exitCode() != 0)
 				throw new IOException("Segment " + segment.index() + " failed: " + result.stderr().strip());
@@ -142,10 +154,23 @@ public final class TwoHostVideoJobMain {
 				copyRemoteSegment(segment, remoteHost, remotePort, runner, plan.options().processTimeout());
 			if (!Files.isRegularFile(segment.output()) || Files.size(segment.output()) == 0)
 				throw new IOException("Segment produced no output: " + segment.index());
-			monitor.onSegmentCompleted(segment.index());
+			monitor.onWorkUnitCompleted(workUnitId);
 		} catch (IOException | InterruptedException | RuntimeException failure) {
-			monitor.onSegmentFailed(segment.index(), failure.getMessage());
+			monitor.onWorkUnitFailed(workUnitId, failure.getMessage());
 			throw failure;
+		}
+	}
+
+	private static int progressPercent(String update, VideoTypes.Segment segment) {
+		if ("progress=end".equals(update))
+			return 100;
+		if (!update.startsWith("out_time_us="))
+			return 0;
+		try {
+			double seconds = Long.parseLong(update.substring("out_time_us=".length())) / 1_000_000.0;
+			return (int) Math.clamp(Math.round(seconds * 100.0 / segment.durationSeconds()), 0, 99);
+		} catch (NumberFormatException ignored) {
+			return 0;
 		}
 	}
 

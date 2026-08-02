@@ -1,5 +1,6 @@
 package dev.mechana.coordinator;
 
+import dev.mechana.api.WorkUnit;
 import dev.mechana.protocol.Messages.JobStatusResponse;
 import dev.mechana.protocol.Messages.TaskLease;
 import dev.mechana.protocol.Messages.TaskStatus;
@@ -47,9 +48,14 @@ public final class Scheduler {
 		String jobId = UUID.randomUUID().toString();
 		List<Task> tasks = new ArrayList<>(taskCount);
 		for (int index = 0; index < taskCount; index++) {
-			tasks.add(new Task(jobId + "-" + (index + 1), durationMillis));
+			tasks.add(new Task(jobId, jobId + "-" + (index + 1), durationMillis));
 		}
-		jobs.put(jobId, new Job(jobId, tasks));
+		InMemoryJobMonitor monitor = new InMemoryJobMonitor(jobId, SLEEP_PLUGIN_ID,
+				Map.of("taskDuration", durationMillis + "ms"));
+		monitor.onPlan(taskCount, tasks.stream().map(task -> new WorkUnit(task.id, "Task " + task.id,
+				task.durationMillis, Map.of("duration", task.durationMillis + "ms"))).toList());
+		monitor.onStage("QUEUED");
+		jobs.put(jobId, new Job(jobId, tasks, monitor));
 		return jobId;
 	}
 
@@ -72,6 +78,8 @@ public final class Scheduler {
 					task.leaseToken = UUID.randomUUID().toString();
 					task.leaseExpiresAt = now() + leaseMillis;
 					task.attempt++;
+					job.monitor.onStage("EXECUTING");
+					job.monitor.onWorkUnitStarted(task.id, workerId);
 					return Optional.of(new TaskLease(job.id, task.id, SLEEP_PLUGIN_ID, SLEEP_PLUGIN_VERSION,
 							SLEEP_PLUGIN_ENTRYPOINT, plugin.url(), plugin.sha256(), task.durationMillis,
 							task.leaseToken, leaseMillis, task.attempt));
@@ -87,6 +95,8 @@ public final class Scheduler {
 			return false;
 		}
 		task.progress = Math.max(task.progress, percent);
+		jobs.get(task.jobId).monitor.onWorkUnitProgress(task.id, percent,
+				Map.of("attempt", Integer.toString(task.attempt)));
 		task.leaseExpiresAt = now() + leaseMillis;
 		touch(workerId);
 		return true;
@@ -100,6 +110,10 @@ public final class Scheduler {
 		task.progress = 100;
 		task.state = TaskState.SUCCEEDED;
 		task.leaseExpiresAt = 0;
+		Job job = jobs.get(task.jobId);
+		job.monitor.onWorkUnitCompleted(task.id);
+		if (job.tasks.stream().allMatch(candidate -> candidate.state == TaskState.SUCCEEDED))
+			job.monitor.onStage("SUCCEEDED");
 		touch(workerId);
 		return true;
 	}
@@ -109,8 +123,25 @@ public final class Scheduler {
 		if (!ownsLease(task, workerId, leaseToken)) {
 			return false;
 		}
-		requeue(task);
+		requeue(task, "worker reported failure");
 		touch(workerId);
+		return true;
+	}
+
+	public synchronized boolean abort(String jobId) {
+		Job job = jobs.get(jobId);
+		if (job == null)
+			throw new IllegalArgumentException("Unknown job: " + jobId);
+		if (isTerminal(job.monitor.snapshot().stage()))
+			return false;
+		for (Task task : job.tasks) {
+			if (task.state != TaskState.SUCCEEDED) {
+				task.state = TaskState.CANCELLED;
+				task.leaseToken = null;
+				task.leaseExpiresAt = 0;
+			}
+		}
+		job.monitor.cancel("Aborted from dashboard");
 		return true;
 	}
 
@@ -124,9 +155,11 @@ public final class Scheduler {
 				.map(task -> new TaskStatus(task.id, task.state.name(), task.progress, task.attempt, task.workerId))
 				.toList();
 		int progress = (int) Math.round(job.tasks.stream().mapToInt(task -> task.progress).average().orElse(0));
-		String state = job.tasks.stream().allMatch(task -> task.state == TaskState.SUCCEEDED)
-				? "SUCCEEDED"
-				: job.tasks.stream().anyMatch(task -> task.state == TaskState.RUNNING) ? "RUNNING" : "QUEUED";
+		String state = job.tasks.stream().anyMatch(task -> task.state == TaskState.CANCELLED)
+				? "CANCELLED"
+				: job.tasks.stream().allMatch(task -> task.state == TaskState.SUCCEEDED)
+						? "SUCCEEDED"
+						: job.tasks.stream().anyMatch(task -> task.state == TaskState.RUNNING) ? "RUNNING" : "QUEUED";
 		return new JobStatusResponse(job.id, state, progress, taskStatuses);
 	}
 
@@ -139,13 +172,37 @@ public final class Scheduler {
 		throw new IllegalArgumentException("Unknown task: " + taskId);
 	}
 
+	public synchronized InMemoryJobMonitor.Snapshot dashboard(String jobId) {
+		Job job = jobs.get(jobId);
+		if (job == null)
+			throw new IllegalArgumentException("Unknown job: " + jobId);
+		return job.monitor.snapshot();
+	}
+
+	public synchronized List<InMemoryJobMonitor.Snapshot> dashboards() {
+		List<InMemoryJobMonitor.Snapshot> snapshots = jobs.values().stream().map(job -> job.monitor.snapshot())
+				.collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+		java.util.Collections.reverse(snapshots);
+		return List.copyOf(snapshots);
+	}
+
+	public synchronized boolean purgeCompleted(String jobId) {
+		Job job = jobs.get(jobId);
+		if (job == null)
+			return false;
+		if (!isTerminal(job.monitor.snapshot().stage()))
+			throw new IllegalArgumentException("Cannot purge an active job: " + jobId);
+		jobs.remove(jobId);
+		return true;
+	}
+
 	public synchronized int expireLeases() {
 		int expired = 0;
 		long currentTime = now();
 		for (Job job : jobs.values()) {
 			for (Task task : job.tasks) {
 				if (task.state == TaskState.RUNNING && task.leaseExpiresAt <= currentTime) {
-					requeue(task);
+					requeue(task, "lease expired");
 					expired++;
 				}
 			}
@@ -178,12 +235,20 @@ public final class Scheduler {
 		}
 	}
 
-	private static void requeue(Task task) {
+	private void requeue(Task task, String reason) {
 		task.state = TaskState.QUEUED;
 		task.progress = 0;
 		task.workerId = null;
 		task.leaseToken = null;
 		task.leaseExpiresAt = 0;
+		Job job = jobs.get(task.jobId);
+		job.monitor.requeueWorkUnit(task.id, reason);
+		if (job.tasks.stream().noneMatch(candidate -> candidate.state == TaskState.RUNNING))
+			job.monitor.onStage("QUEUED");
+	}
+
+	private static boolean isTerminal(String stage) {
+		return "SUCCEEDED".equals(stage) || "FAILED".equals(stage) || "CANCELLED".equals(stage);
 	}
 
 	public record PluginLocation(String url, String sha256) {
@@ -193,17 +258,18 @@ public final class Scheduler {
 		}
 	}
 
-	private record Job(String id, List<Task> tasks) {
+	private record Job(String id, List<Task> tasks, InMemoryJobMonitor monitor) {
 	}
 
 	private record WorkerRegistration(Set<String> supportedPlugins, long lastSeenAt) {
 	}
 
 	private enum TaskState {
-		QUEUED, RUNNING, SUCCEEDED
+		QUEUED, RUNNING, SUCCEEDED, CANCELLED
 	}
 
 	private static final class Task {
+		private final String jobId;
 		private final String id;
 		private final long durationMillis;
 		private TaskState state = TaskState.QUEUED;
@@ -213,7 +279,8 @@ public final class Scheduler {
 		private String leaseToken;
 		private long leaseExpiresAt;
 
-		private Task(String id, long durationMillis) {
+		private Task(String jobId, String id, long durationMillis) {
+			this.jobId = jobId;
 			this.id = id;
 			this.durationMillis = durationMillis;
 		}

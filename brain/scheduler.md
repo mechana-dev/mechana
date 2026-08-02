@@ -1,6 +1,6 @@
 # Scheduler
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-02
 
 The scheduler is task-agnostic. It assigns runnable stages using dependencies,
 plugin/runtime capabilities, leases, and declared resources. It does not inspect
@@ -36,11 +36,26 @@ conservative scratch estimate against local usable space. This is deliberately n
 scheduler integration: it neither advertises nor reserves capacity, assigns remote
 workers, retries attempts, nor changes lease ownership.
 
-The server's video dashboard observes that same local executor. Its configured
-worker count is the executor parallelism and its active-worker count is the number
-of currently running segments; neither value represents registered or leased
-cluster workers. Distributed progress aggregation and worker inventory remain
-scheduler/platform work.
+The scheduler feeds lease assignment, progress, completion, failure, and requeue
+transitions into the same generic in-memory job monitor used by local plugin
+workflows. Sleep jobs therefore expose a live dashboard with authoritative leased
+worker identities. Active scheduling state remains volatile, while terminal
+dashboard snapshots and server-owned artifacts are archived by the server and
+loaded across restarts.
+
+The scheduler can also return newest-first snapshots for every retained job. The
+server combines those snapshots with its worker-presence registry for the master
+dashboard. Terminal transitions capture their completion instant so job and
+work-unit elapsed durations remain stable after completion.
+
+The sleep scheduler supports terminal abort: it marks unfinished work units
+`CANCELLED`, fences active lease tokens, rejects late updates, and lets the server
+archive the result. Pause/resume, job lineage, completed-work reuse, and
+plugin-defined mid-work-unit checkpoints are not implemented yet.
+
+For local video workflows, configured workers still means executor parallelism and
+active workers means currently running work units. The dashboard presents those
+generic values without claiming scheduler ownership of the local executor.
 
 `TwoHostVideoJobMain` goes one step farther only as a manual operational proof: it
 uses a fixed four-local/four-SSH assignment and aggregates both processes' FFmpeg

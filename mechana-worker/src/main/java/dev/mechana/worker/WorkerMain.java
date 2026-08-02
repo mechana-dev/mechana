@@ -14,7 +14,7 @@ public final class WorkerMain {
 	}
 
 	public static void main(String[] args) {
-		URI server = URI.create(args.length > 0 ? args[0] : "http://localhost:8080");
+		URI server = URI.create(args.length > 0 ? args[0] : "http://localhost:8787");
 		Set<String> plugins = args.length > 1
 				? Arrays.stream(args[1].split(",")).collect(Collectors.toSet())
 				: Set.of("sleep");

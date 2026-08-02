@@ -4,10 +4,13 @@ import dev.mechana.plugins.video.CancellationToken;
 import dev.mechana.plugins.video.FfmpegCommands;
 import dev.mechana.plugins.video.LocalVideoCompression;
 import dev.mechana.plugins.video.VideoTypes;
+import dev.mechana.coordinator.InMemoryJobMonitor;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
 /** Runs one local video job with a live HTTP dashboard. */
@@ -34,11 +37,12 @@ public final class VideoJobMain {
 				args.length > 3 ? Duration.ofSeconds(Long.parseLong(args[3])) : defaults.targetSegmentDuration(),
 				args.length > 4 ? Integer.parseInt(args[4]) : defaults.parallelism(), defaults.processTimeout());
 		int port = args.length > 5 ? Integer.parseInt(args[5]) : 8081;
-		VideoJobMonitor monitor = new VideoJobMonitor(input, output);
-		VideoJobDashboardServer dashboard = new VideoJobDashboardServer(port, monitor);
+		InMemoryJobMonitor monitor = new InMemoryJobMonitor(UUID.randomUUID().toString(), "video-ffmpeg",
+				Map.of("input", input.toString(), "output", output.toString()));
+		JobDashboardServer dashboard = new JobDashboardServer(port, monitor);
 		dashboard.start();
-		Runtime.getRuntime().addShutdownHook(new Thread(dashboard::close, "video-dashboard-shutdown"));
-		System.out.printf("Live video job dashboard: http://localhost:%d/%n", dashboard.port());
+		Runtime.getRuntime().addShutdownHook(new Thread(dashboard::close, "job-dashboard-shutdown"));
+		System.out.printf("Live job dashboard: http://localhost:%d/%n", dashboard.port());
 		Thread.ofVirtual().start(() -> {
 			try {
 				String ffmpeg = System.getenv().getOrDefault("MECHANA_FFMPEG", "ffmpeg");
