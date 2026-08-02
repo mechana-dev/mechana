@@ -19,6 +19,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import javax.imageio.ImageIO;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -337,6 +339,79 @@ class MechanaServerDashboardTest {
 			assertTrue(detail.contains("fractal-collection.zip"));
 			assertTrue(detail.contains("contact-sheet.png"));
 			assertTrue(detail.contains("fractal-00000.png"));
+		}
+	}
+
+	@Test
+	void rasterizesPdfAndAssemblesOcrBatchesIntoMarkdown(@TempDir Path temporary) throws Exception {
+		Path plugin = temporary.resolve("plugin.jar");
+		Files.writeString(plugin, "plugin");
+		Path pdf = temporary.resolve("book.pdf");
+		try (PDDocument document = new PDDocument()) {
+			document.addPage(new PDPage());
+			document.addPage(new PDPage());
+			document.save(pdf.toFile());
+		}
+		ObjectMapper json = new ObjectMapper();
+		int port;
+		try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+			port = socket.getLocalPort();
+		}
+		try (MechanaServer server = new MechanaServer(port, "http://127.0.0.1:" + port, plugin, plugin, plugin, plugin,
+				5_000, temporary.resolve("data")); HttpClient client = HttpClient.newHttpClient()) {
+			server.start();
+			URI base = URI.create("http://127.0.0.1:" + server.port());
+			String request = json.writeValueAsString(Map.of("sourcePath", pdf.toString(), "taskCount", 1, "dpi", 150,
+					"language", "eng", "title", "Test Book"));
+			HttpResponse<String> submitted = client.send(
+					HttpRequest.newBuilder(base.resolve("/api/jobs/ocr")).header("Content-Type", "application/json")
+							.POST(HttpRequest.BodyPublishers.ofString(request)).build(),
+					HttpResponse.BodyHandlers.ofString());
+			assertEquals(202, submitted.statusCode());
+			String jobId = json.readValue(submitted.body(), JobSubmission.class).jobId();
+			HttpRequest leaseRequest = HttpRequest.newBuilder(base.resolve("/api/workers/worker-1/lease"))
+					.header("Content-Type", "application/json")
+					.POST(HttpRequest.BodyPublishers
+							.ofString("{\"workerAddress\":\"192.0.2.10\",\"supportedPlugins\":[\"ocr-tesseract\"]}"))
+					.build();
+			TaskLease lease = json.readValue(client.send(leaseRequest, HttpResponse.BodyHandlers.ofString()).body(),
+					TaskLease.class);
+			assertEquals("ocr-tesseract", lease.pluginId());
+			assertEquals(2, Integer.parseInt(lease.parameters().get("pageCount")));
+			HttpResponse<byte[]> page = client.send(
+					HttpRequest.newBuilder(URI.create(lease.parameters().get("pageUrl.0"))).build(),
+					HttpResponse.BodyHandlers.ofByteArray());
+			assertEquals(200, page.statusCode());
+			assertTrue(page.body().length > 0);
+
+			Path batch = temporary.resolve("ocr-batch-00000.zip");
+			try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(batch))) {
+				for (int index = 1; index <= 2; index++) {
+					output.putNextEntry(new ZipEntry("page-%06d.txt".formatted(index)));
+					output.write(("Text from page " + index).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+					output.closeEntry();
+				}
+			}
+			HttpRequest upload = HttpRequest
+					.newBuilder(base.resolve(
+							"/api/workers/worker-1/tasks/" + lease.taskId() + "/artifacts/ocr-batch-00000.zip"))
+					.header("X-Mechana-Lease", lease.leaseToken()).PUT(HttpRequest.BodyPublishers.ofFile(batch))
+					.build();
+			assertEquals(204, client.send(upload, HttpResponse.BodyHandlers.discarding()).statusCode());
+			HttpRequest complete = HttpRequest
+					.newBuilder(base.resolve("/api/workers/worker-1/tasks/" + lease.taskId() + "/complete"))
+					.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers
+							.ofString(json.writeValueAsString(Map.of("leaseToken", lease.leaseToken()))))
+					.build();
+			assertEquals(204, client.send(complete, HttpResponse.BodyHandlers.discarding()).statusCode());
+			String detail = client
+					.send(HttpRequest.newBuilder(base.resolve("/api/jobs/" + jobId + "/dashboard")).build(),
+							HttpResponse.BodyHandlers.ofString())
+					.body();
+			assertTrue(detail.contains("\"stage\":\"SUCCEEDED\""));
+			assertTrue(detail.contains("document.md"));
+			assertTrue(detail.contains("document.tex"));
+			assertTrue(detail.contains("page-000001.txt"));
 		}
 	}
 

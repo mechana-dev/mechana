@@ -5,6 +5,7 @@ import dev.mechana.protocol.Messages.JobStatusResponse;
 import dev.mechana.protocol.Messages.JobSubmission;
 import dev.mechana.protocol.Messages.JobSubmitRequest;
 import dev.mechana.protocol.Messages.FractalJobSubmitRequest;
+import dev.mechana.protocol.Messages.OcrJobSubmitRequest;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -35,10 +36,17 @@ public final class MechanaClient {
 	}
 
 	public String submitFractals(FractalJobSubmitRequest submission) throws IOException, InterruptedException {
+		return submitPlugin("/api/jobs/fractal", submission);
+	}
+
+	public String submitOcr(OcrJobSubmitRequest submission) throws IOException, InterruptedException {
+		return submitPlugin("/api/jobs/ocr", submission);
+	}
+
+	private String submitPlugin(String path, Object submission) throws IOException, InterruptedException {
 		byte[] body = json.writeValueAsBytes(submission);
-		HttpRequest request = HttpRequest.newBuilder(server.resolve("/api/jobs/fractal"))
-				.timeout(Duration.ofSeconds(10)).header("Content-Type", "application/json")
-				.POST(HttpRequest.BodyPublishers.ofByteArray(body)).build();
+		HttpRequest request = HttpRequest.newBuilder(server.resolve(path)).timeout(Duration.ofSeconds(10))
+				.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofByteArray(body)).build();
 		HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
 		requireStatus(response, 202);
 		return json.readValue(response.body(), JobSubmission.class).jobId();

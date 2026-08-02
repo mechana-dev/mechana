@@ -309,3 +309,27 @@ Append-only record of material Mechana project changes and accepted decisions.
   before the accepted runs so Mini workers downloaded the authoritative plugin from
   the MBA server; the invalid configuration attempt was cancelled and not treated
   as validation evidence.
+
+## 2026-08-02 08:40 EDT — Add initial distributed Tesseract OCR plugin
+
+- Added the `ocr-tesseract` plugin with external-process execution, runtime/language
+  probing, cancellation, timeouts, per-page progress, and batch publication.
+- Added server-side PDFBox rasterization and deterministic batching so workers
+  receive only assigned PNG pages and need no PDF tools or source PDF access.
+- Added Markdown/raw-text assembly, durable artifacts, client and server wiring,
+  focused tests, an optional real-Tesseract integration test, and server workflow
+  coverage.
+- Made Maven test JVMs explicitly headless to match non-GUI worker operation and
+  prevent macOS AWT startup crashes.
+
+## 2026-08-02 09:50 EDT — Add LaTeX OCR output
+
+- Extended OCR assembly to publish both `document.md` and Unicode `document.tex`
+  while retaining every raw page text artifact.
+- Added deterministic LaTeX escaping and page boundaries without adding a TeX
+  runtime requirement to servers or workers; compilation remains optional and
+  external to the job.
+- Added focused escaping/assembly coverage and server artifact-flow verification.
+- Added a TeXShop engine directive after live compilation exposed that TeXShop
+  otherwise defaulted to incompatible pdfLaTeX; the 50-page NASA artifact was
+  then verified to compile successfully with XeLaTeX.

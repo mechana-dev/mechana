@@ -56,6 +56,28 @@ public final class Messages {
 		}
 	}
 
+	public record OcrJobSubmitRequest(String sourcePath, int taskCount, int dpi, String language, String title,
+			int firstPage, int pageCount) {
+		public OcrJobSubmitRequest(String sourcePath, int taskCount, int dpi, String language, String title) {
+			this(sourcePath, taskCount, dpi, language, title, 1, 0);
+		}
+
+		public OcrJobSubmitRequest {
+			Objects.requireNonNull(sourcePath, "sourcePath");
+			language = language == null || language.isBlank() ? "eng" : language;
+			title = title == null || title.isBlank() ? "OCR Document" : title;
+			if (taskCount < 0)
+				throw new IllegalArgumentException("taskCount must not be negative");
+			firstPage = firstPage == 0 ? 1 : firstPage;
+			if (firstPage < 1 || pageCount < 0)
+				throw new IllegalArgumentException("Invalid OCR page range");
+			if (dpi < 150 || dpi > 600)
+				throw new IllegalArgumentException("dpi must be between 150 and 600");
+			if (!language.matches("[A-Za-z0-9_+.-]+"))
+				throw new IllegalArgumentException("Invalid OCR language expression");
+		}
+	}
+
 	public record TaskStatus(String taskId, String state, int progress, int attempt, String workerId) {
 		public TaskStatus {
 			Objects.requireNonNull(taskId, "taskId");

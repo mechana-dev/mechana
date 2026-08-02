@@ -79,6 +79,11 @@ This file reports repository evidence, not desired future status.
   Lease-fenced batch ZIPs are assembled and validated server-side through plugin
   code. Completed jobs publish every PNG plus a manifest, contact sheet, and
   complete collection ZIP as durable downloadable artifacts.
+- A scheduler-managed `ocr-tesseract` path accepts a server-local PDF, rasterizes
+  grayscale pages server-side with PDFBox, deterministically batches pages, sends
+  workers only their assigned images, invokes external Tesseract with cancellation
+  and timeout handling, and assembles ordered Markdown, Unicode LaTeX source,
+  and raw page text as durable artifacts.
 
 ## Not established by current repository evidence
 

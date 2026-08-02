@@ -57,6 +57,11 @@ transport must adapt the same domain boundaries rather than redefine them.
   deterministic image-index ranges; workers publish one batch artifact per work
   unit, and plugin-owned server composition validates and collects those batches
   into individual images, a manifest, a contact sheet, and a collection archive.
+- The OCR reference path rasterizes PDFs during server-side planning, transfers
+  immutable per-page PNGs to capable workers, receives lease-fenced page-text
+  batches, and performs ordered Markdown and Unicode LaTeX source assembly on the
+  server. PDF parsing does not occur on workers and Tesseract-specific behavior
+  remains in the plugin.
 - Observability: the platform owns job/work-unit state, weighted progress,
   attempts, workers, events, and dashboard presentation. Plugins emit the generic
   `JobObserver` lifecycle and may attach bounded string display fields; dashboard

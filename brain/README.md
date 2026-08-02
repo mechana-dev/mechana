@@ -16,6 +16,7 @@ loaded through the root `AGENTS.md` and does not affect other repositories.
 - [Scheduler](scheduler.md): leases, capabilities, scratch reservations
 - [Media plugin](media-plugin.md): FFmpeg partitioned-video design
 - [Fractal plugin](fractal-plugin.md): deterministic no-input rendering design
+- [OCR plugin](ocr-plugin.md): PDF rasterization, distributed Tesseract, and Markdown assembly
 - [Glossary](glossary.md): shared terminology
 
 ## Maintenance
