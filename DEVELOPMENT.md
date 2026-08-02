@@ -31,8 +31,8 @@ Selecting a completed job opens its detailed work-unit dashboard and downloadabl
 artifact list. Completed jobs survive server restarts. The **Purge** action removes
 the archived snapshot, all server-owned artifacts for that job, and the dashboard row.
 Worker presence history remains in memory and resets when the server restarts.
-Connected workers show `IDLE` when unassigned or `WORKING` with a link to their
-currently assigned job.
+Connected workers show `IDLE` when unassigned or the active plugin ID and progress
+with a link to their currently assigned job.
 The master page also provides a confirmed, loopback-only **Restart server** action.
 It launches the same server JAR with the current port, plugin, public URL, and data
 directory. Workers reconnect automatically and durable completed history remains;
@@ -52,6 +52,13 @@ Start one or more workers in separate terminals:
 
 ```shell
 java -jar mechana-worker/target/mechana-worker.jar
+```
+
+Pass a comma-separated capability list and worker ID to accept multiple job types:
+
+```shell
+java -jar mechana-worker/target/mechana-worker.jar http://localhost:8787 \
+  sleep,video-ffmpeg,fractal-render worker-1
 ```
 
 Submit a job containing four five-second tasks:
@@ -87,6 +94,21 @@ publishes it as a durable completed-job artifact. Content-addressed caching rema
 a follow-up optimization, but remote work no longer downloads the whole clip for
 every segment.
 
+Submit a no-input fractal collection job from the server host:
+
+```shell
+java -cp mechana-client/target/mechana-client.jar dev.mechana.client.FractalClientMain \
+  http://localhost:8787 24 0 1920 1080 4000 1
+```
+
+The arguments after the server URL are image count, task count, width, height,
+maximum iterations, and deterministic seed. Task count `0` automatically chooses
+up to two batches per currently connected `fractal-render` worker; an explicit
+positive value fixes the number of batches. Each worker renders its assigned PNGs
+without an input artifact and uploads one lease-fenced batch. Successful assembly
+publishes every PNG, `manifest.json`, `contact-sheet.png`, and
+`fractal-collection.zip` as durable job artifacts.
+
 For a client running on the server host, the client prints a loopback-only
 dashboard URL such as `http://localhost:8787/dashboard/jobs/<job-id>`. The same
 generic dashboard model is used by scheduler-managed sleep work and the local
@@ -106,7 +128,7 @@ The server is authoritative for plugin code. A worker advertises the plugin IDs 
 assigned plugin JAR into temporary storage, verifies its SHA-256 checksum, loads it for that execution, and deletes
 the temporary artifact afterward.
 
-Server arguments are `[port] [sleep-plugin-jar] [public-server-url] [data-directory] [video-plugin-jar]`.
+Server arguments are `[port] [sleep-plugin-jar] [public-server-url] [data-directory] [video-plugin-jar] [fractal-plugin-jar]`.
 The default data directory is `.mechana/server`; it is ignored by Git. When workers connect over a network, set the
 public URL to an address they can reach:
 

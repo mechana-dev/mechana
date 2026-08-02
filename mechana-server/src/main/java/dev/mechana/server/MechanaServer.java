@@ -12,6 +12,7 @@ import dev.mechana.coordinator.Scheduler.WorkSpec;
 import dev.mechana.protocol.Messages.JobStatusResponse;
 import dev.mechana.protocol.Messages.JobSubmission;
 import dev.mechana.protocol.Messages.JobSubmitRequest;
+import dev.mechana.protocol.Messages.FractalJobSubmitRequest;
 import dev.mechana.protocol.Messages.LeaseRequest;
 import dev.mechana.protocol.Messages.ProgressUpdate;
 import dev.mechana.protocol.Messages.TaskCompletion;
@@ -21,6 +22,7 @@ import dev.mechana.protocol.Messages.TaskLease;
 import dev.mechana.protocol.Messages.WorkerRegistration;
 import dev.mechana.protocol.Messages.WorkerRegistrationResponse;
 import dev.mechana.protocol.Messages.VideoJobSubmitRequest;
+import dev.mechana.plugins.fractal.FractalCollectionAssembler;
 import dev.mechana.plugins.video.CancellationToken;
 import dev.mechana.plugins.video.ExternalProcessRunner;
 import dev.mechana.plugins.video.FfmpegCommands;
@@ -59,6 +61,10 @@ public final class MechanaServer implements AutoCloseable {
 
 	private static final String PLUGIN_PATH = "/api/plugins/sleep/1.0.0";
 	private static final String VIDEO_PLUGIN_PATH = "/api/plugins/video-ffmpeg/1.0.0";
+	private static final String FRACTAL_PLUGIN_PATH = "/api/plugins/fractal-render/1.0.0";
+	private static final String FRACTAL_PLUGIN_ID = "fractal-render";
+	private static final String FRACTAL_PLUGIN_VERSION = "1.0.0";
+	private static final String FRACTAL_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.fractal.FractalTaskPlugin";
 	private static final long WORKER_TIMEOUT_MILLIS = 15_000;
 	private static final long HEARTBEAT_CHECK_MILLIS = 1_000;
 
@@ -72,10 +78,13 @@ public final class MechanaServer implements AutoCloseable {
 	private final PluginLocation pluginLocation;
 	private final Path videoPluginJar;
 	private final PluginLocation videoPluginLocation;
+	private final Path fractalPluginJar;
+	private final PluginLocation fractalPluginLocation;
 	private final Path workRoot;
 	private final String publicUrl;
 	private final ConcurrentMap<String, Path> videoInputs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, VideoJob> videoJobs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, FractalJob> fractalJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, WorkerPresence> workers = new ConcurrentHashMap<>();
 	private volatile Runnable restartAction;
 	private final ScheduledExecutorService leaseReaper = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -95,6 +104,11 @@ public final class MechanaServer implements AutoCloseable {
 
 	public MechanaServer(int port, String publicUrl, Path pluginJar, Path videoPluginJar, long leaseMillis,
 			Path dataDirectory) throws IOException {
+		this(port, publicUrl, pluginJar, videoPluginJar, videoPluginJar, leaseMillis, dataDirectory);
+	}
+
+	public MechanaServer(int port, String publicUrl, Path pluginJar, Path videoPluginJar, Path fractalPluginJar,
+			long leaseMillis, Path dataDirectory) throws IOException {
 		this.scheduler = new Scheduler(leaseMillis);
 		this.completedJobs = new CompletedJobStore(dataDirectory, json);
 		this.workRoot = dataDirectory.toAbsolutePath().normalize().resolve("work");
@@ -107,6 +121,9 @@ public final class MechanaServer implements AutoCloseable {
 		this.pluginLocation = new PluginLocation(this.publicUrl + PLUGIN_PATH, sha256(this.pluginJar));
 		this.videoPluginJar = videoPluginJar.toAbsolutePath().normalize();
 		this.videoPluginLocation = new PluginLocation(this.publicUrl + VIDEO_PLUGIN_PATH, sha256(this.videoPluginJar));
+		this.fractalPluginJar = fractalPluginJar.toAbsolutePath().normalize();
+		this.fractalPluginLocation = new PluginLocation(this.publicUrl + FRACTAL_PLUGIN_PATH,
+				sha256(this.fractalPluginJar));
 		this.http = HttpServer.create(new InetSocketAddress(port), 0);
 		this.http.createContext("/api/jobs", new JobsHandler());
 		this.http.createContext("/api/dashboard", this::serveServerDashboardStatus);
@@ -116,6 +133,8 @@ public final class MechanaServer implements AutoCloseable {
 		this.http.createContext(PLUGIN_PATH, exchange -> servePlugin(exchange, this.pluginJar, this.pluginLocation));
 		this.http.createContext(VIDEO_PLUGIN_PATH,
 				exchange -> servePlugin(exchange, this.videoPluginJar, this.videoPluginLocation));
+		this.http.createContext(FRACTAL_PLUGIN_PATH,
+				exchange -> servePlugin(exchange, this.fractalPluginJar, this.fractalPluginLocation));
 		this.http.createContext("/api/video-inputs", this::serveVideoInput);
 		this.http.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
 	}
@@ -149,6 +168,13 @@ public final class MechanaServer implements AutoCloseable {
 					requireLoopback(exchange);
 					VideoJobSubmitRequest request = read(exchange, VideoJobSubmitRequest.class);
 					String jobId = submitVideo(request);
+					sendJson(exchange, 202, new JobSubmission(jobId));
+					return;
+				}
+				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs/fractal".equals(path)) {
+					requireLoopback(exchange);
+					FractalJobSubmitRequest request = read(exchange, FractalJobSubmitRequest.class);
+					String jobId = submitFractal(request);
 					sendJson(exchange, 202, new JobSubmission(jobId));
 					return;
 				}
@@ -431,8 +457,12 @@ public final class MechanaServer implements AutoCloseable {
 			};
 			if (accepted) {
 				JobStatusResponse status = scheduler.statusForTask(taskId);
-				if ("complete".equals(action) && "ASSEMBLING".equals(scheduler.dashboard(status.jobId()).stage()))
-					assembleVideo(status.jobId());
+				if ("complete".equals(action) && "ASSEMBLING".equals(scheduler.dashboard(status.jobId()).stage())) {
+					if (videoJobs.containsKey(status.jobId()))
+						assembleVideo(status.jobId());
+					else if (fractalJobs.containsKey(status.jobId()))
+						assembleFractal(status.jobId());
+				}
 				archiveIfTerminal(status.jobId());
 				if (!"heartbeat".equals(action)) {
 					System.out.printf("Worker %s reported task %s action=%s%n", workerId, taskId, action);
@@ -458,10 +488,16 @@ public final class MechanaServer implements AutoCloseable {
 			}
 			String jobId = scheduler.statusForTask(taskId).jobId();
 			VideoJob video = videoJobs.get(jobId);
-			if (video == null || !name.matches("segment-[0-9]{5}\\.mkv"))
-				throw new IllegalArgumentException("Unexpected video artifact");
-			Path destination = video.scratch().resolve("segments").resolve(name).normalize();
-			if (!destination.startsWith(video.scratch().resolve("segments")))
+			FractalJob fractal = fractalJobs.get(jobId);
+			Path artifactRoot;
+			if (video != null && name.matches("segment-[0-9]{5}\\.mkv"))
+				artifactRoot = video.scratch().resolve("segments");
+			else if (fractal != null && name.matches("batch-[0-9]{5}\\.zip"))
+				artifactRoot = fractal.scratch().resolve("batches");
+			else
+				throw new IllegalArgumentException("Unexpected task artifact");
+			Path destination = artifactRoot.resolve(name).normalize();
+			if (!destination.startsWith(artifactRoot))
 				throw new IllegalArgumentException("Invalid artifact path");
 			Path parent = Objects.requireNonNull(destination.getParent(), "Artifact destination must have a parent");
 			Files.createDirectories(parent);
@@ -529,7 +565,9 @@ public final class MechanaServer implements AutoCloseable {
 								Double.toString(segment.durationSeconds()), "startSeconds",
 								Double.toString(segment.startSeconds()), "endSeconds",
 								Double.toString(segment.endSeconds()), "videoBitrate", Long.toString(bitrate), "preset",
-								options.preset())));
+								options.preset()),
+						"Segment " + segment.index(),
+						Map.of("range", segment.startSeconds() + "–" + segment.endSeconds() + "s")));
 			}
 			String jobId = scheduler.submitVideo(work,
 					Map.of("source", source.toString(), "inputDuration", "%.1fs".formatted(info.durationSeconds()),
@@ -546,6 +584,47 @@ public final class MechanaServer implements AutoCloseable {
 			videoInputs.entrySet().removeIf(entry -> entry.getValue().startsWith(scratch));
 			deleteTree(scratch);
 			throw failure;
+		}
+	}
+
+	private String submitFractal(FractalJobSubmitRequest request) throws IOException {
+		long compatibleWorkers = workers.values().stream().filter(WorkerPresence::connected)
+				.filter(worker -> worker.capabilities().contains(FRACTAL_PLUGIN_ID)).count();
+		int taskCount = request.taskCount() > 0
+				? request.taskCount()
+				: Math.min(request.imageCount(), Math.max(1, Math.toIntExact(compatibleWorkers * 2)));
+		Path scratch = workRoot.resolve(UUID.randomUUID().toString());
+		Files.createDirectories(scratch.resolve("batches"));
+		boolean retained = false;
+		try {
+			List<WorkSpec> work = new java.util.ArrayList<>(taskCount);
+			int base = request.imageCount() / taskCount;
+			int remainder = request.imageCount() % taskCount;
+			int start = 0;
+			for (int batch = 0; batch < taskCount; batch++) {
+				int count = base + (batch < remainder ? 1 : 0);
+				work.add(new WorkSpec(count,
+						Map.of("startIndex", Integer.toString(start), "imageCount", Integer.toString(count), "width",
+								Integer.toString(request.width()), "height", Integer.toString(request.height()),
+								"maxIterations", Integer.toString(request.maxIterations()), "seed",
+								Long.toString(request.seed()), "batchIndex", Integer.toString(batch)),
+						"Batch " + batch,
+						Map.of("images", start + "–" + (start + count - 1), "count", Integer.toString(count))));
+				start += count;
+			}
+			String jobId = scheduler.submitPlugin(FRACTAL_PLUGIN_ID, FRACTAL_PLUGIN_VERSION, FRACTAL_PLUGIN_ENTRYPOINT,
+					work,
+					Map.of("imageCount", Integer.toString(request.imageCount()), "taskCount",
+							Integer.toString(taskCount), "dimensions", request.width() + "×" + request.height(),
+							"maxIterations", Integer.toString(request.maxIterations()), "seed",
+							Long.toString(request.seed())),
+					fractalPluginLocation);
+			fractalJobs.put(jobId, new FractalJob(scratch, request));
+			retained = true;
+			return jobId;
+		} finally {
+			if (!retained)
+				deleteTree(scratch);
 		}
 	}
 
@@ -617,6 +696,24 @@ public final class MechanaServer implements AutoCloseable {
 		}
 	}
 
+	private void assembleFractal(String jobId) {
+		FractalJob fractal = fractalJobs.get(jobId);
+		if (fractal == null)
+			return;
+		try {
+			List<Path> batches;
+			try (var paths = Files.list(fractal.scratch().resolve("batches"))) {
+				batches = paths.filter(Files::isRegularFile).sorted().toList();
+			}
+			FractalJobSubmitRequest request = fractal.request();
+			new FractalCollectionAssembler().assemble(batches, fractal.scratch().resolve("result"),
+					request.imageCount(), request.width(), request.height(), request.maxIterations(), request.seed());
+			scheduler.finishAssembly(jobId, null);
+		} catch (IOException failure) {
+			scheduler.finishAssembly(jobId, "Fractal assembly failed: " + failure.getMessage());
+		}
+	}
+
 	private static long targetVideoBitrate(VideoTypes.MediaInfo input, double ratio) {
 		double targetTotalBitsPerSecond = input.inputBytes() * 8.0 * ratio / input.durationSeconds();
 		long audioAndOverheadReserve = input.audioStreams() == 1 ? 512_000 : 64_000;
@@ -656,6 +753,19 @@ public final class MechanaServer implements AutoCloseable {
 			VideoJob video = videoJobs.get(jobId);
 			if (video != null && "SUCCEEDED".equals(snapshot.stage()) && Files.isRegularFile(video.output()))
 				completedJobs.storeArtifact(jobId, "compressed-first-minute.mkv", video.output());
+			FractalJob fractal = fractalJobs.get(jobId);
+			if (fractal != null && "SUCCEEDED".equals(snapshot.stage())) {
+				Path result = fractal.scratch().resolve("result");
+				completedJobs.storeArtifact(jobId, "manifest.json", result.resolve("manifest.json"));
+				completedJobs.storeArtifact(jobId, "contact-sheet.png", result.resolve("contact-sheet.png"));
+				completedJobs.storeArtifact(jobId, "fractal-collection.zip", result.resolve("fractal-collection.zip"));
+				try (var images = Files.list(result.resolve("images"))) {
+					for (Path image : images.filter(Files::isRegularFile).sorted().toList())
+						completedJobs.storeArtifact(jobId, Objects
+								.requireNonNull(image.getFileName(), "Image path must have a file name").toString(),
+								image);
+				}
+			}
 		} catch (IOException failure) {
 			System.err.printf("Could not archive completed job %s: %s%n", jobId, failure.getMessage());
 		} finally {
@@ -664,6 +774,9 @@ public final class MechanaServer implements AutoCloseable {
 				video.inputTokens().forEach(videoInputs::remove);
 				deleteTree(video.scratch());
 			}
+			FractalJob fractal = fractalJobs.remove(jobId);
+			if (fractal != null)
+				deleteTree(fractal.scratch());
 		}
 	}
 
@@ -879,6 +992,9 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private record VideoJob(List<String> inputTokens, Path input, Path output, Path scratch, VideoTypes.Plan plan) {
+	}
+
+	private record FractalJob(Path scratch, FractalJobSubmitRequest request) {
 	}
 
 	private record WorkerActivity(String jobId, String plugin, int progress) {

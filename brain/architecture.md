@@ -53,6 +53,10 @@ transport must adapt the same domain boundaries rather than redefine them.
   assigned chunk and publishes its encoded segment under the live lease, and the
   server performs final assembly and validation. This is not yet the intended
   content-addressed, cache-aware artifact service.
+- The fractal reference path has no input data plane. Planning creates immutable,
+  deterministic image-index ranges; workers publish one batch artifact per work
+  unit, and plugin-owned server composition validates and collects those batches
+  into individual images, a manifest, a contact sheet, and a collection archive.
 - Observability: the platform owns job/work-unit state, weighted progress,
   attempts, workers, events, and dashboard presentation. Plugins emit the generic
   `JobObserver` lifecycle and may attach bounded string display fields; dashboard

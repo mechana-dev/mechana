@@ -34,6 +34,11 @@
     </dependency>
     <dependency>
       <groupId>dev.mechana</groupId>
+      <artifactId>mechana-plugin-fractal-render</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.mechana</groupId>
       <artifactId>mechana-plugin-video</artifactId>
       <version>${project.version}</version>
     </dependency>

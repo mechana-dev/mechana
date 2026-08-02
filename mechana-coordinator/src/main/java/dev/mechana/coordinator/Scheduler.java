@@ -72,20 +72,30 @@ public final class Scheduler {
 	public synchronized String submitVideo(List<WorkSpec> work, Map<String, String> details, PluginLocation location) {
 		if (work.isEmpty())
 			throw new IllegalArgumentException("Video work must not be empty");
+		return submitPlugin(VIDEO_PLUGIN_ID, VIDEO_PLUGIN_VERSION, VIDEO_PLUGIN_ENTRYPOINT, work, details, location);
+	}
+
+	public synchronized String submitPlugin(String pluginId, String pluginVersion, String pluginEntrypoint,
+			List<WorkSpec> work, Map<String, String> details, PluginLocation location) {
+		Objects.requireNonNull(pluginId, "pluginId");
+		Objects.requireNonNull(pluginVersion, "pluginVersion");
+		Objects.requireNonNull(pluginEntrypoint, "pluginEntrypoint");
+		Objects.requireNonNull(location, "location");
+		if (work.isEmpty())
+			throw new IllegalArgumentException("Plugin work must not be empty");
 		String jobId = UUID.randomUUID().toString();
 		List<Task> tasks = new ArrayList<>(work.size());
 		for (int index = 0; index < work.size(); index++) {
 			WorkSpec spec = work.get(index);
-			tasks.add(new Task(jobId, jobId + "-" + (index + 1), spec.durationMillis(), VIDEO_PLUGIN_ID,
-					VIDEO_PLUGIN_VERSION, VIDEO_PLUGIN_ENTRYPOINT, spec.parameters(), location));
+			tasks.add(new Task(jobId, jobId + "-" + (index + 1), spec.durationMillis(), pluginId, pluginVersion,
+					pluginEntrypoint, spec.parameters(), location));
 		}
-		InMemoryJobMonitor monitor = new InMemoryJobMonitor(jobId, VIDEO_PLUGIN_ID, details);
-		monitor.onPlan(work.size(),
-				tasks.stream().map(task -> new WorkUnit(task.id, "Segment " + task.parameters.get("segmentIndex"),
-						task.durationMillis,
-						Map.of("range",
-								task.parameters.get("startSeconds") + "–" + task.parameters.get("endSeconds") + "s")))
-						.toList());
+		InMemoryJobMonitor monitor = new InMemoryJobMonitor(jobId, pluginId, details);
+		monitor.onPlan(work.size(), java.util.stream.IntStream.range(0, tasks.size()).mapToObj(index -> {
+			Task task = tasks.get(index);
+			WorkSpec spec = work.get(index);
+			return new WorkUnit(task.id, spec.name(), task.durationMillis, spec.displayDetails());
+		}).toList());
 		monitor.onStage("QUEUED");
 		jobs.put(jobId, new Job(jobId, tasks, monitor));
 		return jobId;
@@ -152,7 +162,7 @@ public final class Scheduler {
 		Job job = jobs.get(task.jobId);
 		job.monitor.onWorkUnitCompleted(task.id);
 		if (job.tasks.stream().allMatch(candidate -> candidate.state == TaskState.SUCCEEDED))
-			job.monitor.onStage(VIDEO_PLUGIN_ID.equals(job.monitor.snapshot().plugin()) ? "ASSEMBLING" : "SUCCEEDED");
+			job.monitor.onStage(SLEEP_PLUGIN_ID.equals(job.monitor.snapshot().plugin()) ? "SUCCEEDED" : "ASSEMBLING");
 		touch(workerId);
 		return true;
 	}
@@ -162,10 +172,13 @@ public final class Scheduler {
 	}
 
 	public synchronized void finishVideo(String jobId, String error) {
+		finishAssembly(jobId, error);
+	}
+
+	public synchronized void finishAssembly(String jobId, String error) {
 		Job job = requireJob(jobId);
-		if (!VIDEO_PLUGIN_ID.equals(job.monitor.snapshot().plugin())
-				|| !"ASSEMBLING".equals(job.monitor.snapshot().stage()))
-			throw new IllegalArgumentException("Video job is not ready for assembly: " + jobId);
+		if (!"ASSEMBLING".equals(job.monitor.snapshot().stage()))
+			throw new IllegalArgumentException("Job is not ready for assembly: " + jobId);
 		if (error == null)
 			job.monitor.onStage("SUCCEEDED");
 		else
@@ -399,11 +412,18 @@ public final class Scheduler {
 		}
 	}
 
-	public record WorkSpec(long durationMillis, Map<String, String> parameters) {
+	public record WorkSpec(long durationMillis, Map<String, String> parameters, String name,
+			Map<String, String> displayDetails) {
+		public WorkSpec(long durationMillis, Map<String, String> parameters) {
+			this(durationMillis, parameters, "Task", Map.of());
+		}
+
 		public WorkSpec {
 			if (durationMillis < 1)
 				throw new IllegalArgumentException("Work duration must be positive");
 			parameters = Map.copyOf(parameters);
+			Objects.requireNonNull(name, "name");
+			displayDetails = Map.copyOf(displayDetails);
 		}
 	}
 
