@@ -3,6 +3,8 @@ package dev.mechana.client;
 import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 
 /** Submits one parallel sleep job and waits for its terminal result. */
 public final class ClientMain {
@@ -13,11 +15,16 @@ public final class ClientMain {
 	public static void main(String[] args) throws IOException, InterruptedException {
 		URI server = URI.create(args.length > 0 ? args[0] : "http://localhost:8787");
 		int tasks = args.length > 1 ? Integer.parseInt(args[1]) : 4;
-		long durationMillis = args.length > 2 ? Long.parseLong(args[2]) : 5_000;
+		String durationArgument = args.length > 2 ? args[2] : "5000";
+		List<Long> durations = Arrays.stream(durationArgument.split(",")).map(Long::parseLong).toList();
+		if (durations.size() == 1)
+			durations = java.util.Collections.nCopies(tasks, durations.getFirst());
+		else if (durations.size() != tasks)
+			throw new IllegalArgumentException("Provide one duration or one comma-separated duration per task");
 
 		long startedAt = System.nanoTime();
 		MechanaClient client = new MechanaClient(server);
-		String jobId = client.submit(tasks, durationMillis);
+		String jobId = client.submit(durations);
 		System.out.printf("Submitted job %s with %d task(s)%n", jobId, tasks);
 		System.out.printf("Loopback job dashboard: %s%n", client.dashboard(jobId));
 		var result = client.waitForCompletion(jobId, 500);

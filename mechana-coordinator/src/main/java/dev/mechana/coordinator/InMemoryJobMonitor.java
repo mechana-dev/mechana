@@ -23,7 +23,7 @@ public final class InMemoryJobMonitor implements JobObserver {
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "Snapshot collections are immutable defensive copies")
 	public record Snapshot(String jobId, String plugin, String stage, int progress, String elapsed,
 			int configuredWorkers, int activeWorkers, int completedWorkUnits, int totalWorkUnits, String error,
-			Map<String, String> details, List<WorkUnitSnapshot> workUnits, List<String> events) {
+			String completedAt, Map<String, String> details, List<WorkUnitSnapshot> workUnits, List<String> events) {
 	}
 
 	private static final int MAX_EVENTS = 40;
@@ -38,6 +38,8 @@ public final class InMemoryJobMonitor implements JobObserver {
 	private String error = "";
 	private int configuredWorkers;
 	private Instant finishedAt;
+	private Instant pausedAt;
+	private Duration pausedDuration = Duration.ZERO;
 
 	public InMemoryJobMonitor(String jobId, String plugin, Map<String, String> details) {
 		this(jobId, plugin, details, Clock.systemUTC());
@@ -55,8 +57,10 @@ public final class InMemoryJobMonitor implements JobObserver {
 	@Override
 	public synchronized void onStage(String stage) {
 		this.stage = requireText(stage, "Stage");
-		if (isTerminal(stage) && finishedAt == null)
+		if (isTerminal(stage) && finishedAt == null) {
 			finishedAt = now();
+			finishPause(finishedAt);
+		}
 		addEvent("Stage: " + stage);
 	}
 
@@ -128,6 +132,7 @@ public final class InMemoryJobMonitor implements JobObserver {
 
 	public synchronized void cancel(String message) {
 		Instant cancelledAt = now();
+		finishPause(cancelledAt);
 		for (WorkUnitState state : workUnits.values()) {
 			if (!"SUCCEEDED".equals(state.state) && !"FAILED".equals(state.state)) {
 				state.state = "CANCELLED";
@@ -138,6 +143,39 @@ public final class InMemoryJobMonitor implements JobObserver {
 		finishedAt = cancelledAt;
 		error = message == null ? "" : message;
 		addEvent("Job cancelled" + (error.isBlank() ? "" : ": " + error));
+	}
+
+	public synchronized void pause() {
+		if (isTerminal(stage) || "PAUSED".equals(stage))
+			throw new IllegalStateException("Job cannot be paused from stage " + stage);
+		Instant pauseTime = now();
+		for (WorkUnitState state : workUnits.values()) {
+			if (!"SUCCEEDED".equals(state.state) && !"FAILED".equals(state.state)) {
+				state.state = "PAUSED";
+				if (state.startedAt != null)
+					state.finishedAt = pauseTime;
+			}
+		}
+		stage = "PAUSED";
+		pausedAt = pauseTime;
+		addEvent("Job paused");
+	}
+
+	public synchronized void resume() {
+		if (!"PAUSED".equals(stage))
+			throw new IllegalStateException("Job is not paused");
+		finishPause(now());
+		for (WorkUnitState state : workUnits.values()) {
+			if ("PAUSED".equals(state.state)) {
+				state.state = "QUEUED";
+				state.progress = 0;
+				state.startedAt = null;
+				state.finishedAt = null;
+				state.workerAddress = "—";
+			}
+		}
+		stage = "QUEUED";
+		addEvent("Job resumed; unfinished work units requeued");
 	}
 
 	public synchronized Snapshot snapshot() {
@@ -165,9 +203,13 @@ public final class InMemoryJobMonitor implements JobObserver {
 			progress = Math.max(progress, 99);
 		if ("SUCCEEDED".equals(stage))
 			progress = 100;
-		return new Snapshot(jobId, plugin, stage, progress,
-				formatDuration(Duration.between(startedAt, finishedAt == null ? now() : finishedAt)), configuredWorkers,
-				active, completed, workUnits.size(), error, details, List.copyOf(snapshots), List.copyOf(events));
+		Instant snapshotAt = finishedAt == null ? now() : finishedAt;
+		Duration elapsed = Duration.between(startedAt, snapshotAt).minus(pausedDuration);
+		if (pausedAt != null)
+			elapsed = elapsed.minus(Duration.between(pausedAt, snapshotAt));
+		return new Snapshot(jobId, plugin, stage, progress, formatDuration(elapsed), configuredWorkers, active,
+				completed, workUnits.size(), error, finishedAt == null ? null : finishedAt.toString(), details,
+				List.copyOf(snapshots), List.copyOf(events));
 	}
 
 	private WorkUnitState requireWorkUnit(String workUnitId) {
@@ -191,6 +233,13 @@ public final class InMemoryJobMonitor implements JobObserver {
 
 	private Instant now() {
 		return clock.instant();
+	}
+
+	private void finishPause(Instant resumedAt) {
+		if (pausedAt != null) {
+			pausedDuration = pausedDuration.plus(Duration.between(pausedAt, resumedAt));
+			pausedAt = null;
+		}
 	}
 
 	private static boolean isTerminal(String stage) {

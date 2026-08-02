@@ -73,6 +73,21 @@ final class CompletedJobStore {
 		return artifact;
 	}
 
+	synchronized Path artifactsDirectory(String jobId) {
+		requireKnown(jobId);
+		return jobDirectory(jobId).resolve(ARTIFACTS_DIRECTORY);
+	}
+
+	synchronized void storeArtifact(String jobId, String name, Path source) throws IOException {
+		requireKnown(jobId);
+		Path root = jobDirectory(jobId).resolve(ARTIFACTS_DIRECTORY);
+		Path destination = root.resolve(name).normalize();
+		if (!destination.startsWith(root))
+			throw new IllegalArgumentException("Invalid artifact name: " + name);
+		Files.createDirectories(Objects.requireNonNull(destination.getParent()));
+		Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+	}
+
 	synchronized boolean purge(String jobId) throws IOException {
 		if (snapshots.remove(jobId) == null)
 			return false;
@@ -92,12 +107,22 @@ final class CompletedJobStore {
 					continue;
 				try (InputStream input = Files.newInputStream(file)) {
 					InMemoryJobMonitor.Snapshot snapshot = json.readValue(input, InMemoryJobMonitor.Snapshot.class);
+					if (snapshot.completedAt() == null)
+						snapshot = withCompletedAt(snapshot, Files.getLastModifiedTime(file).toInstant().toString());
 					if (isTerminal(snapshot.stage())
 							&& Objects.requireNonNull(directory.getFileName()).toString().equals(snapshot.jobId()))
 						snapshots.put(snapshot.jobId(), snapshot);
 				}
 			}
 		}
+	}
+
+	private static InMemoryJobMonitor.Snapshot withCompletedAt(InMemoryJobMonitor.Snapshot snapshot,
+			String completedAt) {
+		return new InMemoryJobMonitor.Snapshot(snapshot.jobId(), snapshot.plugin(), snapshot.stage(),
+				snapshot.progress(), snapshot.elapsed(), snapshot.configuredWorkers(), snapshot.activeWorkers(),
+				snapshot.completedWorkUnits(), snapshot.totalWorkUnits(), snapshot.error(), completedAt,
+				snapshot.details(), snapshot.workUnits(), snapshot.events());
 	}
 
 	private void writeAtomically(Path destination, Object value) throws IOException {

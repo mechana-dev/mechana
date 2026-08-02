@@ -188,3 +188,96 @@ Append-only record of material Mechana project changes and accepted decisions.
   preserve terminal history, create lineage for resumed terminal jobs, reuse only
   verified completed work units initially, and defer partial-work-unit reuse to an
   explicit plugin checkpoint capability.
+
+## 2026-08-02 04:35 EDT — Add pause/resume and sleep-job revival
+
+- Added cooperative pause/resume for active sleep jobs. Pause stops assignment,
+  fences active leases, retains succeeded units, and freezes elapsed time; resume
+  keeps the job ID and queues only unfinished units.
+- Added **Resume as new** for cancelled and failed sleep jobs. The source terminal
+  record remains immutable, the new job records `resumedFromJobId`, succeeded
+  units are reused, and only incomplete units run again.
+- Added master and job-dashboard controls, linked source lineage on resumed job
+  details, HTTP endpoints, lease-fencing coverage, and deterministic monitor and
+  scheduler tests.
+- Kept the scope honest: interrupted work units restart from zero, and generic
+  artifact-backed reuse plus plugin checkpoints remain future platform contracts.
+
+## 2026-08-02 04:45 EDT — Add dashboard server restart
+
+- Added a confirmed **Restart server** control to the master dashboard and a
+  loopback-only restart endpoint.
+- The replacement process uses the same Java runtime, server artifact, port,
+  plugin path, public URL, and durable data directory.
+- Workers reconnect automatically and completed history remains on disk; active
+  scheduling state remains volatile and is explicitly described as lost.
+- Added HTTP coverage for the configured restart action without spawning a real
+  replacement process during tests.
+
+## 2026-08-02 05:27 EDT — Add variable sleep work and scheduled video segments
+
+- Extended sleep submission with per-work-unit durations while preserving the
+  existing uniform-duration request and CLI.
+- Added generic leased-task parameters and worker artifact publication to the
+  public execution context and HTTP protocol.
+- Added an initial server-managed distributed video path: server-side leading
+  clip/probe/keyframe planning, eight capability-matched `video-ffmpeg` leases,
+  server-mediated input download, lease-fenced segment upload, server assembly,
+  smaller-than-input validation, and durable final artifact publication.
+- Kept the older two-host runner as a separate manual proof. The new scheduled
+  path can genuinely queue video segments behind occupied workers.
+- Recorded current limitations: each segment downloads the whole clipped input;
+  active and intermediate state remains volatile; scratch is not reserved; input
+  transfer is not yet content-addressed or cached.
+
+## 2026-08-02 05:54 EDT — Separate worker presence from task leases
+
+- Added a dedicated worker-presence heartbeat that runs while the worker is idle,
+  staging data, executing plugin code, or publishing artifacts.
+- Increased the dashboard offline threshold from three to fifteen seconds while
+  retaining the scheduler's separate five-second task-lease policy.
+- Added lease-token heartbeats that renew an active attempt without changing its
+  reported progress; stale tokens remain fenced.
+- Removed artifact-upload progress calls as a substitute for liveness and added
+  scheduler plus HTTP coverage for the two heartbeat paths.
+
+## 2026-08-02 06:38 EDT — Send only assigned video chunks to workers
+
+- Diagnosed remote video tasks that appeared alive at zero percent: they were
+  slowly downloading the entire three-minute clipped input before FFmpeg could
+  start, once independently for every segment.
+- Changed server-side video planning to stream-copy every keyframe-aligned range
+  into its own temporary MP4 without re-encoding.
+- Each scheduled work unit now receives a unique URL for only its input chunk and
+  encodes that local chunk from timestamp zero. Encoded outputs retain their
+  planned indices for deterministic server-side assembly.
+- Registered chunk URLs and scratch files are removed on planning failure, job
+  completion, abort, or purge through the existing video-job cleanup path.
+- Added command-construction coverage proving input partitioning uses stream copy
+  rather than HEVC encoding. Content-addressed caching remains future work.
+
+## 2026-08-02 06:53 EDT — Enrich worker and completed-job dashboards
+
+- Replaced the generic `WORKING` worker activity label with the active plugin ID
+  and added the assigned work unit's live percent complete while retaining its
+  job-dashboard link.
+- Added an ISO terminal timestamp to generic job snapshots and displayed it for
+  successful, failed, and cancelled jobs. Older snapshots fall back to their
+  durable snapshot-file timestamp when loaded.
+- Added a loopback-only **Show in Finder** action to completed-job artifact
+  sections while retaining browser download links and purge controls.
+- Kept all worker activity/progress derivation in the generic platform read model;
+  no concrete plugin logic was added to the dashboard.
+
+## 2026-08-02 07:05 EDT — Verify distributed video and prepare dashboard PR
+
+- Verified a 12-task encode of the first two minutes of the reference movie across
+  four MBA and four Mini workers through the scheduler-managed video path.
+- Confirmed workers on both hosts received server-created input chunks, reported
+  live encode progress, and returned to the shared queue for later segments.
+- Confirmed the generic master and job dashboards exposed plugin type, per-worker
+  progress, segment ranges, terminal timestamps, downloadable artifacts, and the
+  loopback-only local-folder action without video-specific presentation logic.
+- Reconciled the brain with the configurable scheduled segment count and prepared
+  the cumulative dashboard, lifecycle, liveness, and distributed-video changes for
+  reactor verification and pull-request review.

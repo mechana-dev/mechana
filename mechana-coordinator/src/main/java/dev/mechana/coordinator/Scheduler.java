@@ -23,6 +23,9 @@ public final class Scheduler {
 	public static final String SLEEP_PLUGIN_ID = "sleep";
 	public static final String SLEEP_PLUGIN_VERSION = "1.0.0";
 	public static final String SLEEP_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.sleep.SleepPlugin";
+	public static final String VIDEO_PLUGIN_ID = "video-ffmpeg";
+	public static final String VIDEO_PLUGIN_VERSION = "1.0.0";
+	public static final String VIDEO_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.video.DistributedVideoSegmentPlugin";
 
 	private final Clock clock;
 	private final long leaseMillis;
@@ -42,18 +45,47 @@ public final class Scheduler {
 	}
 
 	public synchronized String submit(int taskCount, long durationMillis) {
-		if (taskCount < 1 || durationMillis < 1) {
-			throw new IllegalArgumentException("Task count and duration must be positive");
-		}
+		return submit(java.util.Collections.nCopies(taskCount, durationMillis));
+	}
+
+	public synchronized String submit(List<Long> durationsMillis) {
+		if (durationsMillis.isEmpty() || durationsMillis.stream().anyMatch(duration -> duration < 1))
+			throw new IllegalArgumentException("Task durations must be positive");
 		String jobId = UUID.randomUUID().toString();
-		List<Task> tasks = new ArrayList<>(taskCount);
-		for (int index = 0; index < taskCount; index++) {
-			tasks.add(new Task(jobId, jobId + "-" + (index + 1), durationMillis));
+		List<Task> tasks = new ArrayList<>(durationsMillis.size());
+		for (int index = 0; index < durationsMillis.size(); index++) {
+			tasks.add(new Task(jobId, jobId + "-" + (index + 1), durationsMillis.get(index)));
 		}
+		String durationSummary = durationsMillis.stream().distinct().count() == 1
+				? durationsMillis.getFirst() + "ms"
+				: durationsMillis.stream().map(duration -> duration + "ms")
+						.collect(java.util.stream.Collectors.joining(","));
 		InMemoryJobMonitor monitor = new InMemoryJobMonitor(jobId, SLEEP_PLUGIN_ID,
-				Map.of("taskDuration", durationMillis + "ms"));
-		monitor.onPlan(taskCount, tasks.stream().map(task -> new WorkUnit(task.id, "Task " + task.id,
+				Map.of("taskDurations", durationSummary));
+		monitor.onPlan(tasks.size(), tasks.stream().map(task -> new WorkUnit(task.id, "Task " + task.id,
 				task.durationMillis, Map.of("duration", task.durationMillis + "ms"))).toList());
+		monitor.onStage("QUEUED");
+		jobs.put(jobId, new Job(jobId, tasks, monitor));
+		return jobId;
+	}
+
+	public synchronized String submitVideo(List<WorkSpec> work, Map<String, String> details, PluginLocation location) {
+		if (work.isEmpty())
+			throw new IllegalArgumentException("Video work must not be empty");
+		String jobId = UUID.randomUUID().toString();
+		List<Task> tasks = new ArrayList<>(work.size());
+		for (int index = 0; index < work.size(); index++) {
+			WorkSpec spec = work.get(index);
+			tasks.add(new Task(jobId, jobId + "-" + (index + 1), spec.durationMillis(), VIDEO_PLUGIN_ID,
+					VIDEO_PLUGIN_VERSION, VIDEO_PLUGIN_ENTRYPOINT, spec.parameters(), location));
+		}
+		InMemoryJobMonitor monitor = new InMemoryJobMonitor(jobId, VIDEO_PLUGIN_ID, details);
+		monitor.onPlan(work.size(),
+				tasks.stream().map(task -> new WorkUnit(task.id, "Segment " + task.parameters.get("segmentIndex"),
+						task.durationMillis,
+						Map.of("range",
+								task.parameters.get("startSeconds") + "–" + task.parameters.get("endSeconds") + "s")))
+						.toList());
 		monitor.onStage("QUEUED");
 		jobs.put(jobId, new Job(jobId, tasks, monitor));
 		return jobId;
@@ -67,12 +99,9 @@ public final class Scheduler {
 			PluginLocation plugin) {
 		expireLeases();
 		register(workerId, supportedPlugins);
-		if (!supportedPlugins.contains(SLEEP_PLUGIN_ID)) {
-			return Optional.empty();
-		}
 		for (Job job : jobs.values()) {
 			for (Task task : job.tasks) {
-				if (task.state == TaskState.QUEUED) {
+				if (task.state == TaskState.QUEUED && supportedPlugins.contains(task.pluginId)) {
 					task.state = TaskState.RUNNING;
 					task.workerId = workerId;
 					task.leaseToken = UUID.randomUUID().toString();
@@ -80,9 +109,10 @@ public final class Scheduler {
 					task.attempt++;
 					job.monitor.onStage("EXECUTING");
 					job.monitor.onWorkUnitStarted(task.id, workerId);
-					return Optional.of(new TaskLease(job.id, task.id, SLEEP_PLUGIN_ID, SLEEP_PLUGIN_VERSION,
-							SLEEP_PLUGIN_ENTRYPOINT, plugin.url(), plugin.sha256(), task.durationMillis,
-							task.leaseToken, leaseMillis, task.attempt));
+					PluginLocation taskPlugin = task.pluginLocation == null ? plugin : task.pluginLocation;
+					return Optional.of(new TaskLease(job.id, task.id, task.pluginId, task.pluginVersion,
+							task.pluginEntrypoint, taskPlugin.url(), taskPlugin.sha256(), task.durationMillis,
+							task.leaseToken, leaseMillis, task.attempt, task.parameters));
 				}
 			}
 		}
@@ -102,6 +132,15 @@ public final class Scheduler {
 		return true;
 	}
 
+	public synchronized boolean heartbeat(String workerId, String taskId, String leaseToken) {
+		Task task = findTask(taskId);
+		if (!ownsLease(task, workerId, leaseToken))
+			return false;
+		task.leaseExpiresAt = now() + leaseMillis;
+		touch(workerId);
+		return true;
+	}
+
 	public synchronized boolean complete(String workerId, String taskId, String leaseToken) {
 		Task task = findTask(taskId);
 		if (!ownsLease(task, workerId, leaseToken)) {
@@ -113,9 +152,24 @@ public final class Scheduler {
 		Job job = jobs.get(task.jobId);
 		job.monitor.onWorkUnitCompleted(task.id);
 		if (job.tasks.stream().allMatch(candidate -> candidate.state == TaskState.SUCCEEDED))
-			job.monitor.onStage("SUCCEEDED");
+			job.monitor.onStage(VIDEO_PLUGIN_ID.equals(job.monitor.snapshot().plugin()) ? "ASSEMBLING" : "SUCCEEDED");
 		touch(workerId);
 		return true;
+	}
+
+	public synchronized boolean acceptsArtifact(String workerId, String taskId, String leaseToken) {
+		return ownsLease(findTask(taskId), workerId, leaseToken);
+	}
+
+	public synchronized void finishVideo(String jobId, String error) {
+		Job job = requireJob(jobId);
+		if (!VIDEO_PLUGIN_ID.equals(job.monitor.snapshot().plugin())
+				|| !"ASSEMBLING".equals(job.monitor.snapshot().stage()))
+			throw new IllegalArgumentException("Video job is not ready for assembly: " + jobId);
+		if (error == null)
+			job.monitor.onStage("SUCCEEDED");
+		else
+			job.monitor.fail(new IllegalStateException(error));
 	}
 
 	public synchronized boolean fail(String workerId, String taskId, String leaseToken) {
@@ -145,6 +199,69 @@ public final class Scheduler {
 		return true;
 	}
 
+	public synchronized boolean pause(String jobId) {
+		Job job = requireJob(jobId);
+		String stage = job.monitor.snapshot().stage();
+		if (isTerminal(stage) || "PAUSED".equals(stage))
+			return false;
+		for (Task task : job.tasks) {
+			if (task.state == TaskState.QUEUED || task.state == TaskState.RUNNING) {
+				task.state = TaskState.PAUSED;
+				task.leaseToken = null;
+				task.leaseExpiresAt = 0;
+			}
+		}
+		job.monitor.pause();
+		return true;
+	}
+
+	public synchronized boolean resume(String jobId) {
+		Job job = requireJob(jobId);
+		if (!"PAUSED".equals(job.monitor.snapshot().stage()))
+			return false;
+		for (Task task : job.tasks) {
+			if (task.state == TaskState.PAUSED) {
+				task.state = TaskState.QUEUED;
+				task.progress = 0;
+				task.workerId = null;
+			}
+		}
+		job.monitor.resume();
+		return true;
+	}
+
+	public synchronized String resumeAsNew(InMemoryJobMonitor.Snapshot source) {
+		Objects.requireNonNull(source, "source");
+		if (!SLEEP_PLUGIN_ID.equals(source.plugin()))
+			throw new IllegalArgumentException("Unsupported resumable plugin: " + source.plugin());
+		if (!"CANCELLED".equals(source.stage()) && !"FAILED".equals(source.stage()))
+			throw new IllegalArgumentException("Only cancelled or failed jobs can be resumed as new");
+		List<Long> sourceDurations = parseDurations(source.details(), source.totalWorkUnits());
+		String jobId = UUID.randomUUID().toString();
+		List<Task> tasks = new ArrayList<>(source.totalWorkUnits());
+		for (int index = 0; index < source.totalWorkUnits(); index++) {
+			Task task = new Task(jobId, jobId + "-" + (index + 1), sourceDurations.get(index));
+			if (index < source.workUnits().size() && "SUCCEEDED".equals(source.workUnits().get(index).state())) {
+				task.state = TaskState.SUCCEEDED;
+				task.progress = 100;
+			}
+			tasks.add(task);
+		}
+		long reused = tasks.stream().filter(task -> task.state == TaskState.SUCCEEDED).count();
+		String durationSummary = sourceDurations.stream().map(duration -> duration + "ms")
+				.collect(java.util.stream.Collectors.joining(","));
+		InMemoryJobMonitor monitor = new InMemoryJobMonitor(jobId, SLEEP_PLUGIN_ID, Map.of("taskDurations",
+				durationSummary, "resumedFromJobId", source.jobId(), "reusedWorkUnits", Long.toString(reused)));
+		monitor.onPlan(tasks.size(), tasks.stream().map(task -> new WorkUnit(task.id, "Task " + task.id,
+				task.durationMillis, Map.of("duration", task.durationMillis + "ms"))).toList());
+		for (Task task : tasks)
+			if (task.state == TaskState.SUCCEEDED)
+				monitor.onWorkUnitCompleted(task.id);
+		monitor.onStage(tasks.stream().allMatch(task -> task.state == TaskState.SUCCEEDED) ? "SUCCEEDED" : "QUEUED");
+		jobs.put(jobId, new Job(jobId, tasks, monitor));
+		return jobId;
+	}
+
 	public synchronized JobStatusResponse status(String jobId) {
 		expireLeases();
 		Job job = jobs.get(jobId);
@@ -155,11 +272,18 @@ public final class Scheduler {
 				.map(task -> new TaskStatus(task.id, task.state.name(), task.progress, task.attempt, task.workerId))
 				.toList();
 		int progress = (int) Math.round(job.tasks.stream().mapToInt(task -> task.progress).average().orElse(0));
-		String state = job.tasks.stream().anyMatch(task -> task.state == TaskState.CANCELLED)
-				? "CANCELLED"
-				: job.tasks.stream().allMatch(task -> task.state == TaskState.SUCCEEDED)
-						? "SUCCEEDED"
-						: job.tasks.stream().anyMatch(task -> task.state == TaskState.RUNNING) ? "RUNNING" : "QUEUED";
+		String monitorStage = job.monitor.snapshot().stage();
+		String state = Set.of("ASSEMBLING", "VALIDATING", "FAILED").contains(monitorStage)
+				? monitorStage
+				: job.tasks.stream().anyMatch(task -> task.state == TaskState.CANCELLED)
+						? "CANCELLED"
+						: job.tasks.stream().anyMatch(task -> task.state == TaskState.PAUSED)
+								? "PAUSED"
+								: job.tasks.stream().allMatch(task -> task.state == TaskState.SUCCEEDED)
+										? "SUCCEEDED"
+										: job.tasks.stream().anyMatch(task -> task.state == TaskState.RUNNING)
+												? "RUNNING"
+												: "QUEUED";
 		return new JobStatusResponse(job.id, state, progress, taskStatuses);
 	}
 
@@ -223,6 +347,23 @@ public final class Scheduler {
 				.findFirst().orElseThrow(() -> new IllegalArgumentException("Unknown task: " + taskId));
 	}
 
+	private Job requireJob(String jobId) {
+		Job job = jobs.get(jobId);
+		if (job == null)
+			throw new IllegalArgumentException("Unknown job: " + jobId);
+		return job;
+	}
+
+	private static List<Long> parseDurations(Map<String, String> details, int taskCount) {
+		String value = details.getOrDefault("taskDurations", details.get("taskDuration"));
+		if (value == null || value.isBlank())
+			throw new IllegalArgumentException("Source job has no resumable task duration");
+		List<Long> parsed = java.util.Arrays.stream(value.split(",")).map(String::trim)
+				.map(duration -> duration.endsWith("ms") ? duration.substring(0, duration.length() - 2) : duration)
+				.map(Long::parseLong).toList();
+		return parsed.size() == 1 ? java.util.Collections.nCopies(taskCount, parsed.getFirst()) : parsed;
+	}
+
 	private boolean ownsLease(Task task, String workerId, String leaseToken) {
 		return task.state == TaskState.RUNNING && Objects.equals(task.workerId, workerId)
 				&& Objects.equals(task.leaseToken, leaseToken) && task.leaseExpiresAt > now();
@@ -258,6 +399,14 @@ public final class Scheduler {
 		}
 	}
 
+	public record WorkSpec(long durationMillis, Map<String, String> parameters) {
+		public WorkSpec {
+			if (durationMillis < 1)
+				throw new IllegalArgumentException("Work duration must be positive");
+			parameters = Map.copyOf(parameters);
+		}
+	}
+
 	private record Job(String id, List<Task> tasks, InMemoryJobMonitor monitor) {
 	}
 
@@ -265,13 +414,18 @@ public final class Scheduler {
 	}
 
 	private enum TaskState {
-		QUEUED, RUNNING, SUCCEEDED, CANCELLED
+		QUEUED, RUNNING, PAUSED, SUCCEEDED, CANCELLED
 	}
 
 	private static final class Task {
 		private final String jobId;
 		private final String id;
 		private final long durationMillis;
+		private final String pluginId;
+		private final String pluginVersion;
+		private final String pluginEntrypoint;
+		private final Map<String, String> parameters;
+		private final PluginLocation pluginLocation;
 		private TaskState state = TaskState.QUEUED;
 		private int progress;
 		private int attempt;
@@ -280,9 +434,20 @@ public final class Scheduler {
 		private long leaseExpiresAt;
 
 		private Task(String jobId, String id, long durationMillis) {
+			this(jobId, id, durationMillis, SLEEP_PLUGIN_ID, SLEEP_PLUGIN_VERSION, SLEEP_PLUGIN_ENTRYPOINT, Map.of(),
+					null);
+		}
+
+		private Task(String jobId, String id, long durationMillis, String pluginId, String pluginVersion,
+				String pluginEntrypoint, Map<String, String> parameters, PluginLocation pluginLocation) {
 			this.jobId = jobId;
 			this.id = id;
 			this.durationMillis = durationMillis;
+			this.pluginId = pluginId;
+			this.pluginVersion = pluginVersion;
+			this.pluginEntrypoint = pluginEntrypoint;
+			this.parameters = Map.copyOf(parameters);
+			this.pluginLocation = pluginLocation;
 		}
 	}
 }

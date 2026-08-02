@@ -32,10 +32,10 @@ before reporting progress.
 - Add durable state, authentication/authorization, stronger plugin isolation, and
   production operations based on explicit future decisions.
 
-## Next planned slice — pause and resumable execution
+## Implemented first slice — pause and resumable execution
 
-- Add cooperative `PAUSING` and `PAUSED` states that stop new assignments, fence
-  or cancel running leases at safe points, and retain completed work.
+- Add cooperative `PAUSED` state that stops new assignments, fences running
+  leases, and retains completed work.
 - Resume paused jobs by queuing only unfinished work units.
 - Resume cancelled or failed work as a new job with explicit `resumedFromJobId`
   lineage rather than mutating immutable terminal history.
@@ -43,3 +43,7 @@ before reporting progress.
   version, options, runtime signature, checksums, and artifact availability.
 - Treat mid-work-unit checkpointing as an optional plugin capability; the first
   slice reuses whole completed work units and reruns incomplete ones.
+
+The sleep scheduler now implements this first slice. Generic input/plugin/runtime
+identity validation, reusable artifact manifests, and plugin-defined mid-work-unit
+checkpoints remain follow-up work.

@@ -46,6 +46,26 @@ class InMemoryJobMonitorTest {
 		InMemoryJobMonitor.Snapshot snapshot = monitor.snapshot();
 		assertEquals("00:00:05", snapshot.elapsed());
 		assertEquals("00:00:05", snapshot.workUnits().getFirst().elapsed());
+		assertEquals("1970-01-01T00:00:05Z", snapshot.completedAt());
+	}
+
+	@Test
+	void excludesPausedTimeAndRequeuesUnfinishedWorkOnResume() {
+		MutableClock clock = new MutableClock();
+		InMemoryJobMonitor monitor = new InMemoryJobMonitor("job-1", "sleep", Map.of(), clock);
+		monitor.onPlan(1, List.of(new WorkUnit("task-1", "Task", 1, Map.of())));
+		monitor.onWorkUnitStarted("task-1", "worker-1");
+		clock.advance(5_000);
+		monitor.pause();
+		clock.advance(60_000);
+
+		assertEquals("PAUSED", monitor.snapshot().stage());
+		assertEquals("00:00:05", monitor.snapshot().elapsed());
+		assertEquals("PAUSED", monitor.snapshot().workUnits().getFirst().state());
+
+		monitor.resume();
+		assertEquals("QUEUED", monitor.snapshot().stage());
+		assertEquals(0, monitor.snapshot().workUnits().getFirst().progress());
 	}
 
 	private static final class MutableClock extends Clock {

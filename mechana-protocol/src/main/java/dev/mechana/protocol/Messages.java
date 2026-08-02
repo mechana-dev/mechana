@@ -1,6 +1,7 @@
 package dev.mechana.protocol;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -10,20 +11,36 @@ public final class Messages {
 	private Messages() {
 	}
 
-	public record JobSubmitRequest(int taskCount, long durationMillis) {
+	public record JobSubmitRequest(int taskCount, long durationMillis, List<Long> taskDurationsMillis) {
+		public JobSubmitRequest(int taskCount, long durationMillis) {
+			this(taskCount, durationMillis, List.of());
+		}
+
 		public JobSubmitRequest {
-			if (taskCount < 1) {
+			taskDurationsMillis = taskDurationsMillis == null ? List.of() : List.copyOf(taskDurationsMillis);
+			if (taskCount < 1 && taskDurationsMillis.isEmpty()) {
 				throw new IllegalArgumentException("taskCount must be positive");
 			}
-			if (durationMillis < 1) {
+			if (taskDurationsMillis.isEmpty() && durationMillis < 1) {
 				throw new IllegalArgumentException("durationMillis must be positive");
 			}
+			if (!taskDurationsMillis.isEmpty() && taskDurationsMillis.stream().anyMatch(duration -> duration < 1))
+				throw new IllegalArgumentException("task durations must be positive");
 		}
 	}
 
 	public record JobSubmission(String jobId) {
 		public JobSubmission {
 			Objects.requireNonNull(jobId, "jobId");
+		}
+	}
+
+	public record VideoJobSubmitRequest(String sourcePath, double durationSeconds, int segmentCount,
+			double targetSizeRatio) {
+		public VideoJobSubmitRequest {
+			Objects.requireNonNull(sourcePath, "sourcePath");
+			if (durationSeconds <= 0 || segmentCount < 1 || targetSizeRatio <= 0 || targetSizeRatio >= 1)
+				throw new IllegalArgumentException("Invalid video job options");
 		}
 	}
 
@@ -62,7 +79,7 @@ public final class Messages {
 
 	public record TaskLease(String jobId, String taskId, String pluginId, String pluginVersion, String pluginEntrypoint,
 			String pluginUrl, String pluginSha256, long durationMillis, String leaseToken, long leaseMillis,
-			int attempt) {
+			int attempt, Map<String, String> parameters) {
 		public TaskLease {
 			Objects.requireNonNull(jobId, "jobId");
 			Objects.requireNonNull(taskId, "taskId");
@@ -72,6 +89,7 @@ public final class Messages {
 			Objects.requireNonNull(pluginUrl, "pluginUrl");
 			Objects.requireNonNull(pluginSha256, "pluginSha256");
 			Objects.requireNonNull(leaseToken, "leaseToken");
+			parameters = Map.copyOf(parameters);
 		}
 	}
 
@@ -81,6 +99,12 @@ public final class Messages {
 			if (percent < 0 || percent > 100) {
 				throw new IllegalArgumentException("percent must be between 0 and 100");
 			}
+		}
+	}
+
+	public record TaskHeartbeat(String leaseToken) {
+		public TaskHeartbeat {
+			Objects.requireNonNull(leaseToken, "leaseToken");
 		}
 	}
 
