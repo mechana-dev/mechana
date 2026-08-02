@@ -43,5 +43,5 @@ public URL to an address they can reach:
 
 ```shell
 java -jar mechana-server/target/mechana-server.jar 8080 \
-  mechana-plugin-sleep/target/mechana-plugin-sleep-0.1.0-SNAPSHOT.jar https://server.example
+  plugins/sleep-plugin/target/mechana-plugin-sleep-0.1.0-SNAPSHOT.jar https://server.example
 ```

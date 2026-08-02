@@ -2,9 +2,11 @@
 
 Last reviewed: 2026-08-01
 
-The first local media-plugin slice is the reference partitioned-workload plugin. It invokes
-FFprobe and FFmpeg as bounded external processes; the Mechana core does not link
-media internals or embed media-specific scheduling logic.
+The first local media-plugin slice is the reference partitioned-workload plugin.
+Its implementation lives in `plugins/video-ffmpeg-plugin`. It invokes FFprobe and
+FFmpeg as bounded external processes; the Mechana core does not link media
+internals or embed media-specific scheduling logic. The server depends on its
+artifact only for the local video demo/composition entry points.
 
 ## Initial video flow
 

@@ -7,7 +7,8 @@ This file reports repository evidence, not desired future status.
 ## Present in the repository
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
-  sleep-plugin, server, and client modules.
+  server, and client modules plus a nested `plugins/` reactor containing the sleep
+  and FFmpeg video plugin implementations.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
@@ -22,6 +23,9 @@ This file reports repository evidence, not desired future status.
   keyframe-aware deterministic planning, bounded parallel H.265 segment execution,
   separate whole-stream audio handling, concat/remux assembly, final validation,
   scratch estimation, runtime probing, process cancellation/timeouts, and a CLI.
+- Concrete plugin source lives under `plugins/`; `mechana-api` remains outside
+  that directory as the public contract. The server's video-plugin dependency is
+  limited to the local video demo/composition entry points.
 - A loopback-only live HTTP dashboard for one local video job, backed by the
   plugin's lifecycle/progress observer. It shows weighted overall progress,
   configured/active local workers, segment status, elapsed time, and recent events.
