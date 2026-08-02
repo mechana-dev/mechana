@@ -30,6 +30,9 @@ formatting needs correction, then rerun `mvn verify`.
 ## Architectural boundaries
 
 - Keep the core task-agnostic; media behavior belongs in a plugin.
+- Keep the public plugin contract in `mechana-api` and all concrete plugin
+  implementations under `plugins/`. Infrastructure modules must not depend on a
+  concrete plugin except at an explicit composition or demo boundary.
 - Preserve control-plane/data-plane separation. Scheduling and metadata must not
   become the path for large artifact bytes.
 - Model partitioned work as `plan -> parallel partitions -> assemble`; assembly is

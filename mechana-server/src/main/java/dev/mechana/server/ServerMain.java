@@ -14,7 +14,7 @@ public final class ServerMain {
 		int port = args.length > 0 ? Integer.parseInt(args[0]) : 8080;
 		Path pluginJar = args.length > 1
 				? Path.of(args[1])
-				: Path.of("mechana-plugin-sleep/target/mechana-plugin-sleep-0.1.0-SNAPSHOT.jar");
+				: Path.of("plugins/sleep-plugin/target/mechana-plugin-sleep-0.1.0-SNAPSHOT.jar");
 		String publicUrl = args.length > 2 ? args[2] : "http://localhost:" + port;
 
 		MechanaServer server = new MechanaServer(port, publicUrl, pluginJar, 5_000);

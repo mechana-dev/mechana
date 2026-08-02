@@ -37,6 +37,12 @@ propagation, progress aggregation, invocation placement, cleanup, and retention.
 Plugins provide domain descriptions, validation, decomposition, execution,
 estimation, and assembly without taking ownership of those platform concerns.
 
+The repository mirrors this boundary structurally: `mechana-api` contains the
+public plugin contract, while concrete implementations are collected beneath
+`plugins/`. Concrete plugins may depend on `mechana-api`; infrastructure must not
+depend on a concrete plugin except where an explicit composition or demo layer
+wires that plugin into a runnable application.
+
 ## Invariants
 
 - The scheduler matches declared capabilities and resource estimates, not plugin

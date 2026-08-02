@@ -43,6 +43,10 @@ transport must adapt the same domain boundaries rather than redefine them.
 - Plugin: domain description, options, validation, planning, estimation, work-unit
   execution, assembly, and result validation; no ownership of platform lifecycle
   or placement.
+- Module layout: the public contract remains in `mechana-api`; concrete
+  implementations live beneath top-level `plugins/` and depend inward on that
+  contract. Infrastructure does not depend on concrete plugins except at explicit
+  composition/demo entry points.
 - Artifact service: identity and transfer; no domain-specific transformation.
 
 See [plugins](plugin-model.md), [artifacts](artifacts.md), and

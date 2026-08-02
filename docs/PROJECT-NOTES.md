@@ -93,3 +93,16 @@ Append-only record of material Mechana project changes and accepted decisions.
   shrinking from 119,175,998 bytes to 71,778,716 bytes (39.8 percent smaller).
 - The full Maven verification suite, including the generated-media FFmpeg
   integration test, passed before the proof run.
+
+## 2026-08-02 01:57:45 EDT — Group concrete plugins under top-level directory
+
+- Added a nested `plugins/` Maven aggregator and moved the sleep implementation to
+  `plugins/sleep-plugin` and the FFmpeg video implementation to
+  `plugins/video-ffmpeg-plugin`, preserving their artifact IDs and Java packages.
+- Kept `mechana-api` outside `plugins/` as the public plugin contract and left the
+  coordinator, worker, runtime, protocol, server, and client modules at the root.
+- Updated the root reactor, nested POM parent paths, server default plugin-JAR
+  lookup, development instructions, README, repository guidance, and brain files.
+- Preserved the dependency direction from concrete plugins to `mechana-api`; the
+  server's concrete video-plugin dependency remains an explicit local demo and
+  composition boundary.

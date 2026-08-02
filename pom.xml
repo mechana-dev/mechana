@@ -17,8 +17,7 @@
     <module>mechana-coordinator</module>
     <module>mechana-worker</module>
     <module>mechana-runtime</module>
-    <module>mechana-plugin-sleep</module>
-    <module>mechana-plugin-video</module>
+    <module>plugins</module>
     <module>mechana-server</module>
     <module>mechana-client</module>
   </modules>
