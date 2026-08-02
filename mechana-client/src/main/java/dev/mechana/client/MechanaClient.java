@@ -11,6 +11,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.List;
 
 /** Minimal client for job submission and completion observation. */
 public final class MechanaClient {
@@ -25,7 +26,15 @@ public final class MechanaClient {
 	}
 
 	public String submit(int taskCount, long durationMillis) throws IOException, InterruptedException {
-		byte[] body = json.writeValueAsBytes(new JobSubmitRequest(taskCount, durationMillis));
+		return submit(new JobSubmitRequest(taskCount, durationMillis));
+	}
+
+	public String submit(List<Long> taskDurationsMillis) throws IOException, InterruptedException {
+		return submit(new JobSubmitRequest(0, 0, taskDurationsMillis));
+	}
+
+	private String submit(JobSubmitRequest submission) throws IOException, InterruptedException {
+		byte[] body = json.writeValueAsBytes(submission);
 		HttpRequest request = HttpRequest.newBuilder(server.resolve("/api/jobs")).timeout(Duration.ofSeconds(10))
 				.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofByteArray(body)).build();
 		HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
@@ -49,7 +58,7 @@ public final class MechanaClient {
 		while (true) {
 			JobStatusResponse current = status(jobId);
 			System.out.printf("Job %s: %s %d%%%n", jobId, current.state(), current.progress());
-			if ("SUCCEEDED".equals(current.state())) {
+			if (java.util.Set.of("SUCCEEDED", "FAILED", "CANCELLED").contains(current.state())) {
 				return current;
 			}
 			Thread.sleep(pollMillis);

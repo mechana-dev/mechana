@@ -12,6 +12,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -87,11 +89,18 @@ class MechanaServerDashboardTest {
 			assertTrue(status.body().contains("\"serverUptime\":"));
 			assertTrue(status.body().contains("\"connectedWorkers\":1"));
 			assertTrue(status.body().contains("\"address\":\"192.0.2.10\""));
-			assertTrue(status.body().contains("\"activity\":\"WORKING\""));
+			assertTrue(status.body().contains("\"activity\":\"sleep\""));
+			assertTrue(status.body().contains("\"progress\":0"));
 			assertTrue(status.body().contains("\"jobId\":\"" + jobId + "\""));
 			assertTrue(status.body().contains("\"capabilities\":[\"sleep\"]"));
 			assertTrue(status.body().contains(jobId));
 			assertTrue(status.body().contains("\"activeJobs\":1"));
+
+			HttpRequest heartbeat = HttpRequest.newBuilder(base.resolve("/api/workers/worker-1/heartbeat"))
+					.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers
+							.ofString("{\"workerAddress\":\"192.0.2.10\",\"supportedPlugins\":[\"sleep\"]}"))
+					.build();
+			assertEquals(204, client.send(heartbeat, HttpResponse.BodyHandlers.discarding()).statusCode());
 
 			HttpRequest disconnect = HttpRequest.newBuilder(base.resolve("/api/workers/worker-1/disconnect"))
 					.POST(HttpRequest.BodyPublishers.noBody()).build();
@@ -102,6 +111,28 @@ class MechanaServerDashboardTest {
 			assertTrue(disconnected.contains("\"registeredWorkers\":1"));
 			assertTrue(disconnected.contains("\"state\":\"DISCONNECTED\""));
 			assertTrue(disconnected.contains("\"activity\":\"OFFLINE\""));
+		} finally {
+			Files.deleteIfExists(plugin);
+		}
+	}
+
+	@Test
+	void restartsServerOnlyThroughConfiguredLoopbackAction(@TempDir java.nio.file.Path temporary) throws Exception {
+		var plugin = Files.createTempFile("mechana-test-plugin", ".jar");
+		try (MechanaServer server = new MechanaServer(0, "http://localhost", plugin, 5_000, temporary);
+				HttpClient client = HttpClient.newHttpClient()) {
+			CountDownLatch restarted = new CountDownLatch(1);
+			server.onRestart(restarted::countDown);
+			server.start();
+			URI base = URI.create("http://127.0.0.1:" + server.port());
+			HttpResponse<String> page = client.send(HttpRequest.newBuilder(base.resolve("/dashboard")).build(),
+					HttpResponse.BodyHandlers.ofString());
+			HttpRequest restart = HttpRequest.newBuilder(base.resolve("/api/server/restart"))
+					.POST(HttpRequest.BodyPublishers.noBody()).build();
+
+			assertTrue(page.body().contains("Restart server"));
+			assertEquals(202, client.send(restart, HttpResponse.BodyHandlers.discarding()).statusCode());
+			assertTrue(restarted.await(1, TimeUnit.SECONDS));
 		} finally {
 			Files.deleteIfExists(plugin);
 		}
@@ -152,7 +183,12 @@ class MechanaServerDashboardTest {
 							HttpResponse.BodyHandlers.ofString())
 					.body();
 			assertTrue(detail.contains("\"completed\":true"));
+			assertTrue(detail.contains("\"completedAt\":"));
 			assertTrue(detail.contains("job-summary.json"));
+			HttpResponse<String> page = client.send(
+					HttpRequest.newBuilder(base.resolve("/dashboard/jobs/" + jobId)).build(),
+					HttpResponse.BodyHandlers.ofString());
+			assertTrue(page.body().contains("Show in Finder"));
 			HttpResponse<String> artifact = client.send(
 					HttpRequest.newBuilder(base.resolve("/api/jobs/" + jobId + "/artifacts/job-summary.json")).build(),
 					HttpResponse.BodyHandlers.ofString());
@@ -194,6 +230,7 @@ class MechanaServerDashboardTest {
 			assertTrue(dashboard.contains("\"activeJobs\":0"));
 			assertTrue(dashboard.contains("\"completedJobs\":1"));
 			assertTrue(dashboard.contains("\"stage\":\"CANCELLED\""));
+			assertTrue(dashboard.contains("\"completedAt\":"));
 			String detail = client
 					.send(HttpRequest.newBuilder(base.resolve("/api/jobs/" + jobId + "/dashboard")).build(),
 							HttpResponse.BodyHandlers.ofString())
@@ -201,5 +238,50 @@ class MechanaServerDashboardTest {
 			assertTrue(detail.contains("\"abortable\":false"));
 			assertTrue(detail.contains("\"completed\":true"));
 		}
+	}
+
+	@Test
+	void pauseResumeAndResumeAsNewAreAvailableThroughDashboardApi(@TempDir java.nio.file.Path temporary)
+			throws Exception {
+		var plugin = temporary.resolve("plugin.jar");
+		Files.writeString(plugin, "plugin");
+		ObjectMapper json = new ObjectMapper();
+		try (MechanaServer server = new MechanaServer(0, "http://localhost", plugin, 5_000, temporary);
+				HttpClient client = HttpClient.newHttpClient()) {
+			server.start();
+			URI base = URI.create("http://127.0.0.1:" + server.port());
+			HttpRequest submit = HttpRequest.newBuilder(base.resolve("/api/jobs"))
+					.header("Content-Type", "application/json")
+					.POST(HttpRequest.BodyPublishers.ofString("{\"taskCount\":2,\"durationMillis\":1000}")).build();
+			String jobId = json
+					.readValue(client.send(submit, HttpResponse.BodyHandlers.ofString()).body(), JobSubmission.class)
+					.jobId();
+
+			assertEquals(204, post(client, base.resolve("/api/jobs/" + jobId + "/pause")));
+			String paused = client
+					.send(HttpRequest.newBuilder(base.resolve("/api/jobs/" + jobId + "/dashboard")).build(),
+							HttpResponse.BodyHandlers.ofString())
+					.body();
+			assertTrue(paused.contains("\"stage\":\"PAUSED\""));
+			assertTrue(paused.contains("\"resumable\":true"));
+
+			assertEquals(204, post(client, base.resolve("/api/jobs/" + jobId + "/resume")));
+			assertEquals(204, post(client, base.resolve("/api/jobs/" + jobId + "/abort")));
+			HttpRequest resumeAsNew = HttpRequest.newBuilder(base.resolve("/api/jobs/" + jobId + "/resume-as-new"))
+					.POST(HttpRequest.BodyPublishers.noBody()).build();
+			HttpResponse<String> resumed = client.send(resumeAsNew, HttpResponse.BodyHandlers.ofString());
+			assertEquals(202, resumed.statusCode());
+			String resumedId = json.readValue(resumed.body(), JobSubmission.class).jobId();
+			String detail = client
+					.send(HttpRequest.newBuilder(base.resolve("/api/jobs/" + resumedId + "/dashboard")).build(),
+							HttpResponse.BodyHandlers.ofString())
+					.body();
+			assertTrue(detail.contains("\"resumedFromJobId\":\"" + jobId + "\""));
+		}
+	}
+
+	private static int post(HttpClient client, URI uri) throws Exception {
+		return client.send(HttpRequest.newBuilder(uri).POST(HttpRequest.BodyPublishers.noBody()).build(),
+				HttpResponse.BodyHandlers.discarding()).statusCode();
 	}
 }

@@ -8,6 +8,7 @@ import com.sun.net.httpserver.HttpServer;
 import dev.mechana.coordinator.InMemoryJobMonitor;
 import dev.mechana.coordinator.Scheduler;
 import dev.mechana.coordinator.Scheduler.PluginLocation;
+import dev.mechana.coordinator.Scheduler.WorkSpec;
 import dev.mechana.protocol.Messages.JobStatusResponse;
 import dev.mechana.protocol.Messages.JobSubmission;
 import dev.mechana.protocol.Messages.JobSubmitRequest;
@@ -15,9 +16,18 @@ import dev.mechana.protocol.Messages.LeaseRequest;
 import dev.mechana.protocol.Messages.ProgressUpdate;
 import dev.mechana.protocol.Messages.TaskCompletion;
 import dev.mechana.protocol.Messages.TaskFailure;
+import dev.mechana.protocol.Messages.TaskHeartbeat;
 import dev.mechana.protocol.Messages.TaskLease;
 import dev.mechana.protocol.Messages.WorkerRegistration;
 import dev.mechana.protocol.Messages.WorkerRegistrationResponse;
+import dev.mechana.protocol.Messages.VideoJobSubmitRequest;
+import dev.mechana.plugins.video.CancellationToken;
+import dev.mechana.plugins.video.ExternalProcessRunner;
+import dev.mechana.plugins.video.FfmpegCommands;
+import dev.mechana.plugins.video.FinalValidator;
+import dev.mechana.plugins.video.MediaProbe;
+import dev.mechana.plugins.video.VideoAssembler;
+import dev.mechana.plugins.video.VideoTypes;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
@@ -35,7 +45,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
@@ -46,7 +58,8 @@ import java.util.concurrent.TimeUnit;
 public final class MechanaServer implements AutoCloseable {
 
 	private static final String PLUGIN_PATH = "/api/plugins/sleep/1.0.0";
-	private static final long WORKER_TIMEOUT_MILLIS = 3_000;
+	private static final String VIDEO_PLUGIN_PATH = "/api/plugins/video-ffmpeg/1.0.0";
+	private static final long WORKER_TIMEOUT_MILLIS = 15_000;
 	private static final long HEARTBEAT_CHECK_MILLIS = 1_000;
 
 	private final ObjectMapper json = new ObjectMapper();
@@ -57,7 +70,14 @@ public final class MechanaServer implements AutoCloseable {
 	private final HttpServer http;
 	private final Path pluginJar;
 	private final PluginLocation pluginLocation;
+	private final Path videoPluginJar;
+	private final PluginLocation videoPluginLocation;
+	private final Path workRoot;
+	private final String publicUrl;
+	private final ConcurrentMap<String, Path> videoInputs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, VideoJob> videoJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, WorkerPresence> workers = new ConcurrentHashMap<>();
+	private volatile Runnable restartAction;
 	private final ScheduledExecutorService leaseReaper = Executors.newSingleThreadScheduledExecutor(runnable -> {
 		Thread thread = new Thread(runnable, "mechana-lease-reaper");
 		thread.setDaemon(true);
@@ -70,19 +90,33 @@ public final class MechanaServer implements AutoCloseable {
 
 	public MechanaServer(int port, String publicUrl, Path pluginJar, long leaseMillis, Path dataDirectory)
 			throws IOException {
+		this(port, publicUrl, pluginJar, pluginJar, leaseMillis, dataDirectory);
+	}
+
+	public MechanaServer(int port, String publicUrl, Path pluginJar, Path videoPluginJar, long leaseMillis,
+			Path dataDirectory) throws IOException {
 		this.scheduler = new Scheduler(leaseMillis);
 		this.completedJobs = new CompletedJobStore(dataDirectory, json);
+		this.workRoot = dataDirectory.toAbsolutePath().normalize().resolve("work");
+		Files.createDirectories(workRoot);
+		this.publicUrl = stripTrailingSlash(publicUrl);
 		this.pluginJar = pluginJar.toAbsolutePath().normalize();
 		if (!Files.isRegularFile(this.pluginJar)) {
 			throw new IllegalArgumentException("Plugin JAR does not exist: " + this.pluginJar);
 		}
-		this.pluginLocation = new PluginLocation(stripTrailingSlash(publicUrl) + PLUGIN_PATH, sha256(this.pluginJar));
+		this.pluginLocation = new PluginLocation(this.publicUrl + PLUGIN_PATH, sha256(this.pluginJar));
+		this.videoPluginJar = videoPluginJar.toAbsolutePath().normalize();
+		this.videoPluginLocation = new PluginLocation(this.publicUrl + VIDEO_PLUGIN_PATH, sha256(this.videoPluginJar));
 		this.http = HttpServer.create(new InetSocketAddress(port), 0);
 		this.http.createContext("/api/jobs", new JobsHandler());
 		this.http.createContext("/api/dashboard", this::serveServerDashboardStatus);
+		this.http.createContext("/api/server/restart", this::restartServer);
 		this.http.createContext("/dashboard", this::serveDashboard);
 		this.http.createContext("/api/workers", new WorkersHandler());
-		this.http.createContext(PLUGIN_PATH, this::servePlugin);
+		this.http.createContext(PLUGIN_PATH, exchange -> servePlugin(exchange, this.pluginJar, this.pluginLocation));
+		this.http.createContext(VIDEO_PLUGIN_PATH,
+				exchange -> servePlugin(exchange, this.videoPluginJar, this.videoPluginLocation));
+		this.http.createContext("/api/video-inputs", this::serveVideoInput);
 		this.http.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
 	}
 
@@ -96,6 +130,10 @@ public final class MechanaServer implements AutoCloseable {
 		return http.getAddress().getPort();
 	}
 
+	void onRestart(Runnable action) {
+		this.restartAction = action;
+	}
+
 	@Override
 	public void close() {
 		leaseReaper.shutdownNow();
@@ -107,11 +145,21 @@ public final class MechanaServer implements AutoCloseable {
 		public void handle(HttpExchange exchange) throws IOException {
 			try {
 				String path = exchange.getRequestURI().getPath();
+				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs/video".equals(path)) {
+					requireLoopback(exchange);
+					VideoJobSubmitRequest request = read(exchange, VideoJobSubmitRequest.class);
+					String jobId = submitVideo(request);
+					sendJson(exchange, 202, new JobSubmission(jobId));
+					return;
+				}
 				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs".equals(path)) {
 					JobSubmitRequest request = read(exchange, JobSubmitRequest.class);
-					String jobId = scheduler.submit(request.taskCount(), request.durationMillis());
+					List<Long> durations = request.taskDurationsMillis().isEmpty()
+							? java.util.Collections.nCopies(request.taskCount(), request.durationMillis())
+							: request.taskDurationsMillis();
+					String jobId = scheduler.submit(durations);
 					System.out.printf("Client %s submitted job %s: tasks=%d, duration=%dms%n",
-							exchange.getRemoteAddress(), jobId, request.taskCount(), request.durationMillis());
+							exchange.getRemoteAddress(), jobId, durations.size(), request.durationMillis());
 					logJobStatus(scheduler.status(jobId));
 					sendJson(exchange, 202, new JobSubmission(jobId));
 					return;
@@ -126,6 +174,49 @@ public final class MechanaServer implements AutoCloseable {
 					}
 					archiveIfTerminal(jobId);
 					System.out.printf("Aborted job %s from dashboard%n", jobId);
+					sendEmpty(exchange, 204);
+					return;
+				}
+				if ("POST".equals(exchange.getRequestMethod()) && path.startsWith("/api/jobs/")
+						&& path.endsWith("/pause")) {
+					requireLoopback(exchange);
+					String jobId = path.substring("/api/jobs/".length(), path.length() - "/pause".length());
+					if (!scheduler.pause(jobId)) {
+						sendText(exchange, 409, "Job cannot be paused: " + jobId);
+						return;
+					}
+					System.out.printf("Paused job %s from dashboard%n", jobId);
+					sendEmpty(exchange, 204);
+					return;
+				}
+				if ("POST".equals(exchange.getRequestMethod()) && path.startsWith("/api/jobs/")
+						&& path.endsWith("/resume-as-new")) {
+					requireLoopback(exchange);
+					String jobId = path.substring("/api/jobs/".length(), path.length() - "/resume-as-new".length());
+					InMemoryJobMonitor.Snapshot source = completedJobs.find(jobId)
+							.orElseThrow(() -> new IllegalArgumentException("Unknown completed job: " + jobId));
+					String resumedJobId = scheduler.resumeAsNew(source);
+					System.out.printf("Resumed terminal job %s as new job %s%n", jobId, resumedJobId);
+					sendJson(exchange, 202, new JobSubmission(resumedJobId));
+					return;
+				}
+				if ("POST".equals(exchange.getRequestMethod()) && path.startsWith("/api/jobs/")
+						&& path.endsWith("/resume")) {
+					requireLoopback(exchange);
+					String jobId = path.substring("/api/jobs/".length(), path.length() - "/resume".length());
+					if (!scheduler.resume(jobId)) {
+						sendText(exchange, 409, "Job is not paused: " + jobId);
+						return;
+					}
+					System.out.printf("Resumed paused job %s from dashboard%n", jobId);
+					sendEmpty(exchange, 204);
+					return;
+				}
+				if ("POST".equals(exchange.getRequestMethod()) && path.startsWith("/api/jobs/")
+						&& path.endsWith("/reveal-artifacts")) {
+					requireLoopback(exchange);
+					String jobId = path.substring("/api/jobs/".length(), path.length() - "/reveal-artifacts".length());
+					revealInFileManager(completedJobs.artifactsDirectory(jobId));
 					sendEmpty(exchange, 204);
 					return;
 				}
@@ -171,6 +262,8 @@ public final class MechanaServer implements AutoCloseable {
 				sendEmpty(exchange, 404);
 			} catch (IllegalArgumentException invalid) {
 				sendText(exchange, 400, invalid.getMessage());
+			} catch (IOException failure) {
+				sendText(exchange, 500, failure.getMessage());
 			} catch (RuntimeException failure) {
 				sendText(exchange, 500, failure.getMessage());
 			}
@@ -218,6 +311,24 @@ public final class MechanaServer implements AutoCloseable {
 		sendJson(exchange, 200, serverDashboardSnapshot());
 	}
 
+	private void restartServer(HttpExchange exchange) throws IOException {
+		if (!"POST".equals(exchange.getRequestMethod())) {
+			sendEmpty(exchange, 405);
+			return;
+		}
+		if (!isLoopback(exchange)) {
+			sendText(exchange, 403, "Server restart is loopback-only");
+			return;
+		}
+		Runnable action = restartAction;
+		if (action == null) {
+			sendText(exchange, 503, "Server restart is not configured");
+			return;
+		}
+		sendEmpty(exchange, 202);
+		Thread.ofPlatform().name("mechana-server-restart").start(action);
+	}
+
 	private final class WorkersHandler implements HttpHandler {
 		@Override
 		public void handle(HttpExchange exchange) throws IOException {
@@ -236,12 +347,20 @@ public final class MechanaServer implements AutoCloseable {
 					lease(exchange, segments[3]);
 					return;
 				}
+				if (segments.length == 5 && "heartbeat".equals(segments[4])) {
+					workerHeartbeat(exchange, segments[3]);
+					return;
+				}
 				if (segments.length == 5 && "disconnect".equals(segments[4])) {
 					disconnect(exchange, segments[3]);
 					return;
 				}
 				if (segments.length == 7 && "tasks".equals(segments[4])) {
 					updateTask(exchange, segments[3], segments[5], segments[6]);
+					return;
+				}
+				if (segments.length == 8 && "tasks".equals(segments[4]) && "artifacts".equals(segments[6])) {
+					uploadArtifact(exchange, segments[3], segments[5], segments[7]);
 					return;
 				}
 				sendEmpty(exchange, 404);
@@ -278,11 +397,24 @@ public final class MechanaServer implements AutoCloseable {
 			sendEmpty(exchange, 204);
 		}
 
+		private void workerHeartbeat(HttpExchange exchange, String workerId) throws IOException {
+			requirePost(exchange);
+			LeaseRequest heartbeat = read(exchange, LeaseRequest.class);
+			markWorkerSeen(workerId, advertisedOrRemote(heartbeat.workerAddress(), exchange),
+					heartbeat.supportedPlugins());
+			scheduler.register(workerId, heartbeat.supportedPlugins());
+			sendEmpty(exchange, 204);
+		}
+
 		private void updateTask(HttpExchange exchange, String workerId, String taskId, String action)
 				throws IOException {
 			requirePost(exchange);
 			markWorkerSeen(workerId, null, Set.of());
 			boolean accepted = switch (action) {
+				case "heartbeat" -> {
+					TaskHeartbeat heartbeat = read(exchange, TaskHeartbeat.class);
+					yield scheduler.heartbeat(workerId, taskId, heartbeat.leaseToken());
+				}
 				case "progress" -> {
 					ProgressUpdate update = read(exchange, ProgressUpdate.class);
 					yield scheduler.progress(workerId, taskId, update.leaseToken(), update.percent());
@@ -299,29 +431,196 @@ public final class MechanaServer implements AutoCloseable {
 			};
 			if (accepted) {
 				JobStatusResponse status = scheduler.statusForTask(taskId);
+				if ("complete".equals(action) && "ASSEMBLING".equals(scheduler.dashboard(status.jobId()).stage()))
+					assembleVideo(status.jobId());
 				archiveIfTerminal(status.jobId());
-				System.out.printf("Worker %s reported task %s action=%s%n", workerId, taskId, action);
-				logJobStatus(status);
+				if (!"heartbeat".equals(action)) {
+					System.out.printf("Worker %s reported task %s action=%s%n", workerId, taskId, action);
+					logJobStatus(status);
+				}
 			} else {
 				System.out.printf("Rejected stale task update from worker %s for task %s action=%s%n", workerId, taskId,
 						action);
 			}
 			sendEmpty(exchange, accepted ? 204 : 409);
 		}
+
+		private void uploadArtifact(HttpExchange exchange, String workerId, String taskId, String name)
+				throws IOException {
+			if (!"PUT".equals(exchange.getRequestMethod())) {
+				sendEmpty(exchange, 405);
+				return;
+			}
+			String token = exchange.getRequestHeaders().getFirst("X-Mechana-Lease");
+			if (!scheduler.acceptsArtifact(workerId, taskId, token)) {
+				sendEmpty(exchange, 409);
+				return;
+			}
+			String jobId = scheduler.statusForTask(taskId).jobId();
+			VideoJob video = videoJobs.get(jobId);
+			if (video == null || !name.matches("segment-[0-9]{5}\\.mkv"))
+				throw new IllegalArgumentException("Unexpected video artifact");
+			Path destination = video.scratch().resolve("segments").resolve(name).normalize();
+			if (!destination.startsWith(video.scratch().resolve("segments")))
+				throw new IllegalArgumentException("Invalid artifact path");
+			Path parent = Objects.requireNonNull(destination.getParent(), "Artifact destination must have a parent");
+			Files.createDirectories(parent);
+			try (InputStream input = exchange.getRequestBody()) {
+				Files.copy(input, destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+			}
+			sendEmpty(exchange, 204);
+		}
 	}
 
-	private void servePlugin(HttpExchange exchange) throws IOException {
+	private static void servePlugin(HttpExchange exchange, Path jar, PluginLocation location) throws IOException {
 		if (!"GET".equals(exchange.getRequestMethod())) {
 			sendEmpty(exchange, 405);
 			return;
 		}
-		long size = Files.size(pluginJar);
+		long size = Files.size(jar);
 		exchange.getResponseHeaders().set("Content-Type", "application/java-archive");
-		exchange.getResponseHeaders().set("X-Checksum-Sha256", pluginLocation.sha256());
+		exchange.getResponseHeaders().set("X-Checksum-Sha256", location.sha256());
 		exchange.sendResponseHeaders(200, size);
 		try (var output = exchange.getResponseBody()) {
-			Files.copy(pluginJar, output);
+			Files.copy(jar, output);
 		}
+	}
+
+	private String submitVideo(VideoJobSubmitRequest request) throws IOException {
+		Path source = Path.of(request.sourcePath()).toAbsolutePath().normalize();
+		if (!Files.isRegularFile(source))
+			throw new IllegalArgumentException("Video source does not exist: " + source);
+		String workToken = UUID.randomUUID().toString();
+		Path scratch = workRoot.resolve(workToken);
+		Path input = scratch.resolve("input.mp4");
+		Path output = scratch.resolve("result.mkv");
+		Files.createDirectories(scratch.resolve("segments"));
+		Files.createDirectories(scratch.resolve("inputs"));
+		try {
+			ExternalProcessRunner runner = new ExternalProcessRunner();
+			runner.run(
+					List.of("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", source.toString(), "-t",
+							Double.toString(request.durationSeconds()), "-c", "copy", input.toString()),
+					Duration.ofMinutes(15), CancellationToken.NEVER, ignored -> {
+					});
+			FfmpegCommands commands = new FfmpegCommands("ffmpeg", "ffprobe");
+			MediaProbe probe = new MediaProbe(commands, runner);
+			VideoTypes.MediaInfo info = probe.inspect(input, Duration.ofMinutes(5));
+			VideoTypes.Options options = new VideoTypes.Options(VideoTypes.Container.MKV,
+					VideoTypes.QualityMode.VISUALLY_LOSSLESS, 28, "slow",
+					Duration.ofMillis(Math.max(1, Math.round(info.durationSeconds() * 1000 / request.segmentCount()))),
+					request.segmentCount(), Duration.ofHours(2));
+			VideoTypes.Plan plan = exactSegmentPlan(info, options, probe.keyframes(input, options.processTimeout()),
+					scratch, request.segmentCount());
+			long bitrate = targetVideoBitrate(info, request.targetSizeRatio());
+			List<String> inputTokens = new java.util.ArrayList<>(plan.segments().size());
+			List<WorkSpec> work = new java.util.ArrayList<>(plan.segments().size());
+			for (VideoTypes.Segment segment : plan.segments()) {
+				Path segmentInput = scratch.resolve("inputs").resolve("input-%05d.mp4".formatted(segment.index()));
+				runner.run(commands.copySegment(input, segment, segmentInput), Duration.ofMinutes(5),
+						CancellationToken.NEVER, ignored -> {
+						});
+				String inputToken = UUID.randomUUID().toString();
+				videoInputs.put(inputToken, segmentInput);
+				inputTokens.add(inputToken);
+				work.add(new WorkSpec(Math.max(1, Math.round(segment.durationSeconds() * 1000)),
+						Map.of("inputUrl", publicUrl + "/api/video-inputs/" + inputToken, "segmentIndex",
+								Integer.toString(segment.index()), "durationSeconds",
+								Double.toString(segment.durationSeconds()), "startSeconds",
+								Double.toString(segment.startSeconds()), "endSeconds",
+								Double.toString(segment.endSeconds()), "videoBitrate", Long.toString(bitrate), "preset",
+								options.preset())));
+			}
+			String jobId = scheduler.submitVideo(work,
+					Map.of("source", source.toString(), "inputDuration", "%.1fs".formatted(info.durationSeconds()),
+							"targetSizeRatio", Double.toString(request.targetSizeRatio())),
+					videoPluginLocation);
+			videoJobs.put(jobId, new VideoJob(List.copyOf(inputTokens), input, output, scratch, plan));
+			return jobId;
+		} catch (InterruptedException interrupted) {
+			Thread.currentThread().interrupt();
+			videoInputs.entrySet().removeIf(entry -> entry.getValue().startsWith(scratch));
+			deleteTree(scratch);
+			throw new IOException("Video planning was interrupted", interrupted);
+		} catch (IOException | RuntimeException failure) {
+			videoInputs.entrySet().removeIf(entry -> entry.getValue().startsWith(scratch));
+			deleteTree(scratch);
+			throw failure;
+		}
+	}
+
+	private static VideoTypes.Plan exactSegmentPlan(VideoTypes.MediaInfo input, VideoTypes.Options options,
+			List<Double> keyframes, Path scratch, int segmentCount) throws IOException {
+		List<Double> candidates = keyframes.stream().filter(keyframe -> keyframe >= 0.5)
+				.filter(keyframe -> input.durationSeconds() - keyframe >= 0.5).sorted().toList();
+		int cuts = segmentCount - 1;
+		if (candidates.size() < cuts)
+			throw new IOException("The clip has only " + candidates.size() + " usable internal keyframes; " + cuts
+					+ " are required for " + segmentCount + " segments");
+		List<Double> boundaries = new java.util.ArrayList<>(segmentCount + 1);
+		boundaries.add(0.0);
+		int previousIndex = -1;
+		for (int cut = 1; cut <= cuts; cut++) {
+			double desired = input.durationSeconds() * cut / segmentCount;
+			int lastAllowed = candidates.size() - (cuts - cut) - 1;
+			int chosen = previousIndex + 1;
+			for (int index = chosen + 1; index <= lastAllowed; index++)
+				if (Math.abs(candidates.get(index) - desired) < Math.abs(candidates.get(chosen) - desired))
+					chosen = index;
+			boundaries.add(candidates.get(chosen));
+			previousIndex = chosen;
+		}
+		boundaries.add(input.durationSeconds());
+		List<VideoTypes.Segment> segments = new java.util.ArrayList<>(segmentCount);
+		for (int index = 0; index < segmentCount; index++)
+			segments.add(new VideoTypes.Segment(index, boundaries.get(index), boundaries.get(index + 1),
+					scratch.resolve("segments").resolve("segment-%05d.mkv".formatted(index))));
+		return new VideoTypes.Plan(input, options, segments, scratch);
+	}
+
+	private void serveVideoInput(HttpExchange exchange) throws IOException {
+		if (!"GET".equals(exchange.getRequestMethod())) {
+			sendEmpty(exchange, 405);
+			return;
+		}
+		String prefix = "/api/video-inputs/";
+		String path = exchange.getRequestURI().getPath();
+		Path input = path.startsWith(prefix) ? videoInputs.get(path.substring(prefix.length())) : null;
+		if (input == null || !Files.isRegularFile(input)) {
+			sendEmpty(exchange, 404);
+			return;
+		}
+		long size = Files.size(input);
+		exchange.getResponseHeaders().set("Content-Type", "video/mp4");
+		exchange.sendResponseHeaders(200, size);
+		try (var output = exchange.getResponseBody()) {
+			Files.copy(input, output);
+		}
+	}
+
+	private void assembleVideo(String jobId) {
+		VideoJob video = videoJobs.get(jobId);
+		if (video == null)
+			return;
+		try {
+			FfmpegCommands commands = new FfmpegCommands("ffmpeg", "ffprobe");
+			ExternalProcessRunner runner = new ExternalProcessRunner();
+			new VideoAssembler(commands, runner).assemble(video.input(), video.output(), video.plan(),
+					CancellationToken.NEVER);
+			new FinalValidator(new MediaProbe(commands, runner)).validateSmallerThanInput(video.output(), video.plan());
+			scheduler.finishVideo(jobId, null);
+		} catch (InterruptedException failure) {
+			Thread.currentThread().interrupt();
+			scheduler.finishVideo(jobId, failure.getMessage());
+		} catch (IOException | RuntimeException failure) {
+			scheduler.finishVideo(jobId, failure.getMessage());
+		}
+	}
+
+	private static long targetVideoBitrate(VideoTypes.MediaInfo input, double ratio) {
+		double targetTotalBitsPerSecond = input.inputBytes() * 8.0 * ratio / input.durationSeconds();
+		long audioAndOverheadReserve = input.audioStreams() == 1 ? 512_000 : 64_000;
+		return Math.max(250_000, Math.round(targetTotalBitsPerSecond - audioAndOverheadReserve));
 	}
 
 	private void sendJobDashboard(HttpExchange exchange, String jobId) throws IOException {
@@ -334,6 +633,9 @@ public final class MechanaServer implements AutoCloseable {
 				"size", artifact.size(), "url", "/api/jobs/" + jobId + "/artifacts/" + artifact.name())).toList()));
 		body.put("completed", completedJobs.find(jobId).isPresent());
 		body.put("abortable", !isTerminal(snapshot.stage()));
+		body.put("pausable", "QUEUED".equals(snapshot.stage()) || "EXECUTING".equals(snapshot.stage()));
+		body.put("resumable", "PAUSED".equals(snapshot.stage()));
+		body.put("resumableAsNew", "CANCELLED".equals(snapshot.stage()) || "FAILED".equals(snapshot.stage()));
 		sendJson(exchange, 200, body);
 	}
 
@@ -351,8 +653,26 @@ public final class MechanaServer implements AutoCloseable {
 			return;
 		try {
 			completedJobs.archive(snapshot);
+			VideoJob video = videoJobs.get(jobId);
+			if (video != null && "SUCCEEDED".equals(snapshot.stage()) && Files.isRegularFile(video.output()))
+				completedJobs.storeArtifact(jobId, "compressed-first-minute.mkv", video.output());
 		} catch (IOException failure) {
 			System.err.printf("Could not archive completed job %s: %s%n", jobId, failure.getMessage());
+		} finally {
+			VideoJob video = videoJobs.remove(jobId);
+			if (video != null) {
+				video.inputTokens().forEach(videoInputs::remove);
+				deleteTree(video.scratch());
+			}
+		}
+	}
+
+	private static void deleteTree(Path root) {
+		try (var paths = Files.walk(root)) {
+			for (Path path : paths.sorted(Comparator.reverseOrder()).toList())
+				Files.deleteIfExists(path);
+		} catch (IOException ignored) {
+			// Server work storage is best-effort cleanup after durable archival.
 		}
 	}
 
@@ -368,6 +688,16 @@ public final class MechanaServer implements AutoCloseable {
 		try (var output = exchange.getResponseBody()) {
 			Files.copy(artifact, output);
 		}
+	}
+
+	private static void revealInFileManager(Path directory) throws IOException {
+		String operatingSystem = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+		List<String> command = operatingSystem.contains("mac")
+				? List.of("open", directory.toString())
+				: operatingSystem.contains("win")
+						? List.of("explorer.exe", directory.toString())
+						: List.of("xdg-open", directory.toString());
+		new ProcessBuilder(command).start();
 	}
 
 	private void markWorkerSeen(String workerId, String workerAddress, Set<String> supportedPlugins) {
@@ -405,19 +735,25 @@ public final class MechanaServer implements AutoCloseable {
 		List<dev.mechana.coordinator.InMemoryJobMonitor.Snapshot> activeJobItems = liveJobs.stream()
 				.filter(job -> !isTerminal(job.stage())).toList();
 		List<dev.mechana.coordinator.InMemoryJobMonitor.Snapshot> completedJobItems = completedJobs.snapshots();
-		Map<String, String> activeJobsByWorker = new HashMap<>();
+		Map<String, WorkerActivity> activeJobsByWorker = new HashMap<>();
 		for (dev.mechana.coordinator.InMemoryJobMonitor.Snapshot job : activeJobItems) {
 			for (dev.mechana.coordinator.InMemoryJobMonitor.WorkUnitSnapshot workUnit : job.workUnits()) {
 				if ("RUNNING".equals(workUnit.state()))
-					activeJobsByWorker.put(workUnit.workerAddress(), job.jobId());
+					activeJobsByWorker.put(workUnit.workerAddress(),
+							new WorkerActivity(job.jobId(), job.plugin(), workUnit.progress()));
 			}
 		}
 		List<ServerDashboard.WorkerSnapshot> workerSnapshots = workers.entrySet().stream()
 				.sorted(Comparator.comparing(java.util.Map.Entry::getKey)).map(entry -> {
-					String jobId = entry.getValue().connected() ? activeJobsByWorker.get(entry.getKey()) : null;
-					String activity = !entry.getValue().connected() ? "OFFLINE" : jobId == null ? "IDLE" : "WORKING";
+					WorkerActivity active = entry.getValue().connected()
+							? activeJobsByWorker.get(entry.getKey())
+							: null;
+					String activity = !entry.getValue().connected()
+							? "OFFLINE"
+							: active == null ? "IDLE" : active.plugin();
 					return new ServerDashboard.WorkerSnapshot(entry.getKey(), entry.getValue().address(),
-							entry.getValue().connected() ? "CONNECTED" : "DISCONNECTED", activity, jobId,
+							entry.getValue().connected() ? "CONNECTED" : "DISCONNECTED", activity,
+							active == null ? null : active.jobId(), active == null ? 0 : active.progress(),
 							entry.getValue().capabilities(),
 							formatAge(Duration.between(Instant.ofEpochMilli(entry.getValue().lastSeenAt()), now)));
 				}).toList();
@@ -540,5 +876,11 @@ public final class MechanaServer implements AutoCloseable {
 			address = address == null || address.isBlank() ? "unknown" : address;
 			capabilities = Set.copyOf(capabilities);
 		}
+	}
+
+	private record VideoJob(List<String> inputTokens, Path input, Path output, Path scratch, VideoTypes.Plan plan) {
+	}
+
+	private record WorkerActivity(String jobId, String plugin, int progress) {
 	}
 }

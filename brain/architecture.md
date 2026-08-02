@@ -48,6 +48,11 @@ transport must adapt the same domain boundaries rather than redefine them.
   contract. Infrastructure does not depend on concrete plugins except at explicit
   composition/demo entry points.
 - Artifact service: identity and transfer; no domain-specific transformation.
+- The initial distributed-video data plane is server-mediated: the server
+  stream-copies keyframe-aligned input chunks, each worker downloads only its
+  assigned chunk and publishes its encoded segment under the live lease, and the
+  server performs final assembly and validation. This is not yet the intended
+  content-addressed, cache-aware artifact service.
 - Observability: the platform owns job/work-unit state, weighted progress,
   attempts, workers, events, and dashboard presentation. Plugins emit the generic
   `JobObserver` lifecycle and may attach bounded string display fields; dashboard
@@ -57,9 +62,18 @@ transport must adapt the same domain boundaries rather than redefine them.
   presence remain in memory. Terminal dashboard snapshots and server-owned
   artifacts are archived beneath the server data directory, loaded after restart,
   linked from job-specific views, and removed together only through explicit purge.
+- Pause is a non-terminal scheduler transition: it fences live attempts, preserves
+  completed work, and resumes unfinished units under the same job identity.
+  Resuming terminal history creates a new job with explicit source lineage rather
+  than mutating the archived terminal record. Cross-plugin artifact reuse requires
+  a future platform validation contract; the implemented first slice is sleep-only.
 - Workers advertise their host IP address with capabilities during registration
   and lease polling. The server retains that address as worker presentation
   metadata; it does not use it as proof of identity or trust.
+- Fleet presence and task ownership are distinct control-plane signals. A worker
+  heartbeat indicates process/server reachability even while plugin code is busy;
+  a lease-token heartbeat independently renews one authoritative task attempt.
+  Neither signal fabricates plugin progress.
 
 See [plugins](plugin-model.md), [artifacts](artifacts.md), and
 [scheduler](scheduler.md) for the contracts implied by these boundaries.

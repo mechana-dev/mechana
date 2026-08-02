@@ -40,4 +40,14 @@ class FfmpegCommandsTest {
 				"3000000", "-progress", "pipe:1")));
 		assertFalse(command.contains("-crf"));
 	}
+
+	@Test
+	void buildsKeyframeAlignedServerSideInputChunkWithoutEncoding() {
+		var segment = new VideoTypes.Segment(2, 31.823458, 42.625917, Path.of("encoded.mkv"));
+		var command = new FfmpegCommands("ffmpeg", "ffprobe").copySegment(Path.of("source.mp4"), segment,
+				Path.of("input-00002.mp4"));
+		assertTrue(command.containsAll(java.util.List.of("-ss", "31.823458", "-t", "10.802459", "-map", "0:v:0", "-c:v",
+				"copy", "input-00002.mp4")));
+		assertFalse(command.contains("libx265"));
+	}
 }

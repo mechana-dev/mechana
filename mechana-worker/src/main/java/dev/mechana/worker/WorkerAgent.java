@@ -8,6 +8,7 @@ import dev.mechana.protocol.Messages.LeaseRequest;
 import dev.mechana.protocol.Messages.ProgressUpdate;
 import dev.mechana.protocol.Messages.TaskCompletion;
 import dev.mechana.protocol.Messages.TaskFailure;
+import dev.mechana.protocol.Messages.TaskHeartbeat;
 import dev.mechana.protocol.Messages.TaskLease;
 import dev.mechana.protocol.Messages.WorkerRegistration;
 import java.io.IOException;
@@ -55,21 +56,26 @@ public final class WorkerAgent {
 	}
 
 	public void runForever() {
-		while (running.get() && !Thread.currentThread().isInterrupted()) {
-			try {
-				register();
-				while (running.get() && !Thread.currentThread().isInterrupted()) {
-					if (!runOne()) {
-						sleep(500);
+		Thread presenceHeartbeat = startPresenceHeartbeat();
+		try {
+			while (running.get() && !Thread.currentThread().isInterrupted()) {
+				try {
+					register();
+					while (running.get() && !Thread.currentThread().isInterrupted()) {
+						if (!runOne()) {
+							sleep(500);
+						}
 					}
+				} catch (IOException communicationFailure) {
+					System.err.printf("Worker %s lost contact with server: %s%n", workerId,
+							communicationFailure.getMessage());
+					sleep(1_000);
+				} catch (InterruptedException interrupted) {
+					Thread.currentThread().interrupt();
 				}
-			} catch (IOException communicationFailure) {
-				System.err.printf("Worker %s lost contact with server: %s%n", workerId,
-						communicationFailure.getMessage());
-				sleep(1_000);
-			} catch (InterruptedException interrupted) {
-				Thread.currentThread().interrupt();
 			}
+		} finally {
+			presenceHeartbeat.interrupt();
 		}
 	}
 
@@ -101,20 +107,25 @@ public final class WorkerAgent {
 	}
 
 	private void execute(TaskLease lease) throws IOException, InterruptedException {
-		Path pluginFile = downloadPlugin(lease);
 		AtomicBoolean cancelled = new AtomicBoolean();
-		try (URLClassLoader loader = new URLClassLoader(new java.net.URL[]{pluginFile.toUri().toURL()},
-				TaskPlugin.class.getClassLoader())) {
-			Class<? extends TaskPlugin> pluginType = Class.forName(lease.pluginEntrypoint(), true, loader)
-					.asSubclass(TaskPlugin.class);
-			TaskPlugin plugin = pluginType.getConstructor().newInstance();
-			verifyDescriptor(plugin.descriptor(), lease);
-			System.out.printf("Worker %s running task %s%n", workerId, lease.taskId());
-			TaskContext context = new RemoteTaskContext(lease, cancelled);
-			plugin.execute(context);
-			Response completion = post(taskPath(lease, "complete"), new TaskCompletion(lease.leaseToken()));
-			requireStatus(completion, 204);
-			System.out.printf("Worker %s finished task %s successfully%n", workerId, lease.taskId());
+		AtomicBoolean finished = new AtomicBoolean();
+		Thread leaseHeartbeat = startLeaseHeartbeat(lease, cancelled, finished);
+		Path pluginFile = null;
+		try {
+			pluginFile = downloadPlugin(lease);
+			try (URLClassLoader loader = new URLClassLoader(new java.net.URL[]{pluginFile.toUri().toURL()},
+					TaskPlugin.class.getClassLoader())) {
+				Class<? extends TaskPlugin> pluginType = Class.forName(lease.pluginEntrypoint(), true, loader)
+						.asSubclass(TaskPlugin.class);
+				TaskPlugin plugin = pluginType.getConstructor().newInstance();
+				verifyDescriptor(plugin.descriptor(), lease);
+				System.out.printf("Worker %s running task %s%n", workerId, lease.taskId());
+				TaskContext context = new RemoteTaskContext(lease, cancelled);
+				plugin.execute(context);
+				Response completion = post(taskPath(lease, "complete"), new TaskCompletion(lease.leaseToken()));
+				requireStatus(completion, 204);
+				System.out.printf("Worker %s finished task %s successfully%n", workerId, lease.taskId());
+			}
 		} catch (ReflectiveOperationException | RuntimeException | dev.mechana.api.PluginExecutionException failure) {
 			cancelled.set(true);
 			try {
@@ -125,8 +136,47 @@ public final class WorkerAgent {
 			System.err.printf("Worker %s finished task %s with failure: %s%n", workerId, lease.taskId(),
 					safeMessage(failure));
 		} finally {
-			Files.deleteIfExists(pluginFile);
+			finished.set(true);
+			leaseHeartbeat.interrupt();
+			if (pluginFile != null)
+				Files.deleteIfExists(pluginFile);
 		}
+	}
+
+	private Thread startPresenceHeartbeat() {
+		return Thread.ofVirtual().name("mechana-worker-heartbeat-" + workerId).start(() -> {
+			while (running.get() && !Thread.currentThread().isInterrupted()) {
+				try {
+					post("/api/workers/" + workerId + "/heartbeat", new LeaseRequest(workerAddress, supportedPlugins));
+				} catch (IOException ignored) {
+					// The registration/lease loop reports connectivity failures.
+				} catch (InterruptedException interrupted) {
+					Thread.currentThread().interrupt();
+				}
+				sleep(3_000);
+			}
+		});
+	}
+
+	private Thread startLeaseHeartbeat(TaskLease lease, AtomicBoolean cancelled, AtomicBoolean finished) {
+		long intervalMillis = Math.max(250, Math.min(1_000, lease.leaseMillis() / 3));
+		return Thread.ofVirtual().name("mechana-task-heartbeat-" + lease.taskId()).start(() -> {
+			while (!finished.get() && !Thread.currentThread().isInterrupted()) {
+				try {
+					Response response = post(taskPath(lease, "heartbeat"), new TaskHeartbeat(lease.leaseToken()));
+					if (response.status != 204) {
+						cancelled.set(true);
+						return;
+					}
+				} catch (IOException ignored) {
+					// A later heartbeat can still renew the lease before it expires.
+				} catch (InterruptedException interrupted) {
+					Thread.currentThread().interrupt();
+					return;
+				}
+				sleep(intervalMillis);
+			}
+		});
 	}
 
 	private Path downloadPlugin(TaskLease lease) throws IOException, InterruptedException {
@@ -227,6 +277,28 @@ public final class WorkerAgent {
 		@Override
 		public long durationMillis() {
 			return lease.durationMillis();
+		}
+
+		@Override
+		public java.util.Map<String, String> parameters() {
+			return lease.parameters();
+		}
+
+		@Override
+		public void publishArtifact(String name, Path file) {
+			try {
+				HttpRequest request = HttpRequest.newBuilder(server.resolve(taskPath(lease, "artifacts/") + name))
+						.timeout(Duration.ofMinutes(10)).header("X-Mechana-Lease", lease.leaseToken())
+						.PUT(HttpRequest.BodyPublishers.ofFile(file)).build();
+				HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
+				if (response.statusCode() != 204)
+					throw new IOException("Artifact upload returned HTTP " + response.statusCode());
+			} catch (IOException failure) {
+				throw new IllegalStateException("Could not publish artifact", failure);
+			} catch (InterruptedException interrupted) {
+				Thread.currentThread().interrupt();
+				throw new IllegalStateException("Artifact publication was interrupted", interrupted);
+			}
 		}
 
 		@Override

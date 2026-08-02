@@ -5,11 +5,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mechana.coordinator.Scheduler.PluginLocation;
+import dev.mechana.coordinator.Scheduler.WorkSpec;
 import dev.mechana.protocol.Messages.TaskLease;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Set;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class SchedulerTest {
@@ -54,6 +57,22 @@ class SchedulerTest {
 	}
 
 	@Test
+	void independentHeartbeatRenewsLeaseWithoutChangingProgress() {
+		MutableClock clock = new MutableClock();
+		Scheduler scheduler = new Scheduler(1_000, clock);
+		String jobId = scheduler.submit(1, 100);
+		TaskLease lease = scheduler.lease("busy-worker", Set.of("sleep"), PLUGIN).orElseThrow();
+
+		clock.advance(900);
+		assertTrue(scheduler.heartbeat("busy-worker", lease.taskId(), lease.leaseToken()));
+		clock.advance(900);
+
+		assertEquals(0, scheduler.dashboard(jobId).progress());
+		assertTrue(scheduler.complete("busy-worker", lease.taskId(), lease.leaseToken()));
+		assertFalse(scheduler.heartbeat("busy-worker", lease.taskId(), "stale-token"));
+	}
+
+	@Test
 	void abortCancelsQueuedAndRunningTasksAndFencesTheirLeases() {
 		Scheduler scheduler = new Scheduler(1_000);
 		String jobId = scheduler.submit(2, 100);
@@ -67,6 +86,65 @@ class SchedulerTest {
 		assertFalse(scheduler.complete("worker-1", running.taskId(), running.leaseToken()));
 		assertTrue(scheduler.lease("worker-2", Set.of("sleep"), PLUGIN).isEmpty());
 		assertFalse(scheduler.abort(jobId));
+	}
+
+	@Test
+	void pauseFencesLeasesAndResumeRequeuesOnlyUnfinishedTasks() {
+		Scheduler scheduler = new Scheduler(1_000);
+		String jobId = scheduler.submit(2, 100);
+		TaskLease completed = scheduler.lease("worker-1", Set.of("sleep"), PLUGIN).orElseThrow();
+		TaskLease interrupted = scheduler.lease("worker-2", Set.of("sleep"), PLUGIN).orElseThrow();
+		assertTrue(scheduler.complete("worker-1", completed.taskId(), completed.leaseToken()));
+
+		assertTrue(scheduler.pause(jobId));
+		assertEquals("PAUSED", scheduler.status(jobId).state());
+		assertFalse(scheduler.complete("worker-2", interrupted.taskId(), interrupted.leaseToken()));
+		assertTrue(scheduler.lease("worker-3", Set.of("sleep"), PLUGIN).isEmpty());
+		assertTrue(scheduler.resume(jobId));
+
+		TaskLease resumed = scheduler.lease("worker-3", Set.of("sleep"), PLUGIN).orElseThrow();
+		assertEquals(interrupted.taskId(), resumed.taskId());
+		assertEquals(2, resumed.attempt());
+		assertEquals(1, scheduler.dashboard(jobId).completedWorkUnits());
+		assertFalse(scheduler.resume(jobId));
+	}
+
+	@Test
+	void cancelledJobCanResumeAsNewAndReuseCompletedWorkUnits() {
+		Scheduler scheduler = new Scheduler(1_000);
+		String originalId = scheduler.submit(2, 100);
+		TaskLease completed = scheduler.lease("worker-1", Set.of("sleep"), PLUGIN).orElseThrow();
+		scheduler.lease("worker-2", Set.of("sleep"), PLUGIN).orElseThrow();
+		assertTrue(scheduler.complete("worker-1", completed.taskId(), completed.leaseToken()));
+		assertTrue(scheduler.abort(originalId));
+
+		String resumedId = scheduler.resumeAsNew(scheduler.dashboard(originalId));
+
+		assertEquals(originalId, scheduler.dashboard(resumedId).details().get("resumedFromJobId"));
+		assertEquals("1", scheduler.dashboard(resumedId).details().get("reusedWorkUnits"));
+		assertEquals(1, scheduler.dashboard(resumedId).completedWorkUnits());
+		TaskLease remaining = scheduler.lease("worker-3", Set.of("sleep"), PLUGIN).orElseThrow();
+		assertEquals(resumedId, remaining.jobId());
+	}
+
+	@Test
+	void supportsVariableSleepDurationsAndCapabilityMatchedVideoWork() {
+		Scheduler scheduler = new Scheduler(1_000);
+		String sleepJob = scheduler.submit(List.of(120_000L, 180_000L, 210_000L, 240_000L));
+		PluginLocation videoPlugin = new PluginLocation("http://server/video.jar", "video123");
+		String videoJob = scheduler.submitVideo(
+				List.of(new WorkSpec(10_000, Map.of("segmentIndex", "0", "startSeconds", "0", "endSeconds", "10"))),
+				Map.of("source", "input.mp4"), videoPlugin);
+
+		TaskLease sleep = scheduler.lease("sleep-only", Set.of("sleep"), PLUGIN).orElseThrow();
+		TaskLease video = scheduler.lease("video-worker", Set.of("video-ffmpeg"), PLUGIN).orElseThrow();
+
+		assertEquals(120_000, sleep.durationMillis());
+		assertEquals(sleepJob, sleep.jobId());
+		assertEquals(videoJob, video.jobId());
+		assertEquals("video-ffmpeg", video.pluginId());
+		assertEquals(videoPlugin.url(), video.pluginUrl());
+		assertEquals("0", video.parameters().get("segmentIndex"));
 	}
 
 	private static final class MutableClock extends Clock {

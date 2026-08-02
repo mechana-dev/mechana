@@ -85,3 +85,10 @@ creating tiny or severely unbalanced work units.
   overhead. The final validator rejects any result that is not smaller than its
   input. This is an acceptance guarantee, not a promise that every requested
   target can encode successfully, and it is distinct from the perceptual CRF mode.
+- The continuously running server now provides a separate scheduler-managed
+  reference path. It clips and plans a server-local source, stream-copies each
+  keyframe-aligned range into a per-task input, queues each segment by the
+  `video-ffmpeg` capability, serves only the assigned input/plugin to leased workers,
+  accepts segment publication only under the current lease, and assembles and
+  validates a smaller result after all segments complete. Content-addressed caching
+  and shared-host reuse remain future artifact-service work.

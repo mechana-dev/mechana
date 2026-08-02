@@ -22,14 +22,22 @@ or lease expiry.
 - One partition has at most one authoritative active lease.
 - Renewal extends only the matching live lease; stale completion and publication
   are rejected.
+- Worker-presence expiry and task-lease expiry are independent. Presence
+  heartbeats must continue while idle, staging artifacts, executing plugins, or
+  publishing outputs; task heartbeats renew ownership without altering progress.
 - Retry creates a distinct attempt while preserving logical partition identity.
 - Assembly becomes runnable only after every required partition artifact is
   authoritative and compatible.
 - Reservation accounting survives every state transition without leaks or
   double-release; durable recovery requirements are a later explicit decision.
 
-The current scheduler implements leases for sleep tasks but not generic resources
-or scratch reservations; see [current state](current-state.md).
+The current scheduler implements the same capability-matched renewable lease and
+attempt-fencing path for sleep tasks and distributed video segments, but not
+generic resources or scratch reservations; see [current state](current-state.md).
+The HTTP worker sends presence heartbeats every three seconds and the server marks
+it offline after fifteen seconds without contact. Each active assignment also has
+a lease-token heartbeat paced from its advertised lease duration, so slow staging
+or quiet external-process startup does not cause a false retry.
 
 The video-plugin demo uses a bounded in-process `ExecutorService` after checking a
 conservative scratch estimate against local usable space. This is deliberately not
@@ -48,17 +56,32 @@ server combines those snapshots with its worker-presence registry for the master
 dashboard. Terminal transitions capture their completion instant so job and
 work-unit elapsed durations remain stable after completion.
 
-The sleep scheduler supports terminal abort: it marks unfinished work units
-`CANCELLED`, fences active lease tokens, rejects late updates, and lets the server
-archive the result. Pause/resume, job lineage, completed-work reuse, and
-plugin-defined mid-work-unit checkpoints are not implemented yet.
+The sleep scheduler supports terminal abort and cooperative pause. Both fence
+active lease tokens so late updates are rejected. Pause retains succeeded work,
+marks unfinished work `PAUSED`, and excludes paused time from job elapsed time;
+resume queues only those unfinished units under the same job ID. Interrupted work
+units restart from zero.
+
+Cancelled or failed sleep jobs can be resumed as a new job with explicit
+`resumedFromJobId` lineage. Source history remains immutable, corresponding
+succeeded work units are reused, and only incomplete units are queued. This first
+slice reuses sleep work-unit completion state; generic artifact identity and
+availability validation plus plugin-defined mid-work-unit checkpoints remain
+future contracts.
 
 For local video workflows, configured workers still means executor parallelism and
 active workers means currently running work units. The dashboard presents those
 generic values without claiming scheduler ownership of the local executor.
 
-`TwoHostVideoJobMain` goes one step farther only as a manual operational proof: it
+`TwoHostVideoJobMain` remains a manual operational proof: it
 uses a fixed four-local/four-SSH assignment and aggregates both processes' FFmpeg
 progress. It does not call the scheduler, discover capacity, acquire leases,
 reserve scratch, fence attempts, or retry failed work, so it must not be treated as
 evidence that distributed media scheduling is implemented.
+
+The server-managed video path is separate evidence: it plans the requested number
+of segment work units, queues them with the `video-ffmpeg` capability, transfers
+inputs through the server, accepts outputs only for the matching live lease, and
+assembles only after all segments succeed. It currently lacks scratch reservations,
+input caching, checksummed content identity, and durable recovery of
+active/intermediate state.
