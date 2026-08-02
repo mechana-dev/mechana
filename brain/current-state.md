@@ -1,6 +1,6 @@
 # Current state
 
-Verified: 2026-08-01
+Verified: 2026-08-02
 
 This file reports repository evidence, not desired future status.
 
@@ -26,9 +26,26 @@ This file reports repository evidence, not desired future status.
 - Concrete plugin source lives under `plugins/`; `mechana-api` remains outside
   that directory as the public contract. The server's video-plugin dependency is
   limited to the local video demo/composition entry points.
-- A loopback-only live HTTP dashboard for one local video job, backed by the
-  plugin's lifecycle/progress observer. It shows weighted overall progress,
-  configured/active local workers, segment status, elapsed time, and recent events.
+- A generic in-memory observable-job model and loopback-only HTTP dashboard for
+  plugin identity, stages, weighted work-unit progress, configured/active workers,
+  elapsed time, bounded event history, errors, and structured plugin-supplied
+  display details. Scheduler-managed sleep jobs expose it at
+  `/dashboard/jobs/<job-id>`; local video runners use the same contracts.
+- A loopback-only server dashboard at `/dashboard` that retains worker
+  registrations, advertised IP addresses, connection state, capabilities,
+  server PID/date/time/uptime, live active-job rows, and disk-backed completed-job
+  rows. Each job row links to its generic job dashboard, and
+  terminal job/work-unit elapsed times stop advancing. Worker rows derive an
+  `IDLE`, `WORKING`, or `OFFLINE` activity from live assignments and link active
+  workers directly to their current job.
+- Terminal job dashboard snapshots and server-owned artifacts persist beneath a
+  configurable server data directory (default `.mechana/server`). Completed-job
+  detail pages list downloadable artifacts; a loopback-only purge action removes
+  the record and its owned artifact directory. The sleep slice publishes its
+  terminal `job-summary.json` as the first generic downloadable artifact.
+- Active jobs can be aborted from either dashboard. Abort fences current leases,
+  marks unfinished work units and the job `CANCELLED`, rejects late worker updates,
+  and archives the terminal snapshot like other completed jobs.
 - A manual two-host video proof entry point can assign four of eight segments to
   the local host and four over SSH, aggregate both hosts' FFmpeg progress into the
   one-job dashboard, retrieve remote artifacts, and enforce a smaller-than-input
@@ -40,9 +57,11 @@ This file reports repository evidence, not desired future status.
 - Scratch-space advertisement, reservations, or capacity-aware matching.
 - Scheduler-managed media distribution, durable artifact transfer, or reserved
   worker scratch.
-- Durable scheduler/job persistence, authentication, or production isolation.
-- Distributed job monitoring, worker telemetry, durable monitoring history, or
-  authenticated/remote dashboard access.
+- Durable active scheduler state, authentication, or production isolation.
+- Durable worker presence across restarts, richer fleet telemetry, authentication,
+  or remote dashboard access.
+- Pause/resume, revival of terminal jobs, resumable job lineage, reuse of completed
+  work-unit artifacts, or plugin-defined mid-work-unit checkpoints.
 
 These are accepted direction where listed in [decisions](decisions.md) and planned
 work where listed in [roadmap](roadmap.md); they must not be described as shipped.

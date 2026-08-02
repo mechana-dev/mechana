@@ -1,6 +1,6 @@
 # Architecture
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-02
 
 ## Stable shape
 
@@ -48,6 +48,18 @@ transport must adapt the same domain boundaries rather than redefine them.
   contract. Infrastructure does not depend on concrete plugins except at explicit
   composition/demo entry points.
 - Artifact service: identity and transfer; no domain-specific transformation.
+- Observability: the platform owns job/work-unit state, weighted progress,
+  attempts, workers, events, and dashboard presentation. Plugins emit the generic
+  `JobObserver` lifecycle and may attach bounded string display fields; dashboard
+  and scheduler code do not interpret plugin-specific semantics.
+- The running server exposes a stable master dashboard that composes generic job
+  snapshots with its worker-presence registry. Active scheduling and worker
+  presence remain in memory. Terminal dashboard snapshots and server-owned
+  artifacts are archived beneath the server data directory, loaded after restart,
+  linked from job-specific views, and removed together only through explicit purge.
+- Workers advertise their host IP address with capabilities during registration
+  and lease polling. The server retains that address as worker presentation
+  metadata; it does not use it as proof of identity or trust.
 
 See [plugins](plugin-model.md), [artifacts](artifacts.md), and
 [scheduler](scheduler.md) for the contracts implied by these boundaries.

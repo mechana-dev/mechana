@@ -42,9 +42,10 @@ public final class Messages {
 		}
 	}
 
-	public record WorkerRegistration(String workerId, Set<String> supportedPlugins) {
+	public record WorkerRegistration(String workerId, String workerAddress, Set<String> supportedPlugins) {
 		public WorkerRegistration {
 			Objects.requireNonNull(workerId, "workerId");
+			Objects.requireNonNull(workerAddress, "workerAddress");
 			supportedPlugins = Set.copyOf(supportedPlugins);
 		}
 	}
@@ -52,8 +53,9 @@ public final class Messages {
 	public record WorkerRegistrationResponse(long leaseMillis) {
 	}
 
-	public record LeaseRequest(Set<String> supportedPlugins) {
+	public record LeaseRequest(String workerAddress, Set<String> supportedPlugins) {
 		public LeaseRequest {
+			Objects.requireNonNull(workerAddress, "workerAddress");
 			supportedPlugins = Set.copyOf(supportedPlugins);
 		}
 	}

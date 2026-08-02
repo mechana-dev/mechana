@@ -25,10 +25,16 @@ class SchedulerTest {
 		TaskLease second = scheduler.lease("worker-2", Set.of("sleep"), PLUGIN).orElseThrow();
 
 		assertFalse(first.taskId().equals(second.taskId()));
+		assertEquals("sleep", scheduler.dashboard(jobId).plugin());
+		assertEquals(2, scheduler.dashboard(jobId).activeWorkers());
+		assertTrue(scheduler.progress("worker-1", first.taskId(), first.leaseToken(), 50));
+		assertEquals(25, scheduler.dashboard(jobId).progress());
 		assertTrue(scheduler.complete("worker-1", first.taskId(), first.leaseToken()));
 		assertEquals("RUNNING", scheduler.status(jobId).state());
 		assertTrue(scheduler.complete("worker-2", second.taskId(), second.leaseToken()));
 		assertEquals("SUCCEEDED", scheduler.status(jobId).state());
+		assertEquals("SUCCEEDED", scheduler.dashboard(jobId).stage());
+		assertEquals("SUCCEEDED", scheduler.dashboards().getFirst().stage());
 	}
 
 	@Test
@@ -45,6 +51,22 @@ class SchedulerTest {
 		assertEquals(2, retried.attempt());
 		assertFalse(scheduler.complete("lost-worker", abandoned.taskId(), abandoned.leaseToken()));
 		assertTrue(scheduler.complete("replacement", retried.taskId(), retried.leaseToken()));
+	}
+
+	@Test
+	void abortCancelsQueuedAndRunningTasksAndFencesTheirLeases() {
+		Scheduler scheduler = new Scheduler(1_000);
+		String jobId = scheduler.submit(2, 100);
+		TaskLease running = scheduler.lease("worker-1", Set.of("sleep"), PLUGIN).orElseThrow();
+
+		assertTrue(scheduler.abort(jobId));
+		assertEquals("CANCELLED", scheduler.status(jobId).state());
+		assertEquals("CANCELLED", scheduler.dashboard(jobId).stage());
+		assertTrue(scheduler.dashboard(jobId).workUnits().stream()
+				.allMatch(workUnit -> "CANCELLED".equals(workUnit.state())));
+		assertFalse(scheduler.complete("worker-1", running.taskId(), running.leaseToken()));
+		assertTrue(scheduler.lease("worker-2", Set.of("sleep"), PLUGIN).isEmpty());
+		assertFalse(scheduler.abort(jobId));
 	}
 
 	private static final class MutableClock extends Clock {

@@ -13,6 +13,9 @@ import dev.mechana.protocol.Messages.WorkerRegistration;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLClassLoader;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -22,6 +25,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.HexFormat;
+import java.util.Enumeration;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -35,12 +39,18 @@ public final class WorkerAgent {
 	private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 	private final URI server;
 	private final String workerId;
+	private final String workerAddress;
 	private final Set<String> supportedPlugins;
 	private final AtomicBoolean running = new AtomicBoolean(true);
 
 	public WorkerAgent(URI server, String workerId, Set<String> supportedPlugins) {
+		this(server, workerId, localAddress(), supportedPlugins);
+	}
+
+	WorkerAgent(URI server, String workerId, String workerAddress, Set<String> supportedPlugins) {
 		this.server = URI.create(stripTrailingSlash(Objects.requireNonNull(server, "server").toString()));
 		this.workerId = Objects.requireNonNull(workerId, "workerId");
+		this.workerAddress = Objects.requireNonNull(workerAddress, "workerAddress");
 		this.supportedPlugins = Set.copyOf(supportedPlugins);
 	}
 
@@ -71,12 +81,14 @@ public final class WorkerAgent {
 	}
 
 	public void register() throws IOException, InterruptedException {
-		Response response = post("/api/workers/register", new WorkerRegistration(workerId, supportedPlugins));
+		Response response = post("/api/workers/register",
+				new WorkerRegistration(workerId, workerAddress, supportedPlugins));
 		requireStatus(response, 200);
 	}
 
 	public boolean runOne() throws IOException, InterruptedException {
-		Response response = post("/api/workers/" + workerId + "/lease", new LeaseRequest(supportedPlugins));
+		Response response = post("/api/workers/" + workerId + "/lease",
+				new LeaseRequest(workerAddress, supportedPlugins));
 		if (response.status == 204) {
 			return false;
 		}
@@ -181,6 +193,26 @@ public final class WorkerAgent {
 
 	private static String stripTrailingSlash(String value) {
 		return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
+	}
+
+	private static String localAddress() {
+		try {
+			Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+			while (interfaces.hasMoreElements()) {
+				NetworkInterface network = interfaces.nextElement();
+				if (!network.isUp() || network.isLoopback())
+					continue;
+				Enumeration<InetAddress> addresses = network.getInetAddresses();
+				while (addresses.hasMoreElements()) {
+					InetAddress address = addresses.nextElement();
+					if (address instanceof Inet4Address && address.isSiteLocalAddress())
+						return address.getHostAddress();
+				}
+			}
+			return InetAddress.getLocalHost().getHostAddress();
+		} catch (IOException failure) {
+			return "unknown";
+		}
 	}
 
 	private final class RemoteTaskContext implements TaskContext {

@@ -2,10 +2,13 @@ package dev.mechana.plugins.video;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import dev.mechana.api.JobObserver;
+import dev.mechana.api.WorkUnit;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.function.BiConsumer;
 
 public final class LocalVideoCompression {
@@ -19,16 +22,16 @@ public final class LocalVideoCompression {
 	public VideoTypes.MediaInfo run(Path input, Path output, Path scratch, VideoTypes.Options options,
 			CancellationToken cancellation, BiConsumer<Integer, String> progress)
 			throws IOException, InterruptedException {
-		return run(input, output, scratch, options, cancellation, new VideoJobObserver() {
+		return run(input, output, scratch, options, cancellation, new JobObserver() {
 			@Override
-			public void onSegmentProgress(int segment, String update) {
-				progress.accept(segment, update);
+			public void onWorkUnitProgress(String workUnitId, int percent, Map<String, String> details) {
+				progress.accept(Integer.parseInt(workUnitId), details.getOrDefault("ffmpegProgress", percent + "%"));
 			}
 		});
 	}
 
 	public VideoTypes.MediaInfo run(Path input, Path output, Path scratch, VideoTypes.Options options,
-			CancellationToken cancellation, VideoJobObserver observer) throws IOException, InterruptedException {
+			CancellationToken cancellation, JobObserver observer) throws IOException, InterruptedException {
 		observer.onStage("PROBING");
 		RuntimeProbe runtimeProbe = new RuntimeProbe(commands, runner);
 		var capabilities = runtimeProbe.inspect();
@@ -41,7 +44,12 @@ public final class LocalVideoCompression {
 		observer.onStage("PLANNING");
 		VideoTypes.Plan plan = new SegmentPlanner().plan(inputInfo, options,
 				probe.keyframes(input, options.processTimeout()), scratch);
-		observer.onPlan(plan);
+		observer.onPlan(plan.options().parallelism(),
+				plan.segments().stream()
+						.map(segment -> new WorkUnit(Integer.toString(segment.index()), "Segment " + segment.index(),
+								segment.durationSeconds(),
+								Map.of("range", "%.1f–%.1fs".formatted(segment.startSeconds(), segment.endSeconds()))))
+						.toList());
 		long usable = Files.getFileStore(scratch).getUsableSpace();
 		long required = new ScratchEstimator().estimateBytes(inputInfo);
 		if (usable < required)

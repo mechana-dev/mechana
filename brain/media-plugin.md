@@ -1,6 +1,6 @@
 # Media plugin
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-02
 
 The first local media-plugin slice is the reference partitioned-workload plugin.
 Its implementation lives in `plugins/video-ffmpeg-plugin`. It invokes FFprobe and
@@ -64,14 +64,13 @@ creating tiny or severely unbalanced work units.
   cluster scheduling, leases, artifact transport, or scratch reservations.
 - FFmpeg progress is parsed from `-progress pipe:1`; cancellation, timeouts, and
   forced process termination are supported.
-- The workflow emits stage, plan, segment-start, machine-readable progress,
-  completion, and failure events through a small observer contract. The local
-  server turns those events into a thread-safe one-job status model.
-- `VideoJobMain` serves a live dashboard and JSON status endpoint on loopback.
-  It reports overall duration-weighted progress, configured and active local
-  workers, completed work units, per-segment ranges/state/progress/elapsed time,
-  recent events, and terminal errors. This is local observability, not cluster
-  scheduling or a durable job-history API.
+- The workflow translates FFmpeg progress into normalized percentages and emits
+  stage, plan, work-unit start/progress/completion/failure events through the
+  platform `JobObserver`; there is no video-specific dashboard observer or status
+  model.
+- `VideoJobMain` uses the generic job dashboard and in-memory monitor. Video ranges
+  and raw FFmpeg progress are opaque display details; duration weights provide
+  overall progress without adding media knowledge to dashboard infrastructure.
 - Each segment-start event carries a worker address, shown in the JSON status and
   dashboard table. Local execution resolves the host address by default and may
   override it with `MECHANA_WORKER_ADDRESS`; remote schedulers must supply the

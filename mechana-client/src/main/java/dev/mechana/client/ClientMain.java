@@ -11,7 +11,7 @@ public final class ClientMain {
 	}
 
 	public static void main(String[] args) throws IOException, InterruptedException {
-		URI server = URI.create(args.length > 0 ? args[0] : "http://localhost:8080");
+		URI server = URI.create(args.length > 0 ? args[0] : "http://localhost:8787");
 		int tasks = args.length > 1 ? Integer.parseInt(args[1]) : 4;
 		long durationMillis = args.length > 2 ? Long.parseLong(args[2]) : 5_000;
 
@@ -19,6 +19,7 @@ public final class ClientMain {
 		MechanaClient client = new MechanaClient(server);
 		String jobId = client.submit(tasks, durationMillis);
 		System.out.printf("Submitted job %s with %d task(s)%n", jobId, tasks);
+		System.out.printf("Loopback job dashboard: %s%n", client.dashboard(jobId));
 		var result = client.waitForCompletion(jobId, 500);
 		System.out.printf("Job %s finished: %s (%d%%)%n", result.jobId(), result.state(), result.progress());
 		result.tasks().forEach(

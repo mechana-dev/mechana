@@ -106,3 +106,85 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Preserved the dependency direction from concrete plugins to `mechana-api`; the
   server's concrete video-plugin dependency remains an explicit local demo and
   composition boundary.
+
+## 2026-08-02 02:49:36 EDT — Generalize live job dashboard
+
+- Added public `JobObserver` and `WorkUnit` monitoring contracts with normalized
+  lifecycle events, weighted progress, worker identity, and opaque display fields.
+- Replaced the video-specific monitor and dashboard with a generic in-memory
+  coordinator read model and generic server UI/JSON representation.
+- Wired scheduler-managed sleep jobs into monitoring across submission, leasing,
+  progress, completion, failure, lease expiry, and retry; each submitted job now
+  has a loopback-only `/dashboard/jobs/<job-id>` page printed by the client.
+- Adapted local and two-host video execution to emit generic events while keeping
+  FFmpeg parsing, segment ranges, and duration weights inside the video plugin or
+  explicit demo composition layer.
+- Kept monitoring in memory and dashboard access loopback-only; durable history,
+  fleet/multi-job views, authentication, and remote access remain future work.
+
+## 2026-08-02 03:10 EDT — Add server-wide dashboard and terminal elapsed times
+
+- Added a stable loopback master dashboard at `/dashboard` with connected and
+  registered worker counts, worker capabilities/state, and active/completed job
+  history linking to the existing per-job dashboards.
+- Retain disconnected worker registrations and completed jobs for the lifetime of
+  the server process; this is intentionally not durable across restarts yet.
+- Freeze job and work-unit elapsed durations at terminal transitions.
+- Added deterministic elapsed-time coverage and HTTP coverage for the master
+  dashboard read model and page.
+
+## 2026-08-02 03:16 EDT — Establish Mechana development port 8787
+
+- Changed the default server, worker, and client endpoint from generic port 8080
+  to Mechana's development port 8787.
+- Updated development commands and dashboard examples to use port 8787 while
+  preserving explicit port overrides.
+
+## 2026-08-02 03:21 EDT — Add worker address and server runtime metadata
+
+- Extended worker registration and lease polling to advertise the worker's local
+  IPv4 address alongside capabilities.
+- Added worker IP addresses plus server PID, local date/time, and uptime to the
+  master dashboard and JSON read model.
+- Treat the advertised address as display metadata rather than authenticated
+  worker identity.
+
+## 2026-08-02 03:40 EDT — Show worker activity and current job
+
+- Added `IDLE`, `WORKING`, and `OFFLINE` activity to master-dashboard worker rows.
+- Derive current assignments from generic running work-unit snapshots without
+  adding plugin-specific knowledge to the server dashboard.
+- Link working workers directly to the detailed dashboard for their current job.
+
+## 2026-08-02 04:00 EDT — Persist completed jobs and owned artifacts
+
+- Split the master dashboard into active and completed job sections while keeping
+  every row linked to its generic job dashboard.
+- Archive terminal job snapshots atomically beneath a configurable server data
+  directory and reload them across server restarts.
+- Added generic downloadable artifact enumeration; the sleep slice publishes a
+  `job-summary.json` artifact for every terminal job.
+- Added loopback-only purge controls that delete both the durable job record and
+  its server-owned artifact tree, with restart/download/purge HTTP coverage.
+
+## 2026-08-02 04:10 EDT — Add dashboard job abort
+
+- Added confirmed Abort actions to active rows on the master dashboard and to
+  active job detail pages.
+- Aborting transitions queued and running work units to `CANCELLED`, fences their
+  lease tokens so late progress/completion is rejected, and archives the job into
+  durable completed history.
+- Added scheduler and HTTP coverage for cancellation, lease fencing, archival,
+  and terminal dashboard behavior.
+
+## 2026-08-02 04:16 EDT — Dashboard milestone PR checkpoint
+
+- Verified the complete reactor with `mvn verify`, including formatting, SpotBugs,
+  dependency convergence, scheduler tests, and dashboard HTTP tests.
+- Live-tested an eight-task abort across four MBA and four Mini workers: all work
+  units became `CANCELLED`, late leases were fenced, workers returned idle, and
+  the terminal record and summary artifact persisted.
+- Recorded pause/resume and resumable execution as the next planned slice:
+  preserve terminal history, create lineage for resumed terminal jobs, reuse only
+  verified completed work units initially, and defer partial-work-unit reuse to an
+  explicit plugin checkpoint capability.
