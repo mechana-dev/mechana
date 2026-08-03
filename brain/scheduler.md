@@ -94,3 +94,8 @@ does not prove that an external executable remains discoverable in the worker's
 service environment. A worker may therefore register and lease `video-ffmpeg`
 work before failing at process launch; runtime preflight/capability health is not
 yet part of scheduler matching.
+
+The Blender slice uses the same generic capability, lease, progress, attempt, and
+artifact-publication path. Its work units are deterministic contiguous frame
+batches; a failed batch retries as a whole. Per-frame checkpoints and Blender
+runtime health are not yet scheduler-visible.

@@ -379,3 +379,91 @@ Append-only record of material Mechana project changes and accepted decisions.
   all 12 tasks were leased on their first attempt across all four hosts.
 - Recorded the remaining hardening gap: advertised plugin capability does not yet
   include a live runtime preflight for required external executables.
+
+## 2026-08-03 06:05 EDT — Add distributed Blender animation rendering
+
+- Added a `blender-render` plugin with deterministic contiguous frame planning,
+  safe headless CPU Cycles command construction, external-process progress,
+  cancellation/timeouts, PNG validation, and lease-fenced frame archives.
+- Added server/client wiring for packed `.blend` submission, server-mediated scene
+  transfer, generic scheduling and dashboards, complete-frame validation, FFmpeg
+  H.265 movie assembly, and durable final MP4 publication.
+- Added command/planner/assembly tests that do not require Blender and documented
+  the narrow first contract and remaining runtime-preflight, caching, GPU, audio,
+  simulation, and per-frame-checkpoint limitations in `brain/blender-plugin.md`.
+- Prepared a 240-frame, ten-second camera fly-through from Blender's CC0 Junkshop
+  benchmark as a single packed test input and verified representative Cycles frames
+  locally with Blender 4.5.3 LTS.
+- Completed an end-to-end proof as job
+  `75cf4854-29c4-4c02-a593-a49297d34b19`: three MBA workers each rendered one
+  frame at 640x360 and 8 samples, uploaded lease-fenced archives, and the server
+  validated and assembled a 24 fps HEVC MP4 in 2 minutes 44 seconds.
+- Confirmed the resulting MP4 as HEVC, 640x360, 24 fps, three frames, and 29,472
+  bytes. The Mini and Linux fleet nodes did not have Blender installed; the
+  Windows runtime was not established because its Tailscale alias had a saved
+  host-key mismatch.
+- Corrected FFmpeg movie assembly to tag HEVC MP4 output as `hvc1`; the original
+  `hev1` sample entry was valid to FFprobe but rejected by QuickTime Player.
+- Enabled Blender persistent render data within each frame batch so camera-only
+  animation does not unnecessarily rebuild the heavy Cycles scene for every frame.
+- Completed a visible one-second preview as job
+  `5ffe9df0-864d-4368-a567-891975586316`: three MBA workers rendered eight frames
+  each from a 24-frame packed Junkshop camera move at 640x360 and 8 samples. The
+  job completed in 18 minutes 34 seconds and published a 24 fps, 24-frame, `hvc1`
+  HEVC MP4 with 24 distinct decoded frames.
+- Provisioned Blender 4.5 LTS across the complete four-host worker fleet: MBA
+  4.5.3, Intel Rocinante 4.5.12 through Homebrew, Hyperion 4.5.3 from the official
+  Windows installer, and `srv959600` 4.5.3 from the official self-contained Linux
+  archive. Added the minimal Linux headless shared libraries and explicit Blender
+  executable paths to each worker environment.
+- Restarted three workers per host against the MBA Tailscale endpoint and verified
+  all twelve connected workers advertise `blender-render` alongside the existing
+  sleep, video, fractal, and OCR capabilities. A four-host Blender render remains
+  the next operational proof.
+- Replaced Hyperion's SSH-child worker launches with three persistent SYSTEM
+  Scheduled Tasks that start at boot and restart on failure; the initial transient
+  processes correctly connected but were terminated when their SSH session closed.
+
+## 2026-08-03 07:30 EDT — Complete twelve-worker Blender smoke proof
+
+- Made the worker render command explicitly select CPU Cycles, independent of the
+  render engine saved in the submitted `.blend`, and added command-level coverage.
+- Created a small packed 12-frame animated scene and submitted job
+  `accf1dd0-95f7-4f9d-8b16-83ba74dbfc9e` as twelve one-frame work units.
+- Verified one first-attempt work unit ran on every connected worker: three each
+  on MBA, Rocinante, Hyperion, and `srv959600`.
+- The job succeeded in 19 seconds and published a 54,212-byte, 640x360, 12 fps,
+  one-second HEVC MP4 tagged `hvc1`. FFprobe reported all 12 frames, and decoded
+  frame hashes confirmed all 12 frames were distinct.
+
+## 2026-08-03 08:14 EDT — Compare one-worker and twelve-worker Blender renders
+
+- Rendered the same packed 96-frame orbital scene twice at 960x540, 24 fps, and
+  16 CPU Cycles samples, measuring server wall-clock time through final assembly.
+- Job `14f80899-03e3-4329-9e33-57b8eb5dad9f` used only `mba-1` and completed in
+  7 minutes 29 seconds. Job `5fb71e47-5f1c-4765-9e02-9d604675f68b` used twelve
+  eight-frame batches, one per fleet worker, and completed in 6 minutes 19 seconds.
+- The heterogeneous fleet saved 70 seconds, a 15.6% elapsed-time reduction and
+  approximately 1.18x speedup. MBA batches finished in 2:15–2:23, while the
+  terminal Hyperion batch took 6:14; static equal-size partitioning therefore
+  made the slowest worker the makespan bottleneck.
+- Both outputs validated as 96-frame, four-second, 960x540, 24 fps, `hvc1` HEVC
+  movies. This establishes a need for smaller dynamic batches or capability-aware
+  frame allocation before expecting strong heterogeneous-fleet scaling.
+
+## 2026-08-03 08:22 EDT — Measure dynamic Blender frame batching
+
+- Repeated the 96-frame benchmark as job
+  `be8d1e76-44c2-428a-968c-6bfa9e43e2af` using 48 two-frame work units across
+  the same twelve workers. All 48 work units succeeded on attempt one and final
+  server wall-clock time was 5 minutes 38 seconds.
+- Dynamic pickup reduced elapsed time by 41 seconds (10.8%) versus twelve static
+  eight-frame batches and by 1 minute 51 seconds (24.7%) versus one MBA worker;
+  the corresponding speedups were approximately 1.12x and 1.33x.
+- Faster workers naturally accepted more work: the three MBA workers completed
+  eight batches each, the Rocinante and Linux workers three each, and Hyperion
+  workers two each. This confirms fine-grained pull scheduling improves balance
+  without requiring a priori host performance weights.
+- The final artifact validated as a 96-frame, four-second, 960x540, 24 fps,
+  `hvc1` HEVC movie. Per-batch Blender startup and scene loading still limit
+  scaling, so batch size remains a throughput/latency tradeoff.

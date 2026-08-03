@@ -30,11 +30,14 @@ public final class ServerMain {
 		Path ocrPluginJar = args.length > 6
 				? Path.of(args[6])
 				: Path.of("plugins/ocr-tesseract-plugin/target/mechana-plugin-ocr-tesseract-0.1.0-SNAPSHOT.jar");
+		Path blenderPluginJar = args.length > 7
+				? Path.of(args[7])
+				: Path.of("plugins/blender-render-plugin/target/mechana-plugin-blender-render-0.1.0-SNAPSHOT.jar");
 
 		MechanaServer server = new MechanaServer(port, publicUrl, pluginJar, videoPluginJar, fractalPluginJar,
-				ocrPluginJar, 5_000, dataDirectory);
+				ocrPluginJar, blenderPluginJar, 5_000, dataDirectory);
 		server.onRestart(() -> restart(server, port, pluginJar, publicUrl, dataDirectory, videoPluginJar,
-				fractalPluginJar, ocrPluginJar));
+				fractalPluginJar, ocrPluginJar, blenderPluginJar));
 		server.start();
 		Runtime.getRuntime().addShutdownHook(new Thread(server::close, "mechana-shutdown"));
 		System.out.printf("Mechana server listening on %s%n", publicUrl);
@@ -43,17 +46,18 @@ public final class ServerMain {
 		System.out.printf("Serving video plugin from %s%n", videoPluginJar.toAbsolutePath());
 		System.out.printf("Serving fractal plugin from %s%n", fractalPluginJar.toAbsolutePath());
 		System.out.printf("Serving OCR plugin from %s%n", ocrPluginJar.toAbsolutePath());
+		System.out.printf("Serving Blender plugin from %s%n", blenderPluginJar.toAbsolutePath());
 		System.out.printf("Persisting completed jobs under %s%n", dataDirectory.toAbsolutePath());
 		new CountDownLatch(1).await();
 	}
 
 	@SuppressFBWarnings(value = "DM_EXIT", justification = "The restart action replaces this dedicated server JVM")
 	private static void restart(MechanaServer server, int port, Path pluginJar, String publicUrl, Path dataDirectory,
-			Path videoPluginJar, Path fractalPluginJar, Path ocrPluginJar) {
+			Path videoPluginJar, Path fractalPluginJar, Path ocrPluginJar, Path blenderPluginJar) {
 		server.close();
 		try {
 			new ProcessBuilder(restartCommand(port, pluginJar, publicUrl, dataDirectory, videoPluginJar,
-					fractalPluginJar, ocrPluginJar)).inheritIO().start();
+					fractalPluginJar, ocrPluginJar, blenderPluginJar)).inheritIO().start();
 			System.exit(0);
 		} catch (IOException | URISyntaxException failure) {
 			System.err.printf("Could not restart Mechana server: %s%n", failure.getMessage());
@@ -73,6 +77,13 @@ public final class ServerMain {
 
 	static List<String> restartCommand(int port, Path pluginJar, String publicUrl, Path dataDirectory,
 			Path videoPluginJar, Path fractalPluginJar, Path ocrPluginJar) throws URISyntaxException {
+		return restartCommand(port, pluginJar, publicUrl, dataDirectory, videoPluginJar, fractalPluginJar, ocrPluginJar,
+				ocrPluginJar);
+	}
+
+	static List<String> restartCommand(int port, Path pluginJar, String publicUrl, Path dataDirectory,
+			Path videoPluginJar, Path fractalPluginJar, Path ocrPluginJar, Path blenderPluginJar)
+			throws URISyntaxException {
 		List<String> command = new ArrayList<>();
 		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
 		Path codeSource = Path.of(ServerMain.class.getProtectionDomain().getCodeSource().getLocation().toURI());
@@ -91,6 +102,7 @@ public final class ServerMain {
 		command.add(videoPluginJar.toAbsolutePath().normalize().toString());
 		command.add(fractalPluginJar.toAbsolutePath().normalize().toString());
 		command.add(ocrPluginJar.toAbsolutePath().normalize().toString());
+		command.add(blenderPluginJar.toAbsolutePath().normalize().toString());
 		return List.copyOf(command);
 	}
 }

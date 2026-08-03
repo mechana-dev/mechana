@@ -7,8 +7,8 @@ This file reports repository evidence, not desired future status.
 ## Present in the repository
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
-  server, and client modules plus a nested `plugins/` reactor containing the sleep
-  FFmpeg video, and fractal-render plugin implementations.
+  server, and client modules plus a nested `plugins/` reactor containing sleep,
+  FFmpeg video, fractal-render, Tesseract OCR, and Blender render plugins.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
@@ -88,6 +88,16 @@ This file reports repository evidence, not desired future status.
   workers only their assigned images, invokes external Tesseract with cancellation
   and timeout handling, and assembles ordered Markdown, Unicode LaTeX source,
   and raw page text as durable artifacts.
+- A scheduler-managed `blender-render` path accepts one server-local packed
+  `.blend`, deterministically batches an explicit frame range, renders PNG frames
+  through headless CPU-only Cycles on workers, validates the complete ordered frame
+  set, assembles an H.265 MP4 with FFmpeg, and archives the final movie. A
+  three-worker MBA proof rendered one Junkshop frame per worker and completed
+  upload, assembly, and publication. Blender 4.5 LTS is installed on all four
+  fleet hosts. A subsequent 12-frame smoke job assigned one CPU Cycles frame to
+  each of twelve workers across the MBA, Rocinante, Hyperion, and Linux host,
+  then validated and assembled all distinct frames into a QuickTime-compatible
+  HEVC MP4.
 
 ## Not established by current repository evidence
 

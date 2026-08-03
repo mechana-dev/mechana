@@ -78,6 +78,18 @@ public final class Messages {
 		}
 	}
 
+	public record BlenderJobSubmitRequest(String sourcePath, int firstFrame, int lastFrame, int taskCount, int width,
+			int height, int samples, int fps) {
+		public BlenderJobSubmitRequest {
+			Objects.requireNonNull(sourcePath, "sourcePath");
+			if (firstFrame < 0 || lastFrame < firstFrame || taskCount < 1 || taskCount > lastFrame - firstFrame + 1)
+				throw new IllegalArgumentException("Invalid Blender frame range or task count");
+			if (width < 64 || height < 64 || width > 8192 || height > 8192 || samples < 1 || samples > 4096 || fps < 1
+					|| fps > 240)
+				throw new IllegalArgumentException("Invalid Blender render options");
+		}
+	}
+
 	public record TaskStatus(String taskId, String state, int progress, int attempt, String workerId) {
 		public TaskStatus {
 			Objects.requireNonNull(taskId, "taskId");

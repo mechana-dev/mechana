@@ -6,6 +6,7 @@ import dev.mechana.protocol.Messages.JobSubmission;
 import dev.mechana.protocol.Messages.JobSubmitRequest;
 import dev.mechana.protocol.Messages.FractalJobSubmitRequest;
 import dev.mechana.protocol.Messages.OcrJobSubmitRequest;
+import dev.mechana.protocol.Messages.BlenderJobSubmitRequest;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -41,6 +42,10 @@ public final class MechanaClient {
 
 	public String submitOcr(OcrJobSubmitRequest submission) throws IOException, InterruptedException {
 		return submitPlugin("/api/jobs/ocr", submission);
+	}
+
+	public String submitBlender(BlenderJobSubmitRequest submission) throws IOException, InterruptedException {
+		return submitPlugin("/api/jobs/blender", submission);
 	}
 
 	private String submitPlugin(String path, Object submission) throws IOException, InterruptedException {

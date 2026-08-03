@@ -40,3 +40,8 @@ snapshot and an `artifacts/` subtree. The detailed dashboard enumerates regular
 files in that subtree as downloads, and purge deletes the whole owned job directory.
 This establishes restart persistence and ownership-aware cleanup, but it is not yet
 the storage-neutral, checksum-addressed artifact provider accepted above.
+
+The Blender slice uses a server-local packed `.blend` as immutable input,
+server-mediated HTTP copies as task inputs, lease-fenced ZIP batches as partition
+outputs, and a validated MP4 as the retained final artifact. The input is currently
+downloaded once per work unit rather than addressed and cached once per worker.
