@@ -35,8 +35,10 @@ The current scheduler implements the same capability-matched renewable lease and
 attempt-fencing path for sleep tasks and distributed video segments, but not
 generic resources or scratch reservations; see [current state](current-state.md).
 The HTTP worker sends presence heartbeats every three seconds and the server marks
-it offline after fifteen seconds without contact. Each active assignment also has
-a lease-token heartbeat paced from its advertised lease duration, so slow staging
+it offline after fifteen seconds without contact. The dashboard retains that offline
+worker for two minutes after its last contact, then removes it from the presence
+registry. Each active assignment also has a lease-token heartbeat paced from its
+advertised lease duration, so slow staging
 or quiet external-process startup does not cause a false retry.
 
 The video-plugin demo uses a bounded in-process `ExecutorService` after checking a
@@ -85,3 +87,10 @@ inputs through the server, accepts outputs only for the matching live lease, and
 assembles only after all segments succeed. It currently lacks scratch reservations,
 input caching, checksummed content identity, and durable recovery of
 active/intermediate state.
+
+A 12-segment operational proof used three workers on each of four heterogeneous
+hosts. It also exposed an important boundary: capability advertisement currently
+does not prove that an external executable remains discoverable in the worker's
+service environment. A worker may therefore register and lease `video-ffmpeg`
+work before failing at process launch; runtime preflight/capability health is not
+yet part of scheduler matching.

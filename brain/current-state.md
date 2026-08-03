@@ -1,6 +1,6 @@
 # Current state
 
-Verified: 2026-08-02
+Verified: 2026-08-03
 
 This file reports repository evidence, not desired future status.
 
@@ -36,12 +36,13 @@ This file reports repository evidence, not desired future status.
   elapsed time, bounded event history, errors, and structured plugin-supplied
   display details. Scheduler-managed sleep jobs expose it at
   `/dashboard/jobs/<job-id>`; local video runners use the same contracts.
-- A loopback-only server dashboard at `/dashboard` that retains worker
+- A loopback-only server dashboard at `/dashboard` that retains recently disconnected worker
   registrations, advertised IP addresses, connection state, capabilities,
   server PID/date/time/uptime, live active-job rows, and disk-backed completed-job
   rows. Each job row links to its generic job dashboard, and terminal job/work-unit
   elapsed times stop advancing. Worker rows show `IDLE`, `OFFLINE`, or the active
-  plugin name plus that worker's current work-unit progress and job link.
+  plugin name plus that worker's current work-unit progress and job link. Workers
+  disappear from the registry after two minutes without contact.
 - The master dashboard provides a confirmed loopback-only server restart action.
   The replacement inherits the current launch configuration; workers reconnect
   and completed history remains, while volatile active jobs do not survive.
@@ -72,6 +73,9 @@ This file reports repository evidence, not desired future status.
   chunk through the server, accepts lease-fenced
   segment uploads, assembles and validates a smaller HEVC result, and archives it
   as a downloadable job artifact.
+- The scheduler-managed video path has been exercised as a 12-segment job across
+  four heterogeneous hosts (macOS, Windows, and Linux). This is an operational
+  proof of the existing HTTP worker path, not durable cluster orchestration.
 - A scheduler-managed pure-Java `fractal-render` path accepts no input artifact,
   deterministically divides a requested image count across an explicit or
   fleet-derived task count, renders batched Mandelbrot/Julia PNGs on compatible

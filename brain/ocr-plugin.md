@@ -11,6 +11,8 @@ raw text files. The LaTeX artifact is source-only and does not require a TeX eng
 users may compile it separately with XeLaTeX or another `fontspec`-capable engine.
 It includes a TeXShop engine directive so opening the artifact on macOS selects
 XeLaTeX instead of incompatible pdfLaTeX.
+LaTeX output preserves source-page breaks without adding visible synthetic
+`Page N` headings; Markdown retains explicit page headings for navigation.
 Submissions may select a one-based starting page and bounded page count, allowing
 representative test slices without copying or rewriting the source PDF.
 

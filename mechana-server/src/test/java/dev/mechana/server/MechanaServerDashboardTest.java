@@ -1,6 +1,7 @@
 package dev.mechana.server;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -118,6 +119,13 @@ class MechanaServerDashboardTest {
 			assertTrue(disconnected.contains("\"registeredWorkers\":1"));
 			assertTrue(disconnected.contains("\"state\":\"DISCONNECTED\""));
 			assertTrue(disconnected.contains("\"activity\":\"OFFLINE\""));
+
+			server.reapExpiredWorkers(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(2) + 1);
+			String forgotten = client.send(HttpRequest.newBuilder(base.resolve("/api/dashboard")).build(),
+					HttpResponse.BodyHandlers.ofString()).body();
+			assertTrue(forgotten.contains("\"connectedWorkers\":0"));
+			assertTrue(forgotten.contains("\"registeredWorkers\":0"));
+			assertFalse(forgotten.contains("\"workerId\":\"worker-1\""));
 		} finally {
 			Files.deleteIfExists(plugin);
 		}

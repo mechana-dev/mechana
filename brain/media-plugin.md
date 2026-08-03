@@ -92,3 +92,8 @@ creating tiny or severely unbalanced work units.
   accepts segment publication only under the current lease, and assembles and
   validates a smaller result after all segments complete. Content-addressed caching
   and shared-host reuse remain future artifact-service work.
+- A live 12-segment proof completed across four heterogeneous hosts. Supervised
+  worker processes must receive a `PATH` containing the installed FFmpeg and
+  FFprobe directory; registration and leasing can otherwise succeed while every
+  external-process attempt fails immediately. Runtime probing at registration and
+  clearer preflight reporting remain future hardening work.
