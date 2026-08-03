@@ -1,6 +1,7 @@
 package dev.mechana.plugins.ocr;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -27,7 +28,8 @@ class OcrMarkdownAssemblerTest {
 		String latex = Files.readString(result.latexDocument());
 		assertTrue(latex.startsWith("% !TEX TS-program = xelatex\n"));
 		assertTrue(latex.indexOf("first page") < latex.indexOf("second page"));
-		assertTrue(latex.contains("\\section*{Page 1}"));
+		assertFalse(latex.contains("\\section*{Page"));
+		assertTrue(latex.contains("first page\n\\newpage\n\nsecond page\n"));
 		assertTrue(latex.endsWith("\\end{document}\n"));
 	}
 

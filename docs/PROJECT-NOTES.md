@@ -333,3 +333,49 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Added a TeXShop engine directive after live compilation exposed that TeXShop
   otherwise defaulted to incompatible pdfLaTeX; the 50-page NASA artifact was
   then verified to compile successfully with XeLaTeX.
+
+## 2026-08-03 03:13 EDT — Prune stale workers from the server dashboard
+
+- Kept disconnected workers visible briefly for operational context, then removed
+  them from the server presence registry after two minutes without contact.
+- Added deterministic server-dashboard coverage for the retention boundary and
+  documented the distinction between the 15-second offline threshold and the
+  two-minute removal threshold.
+
+## 2026-08-03 04:36 EDT — Remove synthetic page headings from OCR PDF output
+
+- Removed the bold `Page N` section heading from assembled OCR LaTeX while
+  retaining source-page boundaries with explicit page breaks.
+- Kept Markdown page headings for navigation and added focused assembly coverage
+  that prevents the visible LaTeX headings from returning.
+
+## 2026-08-03 04:51 EDT — Add persistent Linux cloud worker
+
+- Provisioned Ubuntu 24.04 host `srv959600` with OpenJDK 25, FFmpeg/libx265,
+  Tesseract 5, and English trained data, then deployed the current worker JAR.
+- Added and enabled a restart-on-failure `systemd` service for worker
+  `srv959600-1`, advertising all four current plugin capabilities and connecting
+  to the MBA server over Tailscale.
+- Verified the service running and heartbeating on the server dashboard. Ubuntu's
+  hostname resolution currently makes its presentation address `127.0.1.1`; task
+  and artifact traffic still uses the configured Tailscale server endpoint.
+
+## 2026-08-03 04:55 EDT — Normalize the live fleet to three workers per host
+
+- Replaced the existing worker processes with three workers each on the MBA,
+  Rocinante, Hyperion, and `srv959600`, all using the MBA Tailscale endpoint.
+- Converted the Linux worker service to a three-instance `systemd` template and
+  verified exactly 12 connected workers across the four hosts.
+
+## 2026-08-03 05:10 EDT — Verify four-host distributed video execution
+
+- Completed a scheduler-managed, 12-segment HEVC job across three workers on each
+  of four heterogeneous hosts spanning macOS, Windows, and Linux.
+- Diagnosed repeated zero-progress retries on both macOS hosts as service-launch
+  environments that omitted the Homebrew FFmpeg directory from `PATH`; restarted
+  those workers with explicit executable paths and confirmed their segments made
+  progress and completed.
+- Submitted the following two-minute slice with the corrected fleet and verified
+  all 12 tasks were leased on their first attempt across all four hosts.
+- Recorded the remaining hardening gap: advertised plugin capability does not yet
+  include a live runtime preflight for required external executables.

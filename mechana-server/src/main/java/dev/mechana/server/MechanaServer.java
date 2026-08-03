@@ -77,6 +77,7 @@ public final class MechanaServer implements AutoCloseable {
 	private static final String OCR_PLUGIN_VERSION = "1.0.0";
 	private static final String OCR_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.ocr.TesseractOcrPlugin";
 	private static final long WORKER_TIMEOUT_MILLIS = 15_000;
+	private static final long WORKER_RETENTION_MILLIS = 120_000;
 	private static final long HEARTBEAT_CHECK_MILLIS = 1_000;
 
 	private final ObjectMapper json = new ObjectMapper();
@@ -996,8 +997,17 @@ public final class MechanaServer implements AutoCloseable {
 		if (expiredTasks > 0) {
 			System.out.printf("Requeued %d task(s) after worker lease expiration%n", expiredTasks);
 		}
-		long disconnectedBefore = System.currentTimeMillis() - WORKER_TIMEOUT_MILLIS;
+		reapExpiredWorkers(System.currentTimeMillis());
+	}
+
+	void reapExpiredWorkers(long nowMillis) {
+		long disconnectedBefore = nowMillis - WORKER_TIMEOUT_MILLIS;
+		long forgottenBefore = nowMillis - WORKER_RETENTION_MILLIS;
 		workers.forEach((workerId, worker) -> {
+			if (worker.lastSeenAt() < forgottenBefore && workers.remove(workerId, worker)) {
+				System.out.printf("Worker %s removed after extended disconnect%n", workerId);
+				return;
+			}
 			if (worker.connected() && worker.lastSeenAt() < disconnectedBefore && workers.replace(workerId, worker,
 					new WorkerPresence(worker.address(), worker.capabilities(), worker.lastSeenAt(), false))) {
 				System.out.printf("Worker %s disconnected (heartbeat timeout)%n", workerId);

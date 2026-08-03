@@ -50,8 +50,9 @@ public final class OcrMarkdownAssembler {
 				throw new IOException("Missing OCR output for page " + page);
 			String pageText = Files.readString(text, StandardCharsets.UTF_8).strip();
 			markdown.append("## Page ").append(page).append("\n\n").append(pageText).append("\n\n");
-			latex.append("\\section*{Page ").append(page).append("}\n")
-					.append(escapeLatex(pageText).replace("\n\n", "\n\n\\par\n")).append("\n\\newpage\n\n");
+			latex.append(escapeLatex(pageText).replace("\n\n", "\n\n\\par\n")).append('\n');
+			if (page < firstPage + pageCount - 1)
+				latex.append("\\newpage\n\n");
 		}
 		latex.append("\\end{document}\n");
 		Path document = outputDirectory.resolve("document.md");
