@@ -17,6 +17,7 @@ loaded through the root `AGENTS.md` and does not affect other repositories.
 - [Media plugin](media-plugin.md): FFmpeg partitioned-video design
 - [Fractal plugin](fractal-plugin.md): deterministic no-input rendering design
 - [OCR plugin](ocr-plugin.md): PDF rasterization, distributed Tesseract, and Markdown assembly
+- [Blender plugin](blender-plugin.md): distributed animation-frame rendering and movie assembly
 - [Glossary](glossary.md): shared terminology
 
 ## Maintenance

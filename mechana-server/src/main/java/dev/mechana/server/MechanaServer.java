@@ -23,6 +23,9 @@ import dev.mechana.protocol.Messages.TaskLease;
 import dev.mechana.protocol.Messages.WorkerRegistration;
 import dev.mechana.protocol.Messages.WorkerRegistrationResponse;
 import dev.mechana.protocol.Messages.VideoJobSubmitRequest;
+import dev.mechana.protocol.Messages.BlenderJobSubmitRequest;
+import dev.mechana.plugins.blender.BlenderMovieAssembler;
+import dev.mechana.plugins.blender.FramePlanner;
 import dev.mechana.plugins.fractal.FractalCollectionAssembler;
 import dev.mechana.plugins.ocr.OcrMarkdownAssembler;
 import dev.mechana.plugins.video.CancellationToken;
@@ -70,12 +73,16 @@ public final class MechanaServer implements AutoCloseable {
 	private static final String VIDEO_PLUGIN_PATH = "/api/plugins/video-ffmpeg/1.0.0";
 	private static final String FRACTAL_PLUGIN_PATH = "/api/plugins/fractal-render/1.0.0";
 	private static final String OCR_PLUGIN_PATH = "/api/plugins/ocr-tesseract/1.0.0";
+	private static final String BLENDER_PLUGIN_PATH = "/api/plugins/blender-render/1.0.0";
 	private static final String FRACTAL_PLUGIN_ID = "fractal-render";
 	private static final String FRACTAL_PLUGIN_VERSION = "1.0.0";
 	private static final String FRACTAL_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.fractal.FractalTaskPlugin";
 	private static final String OCR_PLUGIN_ID = "ocr-tesseract";
 	private static final String OCR_PLUGIN_VERSION = "1.0.0";
 	private static final String OCR_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.ocr.TesseractOcrPlugin";
+	private static final String BLENDER_PLUGIN_ID = "blender-render";
+	private static final String BLENDER_PLUGIN_VERSION = "1.0.0";
+	private static final String BLENDER_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.blender.BlenderRenderPlugin";
 	private static final long WORKER_TIMEOUT_MILLIS = 15_000;
 	private static final long WORKER_RETENTION_MILLIS = 120_000;
 	private static final long HEARTBEAT_CHECK_MILLIS = 1_000;
@@ -94,6 +101,8 @@ public final class MechanaServer implements AutoCloseable {
 	private final PluginLocation fractalPluginLocation;
 	private final Path ocrPluginJar;
 	private final PluginLocation ocrPluginLocation;
+	private final Path blenderPluginJar;
+	private final PluginLocation blenderPluginLocation;
 	private final Path workRoot;
 	private final String publicUrl;
 	private final ConcurrentMap<String, Path> videoInputs = new ConcurrentHashMap<>();
@@ -101,6 +110,8 @@ public final class MechanaServer implements AutoCloseable {
 	private final ConcurrentMap<String, FractalJob> fractalJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, Path> ocrInputs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, OcrJob> ocrJobs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, Path> blenderInputs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, BlenderJob> blenderJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, WorkerPresence> workers = new ConcurrentHashMap<>();
 	private volatile Runnable restartAction;
 	private final ScheduledExecutorService leaseReaper = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -131,6 +142,12 @@ public final class MechanaServer implements AutoCloseable {
 
 	public MechanaServer(int port, String publicUrl, Path pluginJar, Path videoPluginJar, Path fractalPluginJar,
 			Path ocrPluginJar, long leaseMillis, Path dataDirectory) throws IOException {
+		this(port, publicUrl, pluginJar, videoPluginJar, fractalPluginJar, ocrPluginJar, ocrPluginJar, leaseMillis,
+				dataDirectory);
+	}
+
+	public MechanaServer(int port, String publicUrl, Path pluginJar, Path videoPluginJar, Path fractalPluginJar,
+			Path ocrPluginJar, Path blenderPluginJar, long leaseMillis, Path dataDirectory) throws IOException {
 		this.scheduler = new Scheduler(leaseMillis);
 		this.completedJobs = new CompletedJobStore(dataDirectory, json);
 		this.workRoot = dataDirectory.toAbsolutePath().normalize().resolve("work");
@@ -148,6 +165,9 @@ public final class MechanaServer implements AutoCloseable {
 				sha256(this.fractalPluginJar));
 		this.ocrPluginJar = ocrPluginJar.toAbsolutePath().normalize();
 		this.ocrPluginLocation = new PluginLocation(this.publicUrl + OCR_PLUGIN_PATH, sha256(this.ocrPluginJar));
+		this.blenderPluginJar = blenderPluginJar.toAbsolutePath().normalize();
+		this.blenderPluginLocation = new PluginLocation(this.publicUrl + BLENDER_PLUGIN_PATH,
+				sha256(this.blenderPluginJar));
 		this.http = HttpServer.create(new InetSocketAddress(port), 0);
 		this.http.createContext("/api/jobs", new JobsHandler());
 		this.http.createContext("/api/dashboard", this::serveServerDashboardStatus);
@@ -161,8 +181,11 @@ public final class MechanaServer implements AutoCloseable {
 				exchange -> servePlugin(exchange, this.fractalPluginJar, this.fractalPluginLocation));
 		this.http.createContext(OCR_PLUGIN_PATH,
 				exchange -> servePlugin(exchange, this.ocrPluginJar, this.ocrPluginLocation));
+		this.http.createContext(BLENDER_PLUGIN_PATH,
+				exchange -> servePlugin(exchange, this.blenderPluginJar, this.blenderPluginLocation));
 		this.http.createContext("/api/video-inputs", this::serveVideoInput);
 		this.http.createContext("/api/ocr-inputs", this::serveOcrInput);
+		this.http.createContext("/api/blender-inputs", this::serveBlenderInput);
 		this.http.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
 	}
 
@@ -209,6 +232,12 @@ public final class MechanaServer implements AutoCloseable {
 					requireLoopback(exchange);
 					OcrJobSubmitRequest request = read(exchange, OcrJobSubmitRequest.class);
 					sendJson(exchange, 202, new JobSubmission(submitOcr(request)));
+					return;
+				}
+				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs/blender".equals(path)) {
+					requireLoopback(exchange);
+					BlenderJobSubmitRequest request = read(exchange, BlenderJobSubmitRequest.class);
+					sendJson(exchange, 202, new JobSubmission(submitBlender(request)));
 					return;
 				}
 				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs".equals(path)) {
@@ -497,6 +526,8 @@ public final class MechanaServer implements AutoCloseable {
 						assembleFractal(status.jobId());
 					else if (ocrJobs.containsKey(status.jobId()))
 						assembleOcr(status.jobId());
+					else if (blenderJobs.containsKey(status.jobId()))
+						assembleBlender(status.jobId());
 				}
 				archiveIfTerminal(status.jobId());
 				if (!"heartbeat".equals(action)) {
@@ -525,6 +556,7 @@ public final class MechanaServer implements AutoCloseable {
 			VideoJob video = videoJobs.get(jobId);
 			FractalJob fractal = fractalJobs.get(jobId);
 			OcrJob ocr = ocrJobs.get(jobId);
+			BlenderJob blender = blenderJobs.get(jobId);
 			Path artifactRoot;
 			if (video != null && name.matches("segment-[0-9]{5}\\.mkv"))
 				artifactRoot = video.scratch().resolve("segments");
@@ -532,6 +564,8 @@ public final class MechanaServer implements AutoCloseable {
 				artifactRoot = fractal.scratch().resolve("batches");
 			else if (ocr != null && name.matches("ocr-batch-[0-9]{5}\\.zip"))
 				artifactRoot = ocr.scratch().resolve("batches");
+			else if (blender != null && name.matches("frames-[0-9]{5}\\.zip"))
+				artifactRoot = blender.scratch().resolve("batches");
 			else
 				throw new IllegalArgumentException("Unexpected task artifact");
 			Path destination = artifactRoot.resolve(name).normalize();
@@ -740,6 +774,47 @@ public final class MechanaServer implements AutoCloseable {
 		}
 	}
 
+	private String submitBlender(BlenderJobSubmitRequest request) throws IOException {
+		Path source = Path.of(request.sourcePath()).toAbsolutePath().normalize();
+		if (!Files.isRegularFile(source) || !Objects.requireNonNull(source.getFileName()).toString()
+				.toLowerCase(java.util.Locale.ROOT).endsWith(".blend"))
+			throw new IllegalArgumentException("Packed Blender source does not exist or is not .blend: " + source);
+		Path scratch = workRoot.resolve(UUID.randomUUID().toString());
+		Files.createDirectories(scratch.resolve("batches"));
+		String token = UUID.randomUUID().toString();
+		blenderInputs.put(token, source);
+		boolean retained = false;
+		try {
+			List<FramePlanner.Batch> batches = new FramePlanner().plan(request.firstFrame(), request.lastFrame(),
+					request.taskCount());
+			List<WorkSpec> work = batches.stream()
+					.map(batch -> new WorkSpec(batch.frameCount(),
+							Map.of("inputUrl", publicUrl + "/api/blender-inputs/" + token, "batchIndex",
+									Integer.toString(batch.index()), "firstFrame", Integer.toString(batch.firstFrame()),
+									"lastFrame", Integer.toString(batch.lastFrame()), "width",
+									Integer.toString(request.width()), "height", Integer.toString(request.height()),
+									"samples", Integer.toString(request.samples()), "threads", "0"),
+							"Frames " + batch.firstFrame() + "–" + batch.lastFrame(),
+							Map.of("frames", batch.firstFrame() + "–" + batch.lastFrame(), "samples",
+									Integer.toString(request.samples()))))
+					.toList();
+			String jobId = scheduler.submitPlugin(BLENDER_PLUGIN_ID, BLENDER_PLUGIN_VERSION, BLENDER_PLUGIN_ENTRYPOINT,
+					work,
+					Map.of("source", source.toString(), "frames", request.firstFrame() + "–" + request.lastFrame(),
+							"dimensions", request.width() + "×" + request.height(), "samples",
+							Integer.toString(request.samples()), "fps", Integer.toString(request.fps())),
+					blenderPluginLocation);
+			blenderJobs.put(jobId, new BlenderJob(token, scratch, request));
+			retained = true;
+			return jobId;
+		} finally {
+			if (!retained) {
+				blenderInputs.remove(token);
+				deleteTree(scratch);
+			}
+		}
+	}
+
 	private static VideoTypes.Plan exactSegmentPlan(VideoTypes.MediaInfo input, VideoTypes.Options options,
 			List<Double> keyframes, Path scratch, int segmentCount) throws IOException {
 		List<Double> candidates = keyframes.stream().filter(keyframe -> keyframe >= 0.5)
@@ -791,6 +866,10 @@ public final class MechanaServer implements AutoCloseable {
 
 	private void serveOcrInput(HttpExchange exchange) throws IOException {
 		serveMappedInput(exchange, "/api/ocr-inputs/", ocrInputs, "image/png");
+	}
+
+	private void serveBlenderInput(HttpExchange exchange) throws IOException {
+		serveMappedInput(exchange, "/api/blender-inputs/", blenderInputs, "application/x-blender");
 	}
 
 	private static void serveMappedInput(HttpExchange exchange, String prefix, Map<String, Path> inputs,
@@ -866,6 +945,26 @@ public final class MechanaServer implements AutoCloseable {
 		}
 	}
 
+	private void assembleBlender(String jobId) {
+		BlenderJob blender = blenderJobs.get(jobId);
+		if (blender == null)
+			return;
+		try {
+			List<Path> batches;
+			try (var paths = Files.list(blender.scratch().resolve("batches"))) {
+				batches = paths.filter(Files::isRegularFile).sorted().toList();
+			}
+			BlenderJobSubmitRequest request = blender.request();
+			new BlenderMovieAssembler().assemble(batches, blender.scratch().resolve("result"), request.firstFrame(),
+					request.lastFrame(), request.width(), request.height(), request.fps(), "ffmpeg");
+			scheduler.finishAssembly(jobId, null);
+		} catch (IOException | InterruptedException failure) {
+			if (failure instanceof InterruptedException)
+				Thread.currentThread().interrupt();
+			scheduler.finishAssembly(jobId, "Blender assembly failed: " + failure.getMessage());
+		}
+	}
+
 	private static long targetVideoBitrate(VideoTypes.MediaInfo input, double ratio) {
 		double targetTotalBitsPerSecond = input.inputBytes() * 8.0 * ratio / input.durationSeconds();
 		long audioAndOverheadReserve = input.audioStreams() == 1 ? 512_000 : 64_000;
@@ -928,6 +1027,9 @@ public final class MechanaServer implements AutoCloseable {
 						completedJobs.storeArtifact(jobId, Objects.requireNonNull(page.getFileName()).toString(), page);
 				}
 			}
+			BlenderJob blender = blenderJobs.get(jobId);
+			if (blender != null && "SUCCEEDED".equals(snapshot.stage()))
+				completedJobs.storeArtifact(jobId, "animation.mp4", blender.scratch().resolve("result/animation.mp4"));
 		} catch (IOException failure) {
 			System.err.printf("Could not archive completed job %s: %s%n", jobId, failure.getMessage());
 		} finally {
@@ -943,6 +1045,11 @@ public final class MechanaServer implements AutoCloseable {
 			if (ocr != null) {
 				ocr.inputTokens().forEach(ocrInputs::remove);
 				deleteTree(ocr.scratch());
+			}
+			BlenderJob blender = blenderJobs.remove(jobId);
+			if (blender != null) {
+				blenderInputs.remove(blender.inputToken());
+				deleteTree(blender.scratch());
 			}
 		}
 	}
@@ -1175,6 +1282,9 @@ public final class MechanaServer implements AutoCloseable {
 
 	private record OcrJob(List<String> inputTokens, Path scratch, int firstPage, int pageCount,
 			OcrJobSubmitRequest request) {
+	}
+
+	private record BlenderJob(String inputToken, Path scratch, BlenderJobSubmitRequest request) {
 	}
 
 	private record WorkerActivity(String jobId, String plugin, int progress) {

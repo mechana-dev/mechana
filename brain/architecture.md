@@ -62,6 +62,10 @@ transport must adapt the same domain boundaries rather than redefine them.
   batches, and performs ordered Markdown and Unicode LaTeX source assembly on the
   server. PDF parsing does not occur on workers and Tesseract-specific behavior
   remains in the plugin.
+- The Blender reference path transfers one immutable packed scene to each frame
+  batch, executes independent contiguous ranges, and collects lease-fenced PNG
+  archives for server-side validation and movie assembly. Blender command and
+  frame semantics remain plugin-owned.
 - Observability: the platform owns job/work-unit state, weighted progress,
   attempts, workers, events, and dashboard presentation. Plugins emit the generic
   `JobObserver` lifecycle and may attach bounded string display fields; dashboard
