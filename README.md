@@ -1,4 +1,4 @@
-# Mechana
+# Mechana™
 
 Mechana is an open-source, plugin-driven distributed computation platform. A
 plugin describes a computation; Mechana supplies the distributed execution
@@ -63,3 +63,14 @@ travel with every clone; large base-model weights do not. See
 [AI-assisted plugin authoring](brain/ai-plugin-authoring.md).
 
 See [`DEVELOPMENT.md`](DEVELOPMENT.md) for runnable examples.
+
+## License and trademarks
+
+The software in this repository is licensed under the
+[Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution and trademark
+information.
+
+Mechana and the Mechana logo are trademarks of Mark Vita. The Apache License 2.0
+applies to the software and other licensed repository content; it does not grant
+permission to use those trademarks except as required by applicable law. See the
+[trademark and brand policy](assets/brand/TRADEMARK.md) for permitted uses.

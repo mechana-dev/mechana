@@ -1,4 +1,4 @@
-# Mechana repository guidance
+# Mechana™ repository guidance
 
 ## Read first
 
@@ -12,6 +12,16 @@ Before changing this repository, read in order:
 
 Use `brain/decisions.md` as the accepted-decision index. Do not infer implementation
 status from a decision or roadmap item; verify the code and `brain/current-state.md`.
+
+## Source file legal header
+
+Add the repository's standard Apache License 2.0 header to every new hand-authored
+source or script file, using `Copyright (c) 2026 Mark Vita`. Use the language's
+normal comment syntax and place the header before the package declaration,
+imports, shebang, or other source content (while preserving a required shebang as
+the first line). Do not add the bulky header to generated files, binaries, SVGs,
+JSON/YAML, assets, or formats where comments are unsupported or inappropriate.
+Copy the exact wording and URL from an existing Java source file.
 
 ## Commands
 
