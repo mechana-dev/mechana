@@ -605,3 +605,41 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Dynamic scheduling assigned 30 work units to the MBA, 8 to Rocinante, and 10 to
   the Linux host, demonstrating that all nodes participated while faster workers
   accepted additional batches.
+
+## 2026-08-04 11:35:01 EDT — Record distributed storage and AI-authoring direction
+
+- **Accepted** storage as a first-class abstraction with independent input,
+  intermediate, and output providers hidden from plugins behind stable artifact
+  references, handles, metadata, and verified staging.
+- **Accepted** the coordinator as primarily a control plane rather than the
+  mandatory bulk storage server or relay: it owns scheduling, job authority,
+  leases, retries, policy, progress, and artifact metadata.
+- Added **Directional** direct worker publication to requester-controlled storage.
+  Atomic, content-verifiable, lease-fenced parallel uploads preserve centralized
+  authority while providing BitTorrent-like aggregate bandwidth without adopting
+  an anonymous peer-to-peer protocol.
+- **Accepted** a location-independent assembly contract: plugins define how to
+  assemble through artifact abstractions, while Mechana may eventually choose
+  coordinator-side, client-side, or worker-side placement.
+- Separated security layers: authenticated TLS is **Accepted** beyond explicit
+  local development, provider encryption at rest is an optional provider
+  capability, end-to-end artifact encryption with requester-controlled keys is
+  **Proposed**, and concrete key management is **Deferred**.
+- Reaffirmed **Directional** immutable artifact caching and locality-aware
+  scheduling as optimizations that never determine correctness.
+- **Accepted** vendor-neutral, repository-owned plugin definition/context
+  artifacts usable by humans and any capable coding assistant.
+- Added a **Directional** built-in Mechana assistant for plugin creation, testing,
+  explanation, refinement, and reuse.
+- Added **Directional** Git-backed AI knowledge: reviewed architecture context,
+  examples, prompts, evaluation/certification cases, known failures, and reusable
+  plugin patterns travel with every clone. Large base-model weights stay outside
+  ordinary Git; optional small adapters remain **Proposed**.
+- Reaffirmed simplicity and audience separation: operators, plugin authors,
+  domain experts, and infrastructure contributors should need only the concepts
+  relevant to their responsibilities.
+- Added focused [storage](../brain/storage.md),
+  [AI plugin authoring](../brain/ai-plugin-authoring.md), and
+  [distributed-storage design](architecture/distributed-storage.md) documents and
+  linked them from the README, repository guidance, decision index, roadmap, and
+  relevant brain files. This documentation update makes no implementation claim.

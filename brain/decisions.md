@@ -14,9 +14,14 @@ This is the concise decision index. Detailed implications live in the linked fil
 | Milestone 1 | In-process execution before distributed transport. |
 | Transport | HTTP+JSON later, as an adapter around core contracts. |
 | Work graph | Constrained to `plan -> parallel work units -> assemble`; no generic DAG engine. |
-| Plan/assembly topology | Server-side initially; preserve a path to later client-side assembly. |
+| Plan/assembly topology | Server-side initially; use one storage-neutral contract that preserves later client-side or worker-side assembly. |
 | Planes | Separate control-plane metadata from data-plane artifact bytes. |
 | Artifacts | Use a storage-neutral artifact abstraction and stable artifact identities. |
+| Storage providers | Input, intermediate, and output providers are independently selectable behind artifact references/handles; plugins do not know provider APIs or credentials. |
+| Coordinator role | Primarily a control plane, not the mandatory bulk storage server or byte relay. |
+| Direct publication | Preserve authoritative, lease-fenced worker publication to requester-controlled storage; concurrent uploads may aggregate worker bandwidth. |
+| Assembly placement | One storage-neutral assembly API supports coordinator, client, or worker placement; the plugin defines how and Mechana decides where. |
+| Storage security | Require authenticated TLS beyond explicit local development; distinguish optional provider encryption at rest from proposed end-to-end artifact encryption. Key management is deferred. |
 | Media | FFmpeg/FFprobe run as external processes in the media plugin. |
 | Video profile | All partitions in a video job initially share one runtime signature. |
 | Segmentation | Keyframe-aware and time-based; correctness at boundaries outranks equal byte sizes. |
@@ -28,6 +33,8 @@ This is the concise decision index. Detailed implications live in the linked fil
 | Plugin runtime | Package, long-lived runtime, and work-unit attempt are distinct; managed and sandboxed runtimes execute outside the worker. |
 | Trust levels | Trusted, managed, and sandboxed are explicit modes. Only verified OS enforcement may be presented as a sandbox guarantee. |
 | Third-party authoring | SDK, templates, simulator, certification, packaging, and vendor-neutral plugin definition/context artifacts are first-class goals. |
+| Mechana AI assistant | Directionally provide specialized plugin creation, testing, explanation, refinement, and pattern-reuse assistance without making one AI vendor part of the plugin contract. |
+| Git-backed AI knowledge | Version curated platform context, examples, prompts, evaluations, and reusable plugin patterns in Git so each clone inherits them; exclude large base-model weights and private user material. |
 | Document processing | OCR evolves toward layout, figures, tables, structured outputs, confidence, assembly, and validation inside the plugin. |
 | Values | Prefer simplicity, clarity, cognitive separation, honest operator guarantees, and architecture readable by humans and AI. |
 | Worker process management | Optional remote lifecycle control uses a distinct authenticated host-agent HTTP API. Hostnames are never treated as permission or a shell transport, and the agent manages only children it launches. |

@@ -27,7 +27,9 @@ Plugins describe what must happen. Mechana determines where, when, and under whi
 attempt it happens.
 
 Initial topology performs planning and assembly server-side. Contracts must not
-preclude later client-side assembly. Milestone 1 remains in-process; later HTTP+JSON
+preclude later client-side or worker-side assembly. The plugin defines how to
+assemble while Mechana chooses placement through the same artifact-based API.
+Milestone 1 remains in-process; later HTTP+JSON
 transport must adapt the same domain boundaries rather than redefine them.
 
 ## Boundaries
@@ -39,6 +41,13 @@ transport must adapt the same domain boundaries rather than redefine them.
 - Control plane: execution state, scheduling, leases, capabilities, reservations,
   progress, retries, and artifact metadata.
 - Data plane: input, partition, intermediate, and final artifact bytes.
+- Storage providers: independent input, intermediate, and output destinations
+  hidden behind artifact references and handles. The coordinator is not the
+  mandatory bulk-data repository or relay.
+- Publication topology: directional support for workers to publish directly to
+  authorized requester-controlled providers. Parallel publication naturally
+  aggregates worker bandwidth while lease fencing and the coordinator preserve
+  authoritative job state.
 - Scheduler: plugin-agnostic matching and lifecycle; no FFmpeg knowledge.
 - Plugin: domain description, options, validation, planning, estimation, work-unit
   execution, assembly, and result validation; no ownership of platform lifecycle
@@ -94,7 +103,8 @@ transport must adapt the same domain boundaries rather than redefine them.
   module is a dependency of the scheduler, worker, or plugin infrastructure.
 
 See [plugins](plugin-model.md), [artifacts](artifacts.md), and
-[scheduler](scheduler.md) for the contracts implied by these boundaries.
+[storage](storage.md) and [scheduler](scheduler.md) for the contracts implied by
+these boundaries.
 
 ## Plugin runtime boundary
 

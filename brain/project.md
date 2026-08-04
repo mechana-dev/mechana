@@ -23,6 +23,9 @@ without learning their domain semantics.
    vendor-neutral documents and specifications are part of the product.
 7. **Operator trust is explicit.** Operators know what CPU, memory, scratch,
    network access, and plugin trust they contribute and what is actually enforced.
+8. **Audience boundaries reduce complexity.** Worker operators, plugin authors,
+   domain experts, and infrastructure contributors receive the smallest mental
+   model needed for their responsibilities.
 
 ## Accepted foundation
 
@@ -35,6 +38,10 @@ without learning their domain semantics.
   reproducible commands, documented decisions, and reviewable changes.
 - Third-party authoring is a first-class surface with an SDK, templates, simulator,
   verification/certification, packaging, and human- and AI-readable artifacts.
+- Storage is a first-class abstraction. The coordinator is primarily a control
+  plane, while provider-neutral artifacts keep bulk data placement independent.
+- Curated Mechana AI knowledge is versioned in Git and portable across clones;
+  large base-model weights are distributed separately when needed.
 - Significant work is recorded append-only in `../docs/PROJECT-NOTES.md`.
 
 See [current state](current-state.md) for repository evidence and

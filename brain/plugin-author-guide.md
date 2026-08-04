@@ -46,6 +46,16 @@ future assistant to implement the template using the same repository-owned
 context. Generated code receives no special trust: it follows normal review,
 testing, packaging, permission declaration, and certification.
 
+The long-term integrated Mechana assistant may create, test, explain, refine, and
+reuse plugin patterns, but the authoring contract remains model-replaceable. The
+repository—not a vendor's hidden context—is the durable source for curated
+architecture knowledge, examples, prompts, evaluations, certification cases, and
+reusable patterns inherited by every clone. Large base-model weights are not
+stored in ordinary Git, and private user requests or code are never contributed
+without deliberate sanitization and review.
+
+See [AI-assisted plugin authoring](ai-plugin-authoring.md) for statuses and scope.
+
 ## Certification direction
 
 Verification should cover descriptor/schema completeness, deterministic planning,
