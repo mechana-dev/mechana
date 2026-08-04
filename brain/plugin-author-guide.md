@@ -20,6 +20,13 @@ Authors do not create worker pools, select machines, transfer artifacts, allocat
 scratch, implement retries/leases, aggregate global progress, propagate
 cancellation between machines, or own retention and cleanup.
 
+For sandboxed execution, authors must assume no home directory, arbitrary host
+filesystem, unrestricted network, ambient credentials, undeclared executable, or
+stable machine identity. They use only Mechana-provided artifact handles and
+logical input/output/work/log locations and declare every resource and native
+runtime need. The complete, status-classified author contract is canonical in the
+[sandbox architecture](sandbox.md).
+
 ## Authoring surface
 
 The planned Plugin SDK comprises:
@@ -58,11 +65,12 @@ See [AI-assisted plugin authoring](ai-plugin-authoring.md) for statuses and scop
 
 ## Certification direction
 
-Verification should cover descriptor/schema completeness, deterministic planning,
-artifact identity, cancellation and timeout responsiveness, bounded progress,
-scratch compliance, attempt-safe publication, assembly correctness, cleanup,
-documentation, API compatibility, and declared sandbox/runtime needs. Passing
-compatibility tests is not itself proof that OS sandbox enforcement exists.
+Verification should cover computational and packaging compatibility. Sandbox
+compliance is a distinct, platform-specific result tied to a package digest,
+runtime signature, policy, OS, and test-suite version. Passing API compatibility
+tests is not proof of OS enforcement or universal plugin safety. The canonical
+[sandbox architecture](sandbox.md) defines the proposed adversarial checks and
+future certification dimensions without duplicating them here.
 
 See the normative [plugin lifecycle](../docs/plugin-lifecycle.md),
 [plugin model](plugin-model.md), and [sandbox strategy](sandbox.md).

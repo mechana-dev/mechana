@@ -108,13 +108,13 @@ these boundaries.
 
 ## Plugin runtime boundary
 
-A plugin package is installed material; a plugin runtime is an isolated process
-that may execute many work units; a work-unit attempt is one leased invocation.
-The long-term path is `worker -> runtime manager -> sandbox launcher -> plugin
-runtime -> plugin/native tools`. Runtime reuse amortizes startup while preserving
-fault and resource isolation from the worker.
+**Accepted:** plugin packages, reusable runtimes, and leased work-unit attempts
+are distinct. Managed and sandboxed execution passes through a worker-owned plugin
+runtime manager and platform-specific sandbox runtime; native tools remain inside
+that boundary. **Directional:** Linux, Windows, and macOS provide one policy API
+through different enforcement implementations and guarantee matrices.
 
-Three trust levels are accepted: trusted (potentially in-process), managed
-(separate process), and sandboxed (OS-enforced isolation). Enforcement is
-platform-specific and capabilities must be advertised honestly. See
-[sandbox](sandbox.md); future guarantees may not be inferred from current loading.
+The canonical [sandbox architecture](sandbox.md) defines the trust levels,
+filesystem and resource model, manifest proposal, author contract, native-runtime
+isolation, and certification direction. Future guarantees may not be inferred
+from current plugin loading.
