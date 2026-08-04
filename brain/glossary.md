@@ -6,6 +6,8 @@
 | Assembler | Plugin component or contract operation that validates and combines the complete ordered work-unit result set into a final artifact. |
 | Control plane | Job, scheduler, lease, capability, progress, reservation, and artifact-metadata traffic. |
 | Data plane | Movement or storage of artifact bytes. |
+| Artifact fabric | Platform responsibility for identifying, locating, staging, validating, transferring, caching, assembling, retaining, and cleaning up artifacts across storage providers. |
+| Storage provider | Adapter that persists or transfers artifact bytes; input, intermediate, and output roles may use different providers. |
 | Execution model | The constrained `plan -> parallel work units -> assemble` lifecycle; not a generic DAG. |
 | Parallel execution plan | Deterministic plugin-produced description of independent work units, their resource estimates, and explicit assembly requirements. |
 | Partition | Independently executable unit emitted by planning. |

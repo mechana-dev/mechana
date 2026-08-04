@@ -47,4 +47,19 @@ templates, examples, and certification rules as first-class SDK artifacts. The
 goal is for a domain expert to describe a computation and implement it directly or
 use any capable coding assistant without learning Mechana internals.
 
+Storage is also a first-class architecture boundary. Jobs may independently use
+different input, intermediate, and output providers behind stable artifact
+references. The coordinator remains primarily a control plane, and the
+directional data plane allows workers to publish directly to requester-controlled
+storage. Concurrent worker uploads can aggregate bandwidth instead of forcing all
+bytes through one coordinator pipe, while the same assembly contract can run on a
+client, coordinator, or worker. See the
+[distributed-storage design](docs/architecture/distributed-storage.md) and
+[storage brain](brain/storage.md).
+
+Mechana's long-term AI authoring direction is vendor-neutral and Git-backed.
+Curated context, examples, prompts, evaluations, and reusable plugin patterns
+travel with every clone; large base-model weights do not. See
+[AI-assisted plugin authoring](brain/ai-plugin-authoring.md).
+
 See [`DEVELOPMENT.md`](DEVELOPMENT.md) for runnable examples.

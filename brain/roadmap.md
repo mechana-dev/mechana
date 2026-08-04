@@ -13,6 +13,8 @@ explicit superseding decision.
   assembly, and final-validation contracts in `mechana-api`.
 - Implement `plan -> parallel work units -> assemble` locally without a general DAG.
 - Introduce storage-neutral artifact references and a filesystem-backed provider.
+- Model independent input, intermediate, and output provider selection while
+  retaining a simple filesystem-backed first implementation.
 - Introduce scratch request/reservation lifecycle contracts and cleanup.
 - Add a minimal generated plugin template and compatibility tests.
 
@@ -23,6 +25,13 @@ explicit superseding decision.
 - Match and reserve resources atomically; preserve lease-fenced publication.
 - Add immutable content identity, bounded worker caching, and later locality-aware
   scheduling without depending on cache hits for correctness.
+- Add authorized, atomic, lease-fenced direct worker publication so bulk results
+  need not traverse coordinator storage and parallel uploads can aggregate worker
+  bandwidth.
+- Generalize assembly placement only after the same artifact API is proven
+  coordinator-side; later placement may be client-side or worker-side.
+- Add authenticated TLS and provider security policy. Design optional end-to-end
+  artifact encryption separately; key management remains deferred.
 
 ## Reference plugins
 
@@ -47,6 +56,11 @@ explicit superseding decision.
   documentation generation, and packaging.
 - Define vendor-neutral `plugin-definition.yaml` and `plugin-context.md` artifacts
   for human and AI-assisted authoring.
+- Curate architecture context, examples, prompts, evaluations, known failures,
+  and reusable plugin patterns in Git so every clone receives the reviewed
+  Mechana knowledge base without bundling large base-model weights.
+- Evolve toward an integrated, model-replaceable Mechana assistant for plugin
+  creation, testing, failure explanation, refinement, and reuse.
 - Add specialized templates only after a demonstrated need.
 
 ## Production evolution

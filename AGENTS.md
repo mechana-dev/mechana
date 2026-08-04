@@ -38,10 +38,17 @@ formatting needs correction, then rerun `mvn verify`.
 - Model partitioned work as `plan -> parallel partitions -> assemble`; assembly is
   an explicit stage, never an accidental scheduler side effect.
 - Depend on the artifact abstraction, not local paths or one storage backend.
+- Treat input, intermediate, and output providers as independent choices. Keep
+  provider credentials and APIs outside plugins and core scheduling contracts.
+- Keep the coordinator primarily a control plane. Prefer direct, lease-fenced
+  worker publication to authorized requester storage over mandatory bulk-data
+  relay when the provider and security model support it.
+- Keep assembly storage- and location-independent: the plugin defines how;
+  Mechana may choose client, coordinator, or worker placement.
 - Keep transport concerns outside core scheduling and plugin contracts. HTTP+JSON
   is a later boundary, not the Milestone 1 domain model.
 - Initial topology is server-side planning and assembly; retain contracts that can
-  support later client-side assembly.
+  support later client-side or worker-side assembly.
 - Workers advertise scratch capacity. Scheduling must reserve capacity and must
   not knowingly overcommit it.
 - Media execution uses FFmpeg/FFprobe as external processes; do not embed media
@@ -52,6 +59,8 @@ formatting needs correction, then rerun `mvn verify`.
 - Distinguish plugin packages, plugin runtimes, and work-unit attempts. Do not
   claim sandbox guarantees until OS enforcement is implemented and verified.
 - Keep plugin-authoring artifacts vendor-neutral and useful to both humans and AI.
+- Keep curated AI authoring knowledge reviewable and portable in Git; do not add
+  large base-model weights, private user material, or unsanitized generated code.
 - Prefer the simplest design that preserves correctness, safety, and ownership.
 
 ## Keeping context current

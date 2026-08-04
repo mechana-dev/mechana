@@ -2,7 +2,8 @@
 
 Last reviewed: 2026-08-04
 
-Artifacts abstract inputs and outputs from topology and storage. Core and plugins
+Artifacts abstract inputs, intermediates, and outputs from topology and storage.
+Jobs may choose each provider independently. Core and plugins
 exchange stable references plus metadata; a provider handles byte transfer.
 
 An artifact reference must be sufficient to identify the object and validate what
@@ -20,7 +21,17 @@ Local files may back Milestone 1, but local paths are an adapter detail.
 - Cleanup respects ownership: scratch copies may be removed after release, while
   authoritative artifacts follow provider retention rules.
 - The API must support server-side assembly now and later client-side assembly
-  without changing artifact meaning.
+  or worker-side assembly without changing artifact meaning or plugin logic.
+- Provider credentials and APIs remain outside plugin contracts. Access should be
+  narrowly scoped to the relevant attempt and artifact operation.
+- Authoritative direct worker publication is lease-fenced, content-verifiable,
+  and atomic even when coordinator storage is bypassed.
+
+The coordinator primarily carries artifact metadata and authority. Direct worker
+publication to requester-controlled providers is directional and can aggregate
+the independent bandwidth of the worker fleet rather than concentrating all
+result bytes through one server. See [storage](storage.md) for provider roles,
+security layers, assembly placement, and the limits of the BitTorrent analogy.
 
 ## Locality and caching direction
 
