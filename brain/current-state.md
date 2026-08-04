@@ -1,6 +1,6 @@
 # Current state
 
-Verified: 2026-08-03
+Verified: 2026-08-04
 
 This file reports repository evidence, not desired future status.
 
@@ -9,6 +9,12 @@ This file reports repository evidence, not desired future status.
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,
   FFmpeg video, fractal-render, Tesseract OCR, and Blender render plugins.
+- Optional `worker-host-agent` and `worker-control-app` leaf modules. The agent
+  exposes bearer-token-protected status/start/stop HTTP endpoints by default, with
+  an explicit unauthenticated-development opt-in, enforces a
+  configured worker limit, and tracks only child workers it launches. The compact
+  Swing controller persists known hosts and last settings locally and performs
+  network actions away from the event-dispatch thread.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
@@ -36,13 +42,13 @@ This file reports repository evidence, not desired future status.
   elapsed time, bounded event history, errors, and structured plugin-supplied
   display details. Scheduler-managed sleep jobs expose it at
   `/dashboard/jobs/<job-id>`; local video runners use the same contracts.
-- A loopback-only server dashboard at `/dashboard` that retains recently disconnected worker
+- A loopback-only server dashboard at `/dashboard` that removes gracefully disconnected workers immediately and retains heartbeat-timed-out worker
   registrations, advertised IP addresses, connection state, capabilities,
   server PID/date/time/uptime, live active-job rows, and disk-backed completed-job
   rows. Each job row links to its generic job dashboard, and terminal job/work-unit
   elapsed times stop advancing. Worker rows show `IDLE`, `OFFLINE`, or the active
   plugin name plus that worker's current work-unit progress and job link. Workers
-  disappear from the registry after two minutes without contact.
+  entries for ten seconds after timeout before removing them.
 - The master dashboard provides a confirmed loopback-only server restart action.
   The replacement inherits the current launch configuration; workers reconnect
   and completed history remains, while volatile active jobs do not survive.
@@ -97,7 +103,9 @@ This file reports repository evidence, not desired future status.
   fleet hosts. A subsequent 12-frame smoke job assigned one CPU Cycles frame to
   each of twelve workers across the MBA, Rocinante, Hyperion, and Linux host,
   then validated and assembled all distinct frames into a QuickTime-compatible
-  HEVC MP4.
+  HEVC MP4. The host-agent-managed development fleet has also completed a
+  96-frame, 48-work-unit render across twelve workers on the MBA, Rocinante, and
+  Linux host, producing the validated HEVC movie in 6 minutes 42 seconds.
 
 ## Not established by current repository evidence
 
@@ -109,6 +117,8 @@ This file reports repository evidence, not desired future status.
 - Durable active scheduler state, authentication, or production isolation.
 - Durable worker presence across restarts, richer fleet telemetry, authentication,
   or remote dashboard access.
+- Durable host-agent child-process adoption after an agent restart, TLS, token
+  rotation, role-based access, or operating-system service installers.
 - Generic cross-plugin resume validation, reusable completed-work artifact
   manifests, or plugin-defined mid-work-unit checkpoints. Resume-as-new is
   currently limited to scheduler-managed sleep jobs and reuses their logical

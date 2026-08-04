@@ -116,16 +116,29 @@ class MechanaServerDashboardTest {
 			String disconnected = client.send(HttpRequest.newBuilder(base.resolve("/api/dashboard")).build(),
 					HttpResponse.BodyHandlers.ofString()).body();
 			assertTrue(disconnected.contains("\"connectedWorkers\":0"));
-			assertTrue(disconnected.contains("\"registeredWorkers\":1"));
-			assertTrue(disconnected.contains("\"state\":\"DISCONNECTED\""));
-			assertTrue(disconnected.contains("\"activity\":\"OFFLINE\""));
+			assertTrue(disconnected.contains("\"registeredWorkers\":0"));
+			assertFalse(disconnected.contains("\"id\":\"worker-1\""));
 
-			server.reapExpiredWorkers(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(2) + 1);
+			HttpRequest timeoutRegistration = HttpRequest.newBuilder(base.resolve("/api/workers/register"))
+					.header("Content-Type", "application/json")
+					.POST(HttpRequest.BodyPublishers.ofString(
+							"{\"workerId\":\"worker-timeout\",\"workerAddress\":\"192.0.2.11\",\"supportedPlugins\":[\"sleep\"]}"))
+					.build();
+			assertEquals(200, client.send(timeoutRegistration, HttpResponse.BodyHandlers.discarding()).statusCode());
+			long beforeTimeout = System.currentTimeMillis();
+			server.reapExpiredWorkers(beforeTimeout + TimeUnit.SECONDS.toMillis(15) + 1);
+			String timedOut = client.send(HttpRequest.newBuilder(base.resolve("/api/dashboard")).build(),
+					HttpResponse.BodyHandlers.ofString()).body();
+			assertTrue(timedOut.contains("\"registeredWorkers\":1"));
+			assertTrue(timedOut.contains("\"state\":\"DISCONNECTED\""));
+			assertTrue(timedOut.contains("\"activity\":\"OFFLINE\""));
+
+			server.reapExpiredWorkers(beforeTimeout + TimeUnit.SECONDS.toMillis(25) + 2);
 			String forgotten = client.send(HttpRequest.newBuilder(base.resolve("/api/dashboard")).build(),
 					HttpResponse.BodyHandlers.ofString()).body();
 			assertTrue(forgotten.contains("\"connectedWorkers\":0"));
 			assertTrue(forgotten.contains("\"registeredWorkers\":0"));
-			assertFalse(forgotten.contains("\"workerId\":\"worker-1\""));
+			assertFalse(forgotten.contains("\"id\":\"worker-timeout\""));
 		} finally {
 			Files.deleteIfExists(plugin);
 		}
