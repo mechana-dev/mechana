@@ -127,6 +127,15 @@ This file reports repository evidence, not desired future status.
 These are accepted direction where listed in [decisions](decisions.md) and planned
 work where listed in [roadmap](roadmap.md); they must not be described as shipped.
 
+## Architecture Baseline 1 status
+
+Architecture Baseline 1 is a documentation freeze, not an implementation claim.
+Implementation is intentionally paused at this checkpoint. The next implementation
+iteration is the **Parallel Plugin Execution Framework**: stable lifecycle and
+parallel-plan contracts, storage-neutral artifact references, scratch/resource
+contracts, and a minimal plugin template exercised locally before expanding the
+distributed path.
+
 The accepted plugin model is now documented as a complete computational contract
 in [plugin model](plugin-model.md). This documentation decision does not change the
 implementation facts above: the generic plan/work-unit/assemble API and its full

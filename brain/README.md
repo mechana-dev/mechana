@@ -14,7 +14,10 @@ loaded through the root `AGENTS.md` and does not affect other repositories.
 - [Plugin model](plugin-model.md): task-agnostic extension boundary
 - [Artifacts](artifacts.md): artifact identity and movement
 - [Scheduler](scheduler.md): leases, capabilities, scratch reservations
-- [Worker management](worker-management.md): optional host agent and desktop controller
+- [Worker management](worker-management.md): operator resource model, host agent, and controller
+- [Plugin author guide](plugin-author-guide.md): third-party and AI-assisted authoring
+- [Sandbox](sandbox.md): trust levels and plugin runtime isolation direction
+- [Plugin lifecycle](../docs/plugin-lifecycle.md): normative stage ordering and ownership
 - [Media plugin](media-plugin.md): FFmpeg partitioned-video design
 - [Fractal plugin](fractal-plugin.md): deterministic no-input rendering design
 - [OCR plugin](ocr-plugin.md): PDF rasterization, distributed Tesseract, and Markdown assembly

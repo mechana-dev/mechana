@@ -1,6 +1,6 @@
 # Accepted decisions
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-04
 
 This is the concise decision index. Detailed implications live in the linked files.
 
@@ -23,6 +23,13 @@ This is the concise decision index. Detailed implications live in the linked fil
 | Initial audio path | Transcode video in parallel segments; copy optional audio once as a whole stream before final mux. |
 | Video quality | Default CRF-based visually lossless mode makes no mathematical-losslessness claim; x265 bit-exact lossless is explicit and may increase size. |
 | Worker storage | Workers advertise scratch space; the scheduler reserves before assignment. |
+| Worker resources | Workers advertise CPU, RAM, scratch, plugin capabilities, and runtime signatures; matching and reservation remain platform-owned. |
+| Locality and cache | Workers may cache immutable, content-verifiable artifacts; locality is an optimization and never a correctness requirement. |
+| Plugin runtime | Package, long-lived runtime, and work-unit attempt are distinct; managed and sandboxed runtimes execute outside the worker. |
+| Trust levels | Trusted, managed, and sandboxed are explicit modes. Only verified OS enforcement may be presented as a sandbox guarantee. |
+| Third-party authoring | SDK, templates, simulator, certification, packaging, and vendor-neutral plugin definition/context artifacts are first-class goals. |
+| Document processing | OCR evolves toward layout, figures, tables, structured outputs, confidence, assembly, and validation inside the plugin. |
+| Values | Prefer simplicity, clarity, cognitive separation, honest operator guarantees, and architecture readable by humans and AI. |
 | Worker process management | Optional remote lifecycle control uses a distinct authenticated host-agent HTTP API. Hostnames are never treated as permission or a shell transport, and the agent manages only children it launches. |
 | Project record | Append material updates to timestamped `docs/PROJECT-NOTES.md`. |
 

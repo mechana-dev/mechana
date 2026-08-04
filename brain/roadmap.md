@@ -1,49 +1,56 @@
 # Roadmap
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-04
 
-This sequence expresses intent, not completion. Check [current state](current-state.md)
-before reporting progress.
+This sequence expresses intent, not completion. Check
+[current state](current-state.md) before reporting progress. Architecture Baseline
+1 closes design stabilization; implementation should preserve it or record an
+explicit superseding decision.
 
-## Milestone 1 — in-process foundation
+## Next — Parallel Plugin Execution Framework
 
-- Align the build with Java 25.
-- Define task-agnostic plugin lifecycle and artifact contracts.
-- Model `plan -> parallel partitions -> assemble` in one process.
-- Implement deterministic state transitions, retries, and tests without transport.
+- Define stable descriptor, validation, deterministic plan, work-unit, resource,
+  assembly, and final-validation contracts in `mechana-api`.
+- Implement `plan -> parallel work units -> assemble` locally without a general DAG.
+- Introduce storage-neutral artifact references and a filesystem-backed provider.
+- Introduce scratch request/reservation lifecycle contracts and cleanup.
+- Add a minimal generated plugin template and compatibility tests.
 
-## Milestone 2 — media reference plugin
+## Artifact and worker resources
 
-- Add FFprobe inspection and keyframe/time-based planning.
-- Execute FFmpeg partitions as external processes under one per-job runtime
-  signature.
-- Assemble ordered, compatible outputs and expose failure diagnostics.
+- Separate data-plane transfer from control-plane scheduling metadata.
+- Advertise CPU, RAM, scratch, plugin capabilities, and runtime health.
+- Match and reserve resources atomically; preserve lease-fenced publication.
+- Add immutable content identity, bounded worker caching, and later locality-aware
+  scheduling without depending on cache hits for correctness.
 
-## Milestone 3 — distributed control plane
+## Reference plugins
 
-- Add HTTP+JSON adapters for clients and workers around the core contracts.
-- Advertise capabilities and scratch capacity; reserve/release scratch atomically.
-- Move artifact bytes through the data plane, not scheduler payloads.
-- Preserve leases, retry safety, and stale-result rejection.
+- Adapt FFmpeg media to the generic framework: H.264 input, H.265 output,
+  keyframe-aligned plans, quality profiles, assembly, and FFprobe validation.
+- Evolve OCR into document processing with layout, figures, tables, structured
+  multi-artifact results, confidence, assembly, and validation.
+- Use fractal and Blender workloads to prove infrastructure remains domain-agnostic.
 
-## Later evolution
+## Worker operations and plugin runtime
 
-- Support client-side assembly without breaking artifact or job contracts.
-- Add durable state, authentication/authorization, stronger plugin isolation, and
-  production operations based on explicit future decisions.
+- Provide a simple host control surface where operators set worker count, CPU,
+  RAM, scratch, network, and allowed plugins with understandable defaults.
+- Separate plugin runtimes from workers for crash, timeout, and resource isolation;
+  reuse runtimes across work units where appropriate.
+- Implement trusted, managed, and sandboxed modes. Verify platform-specific
+  enforcement before advertising a guarantee.
 
-## Implemented first slice — pause and resumable execution
+## Plugin authoring ecosystem
 
-- Add cooperative `PAUSED` state that stops new assignments, fences running
-  leases, and retains completed work.
-- Resume paused jobs by queuing only unfinished work units.
-- Resume cancelled or failed work as a new job with explicit `resumedFromJobId`
-  lineage rather than mutating immutable terminal history.
-- Reuse completed work-unit outputs only after validating input identity, plugin
-  version, options, runtime signature, checksums, and artifact availability.
-- Treat mid-work-unit checkpointing as an optional plugin capability; the first
-  slice reuses whole completed work units and reruns incomplete ones.
+- Ship SDK contracts, scaffolding, simulator, compatibility suite, certification,
+  documentation generation, and packaging.
+- Define vendor-neutral `plugin-definition.yaml` and `plugin-context.md` artifacts
+  for human and AI-assisted authoring.
+- Add specialized templates only after a demonstrated need.
 
-The sleep scheduler now implements this first slice. Generic input/plugin/runtime
-identity validation, reusable artifact manifests, and plugin-defined mid-work-unit
-checkpoints remain follow-up work.
+## Production evolution
+
+- Durable active state and recovery, authentication/authorization, signed plugin
+  provenance, secure distribution, operator policy, and production observability.
+- Client-side assembly may be added without changing artifact identity or lifecycle.

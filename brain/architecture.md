@@ -1,6 +1,6 @@
 # Architecture
 
-Last reviewed: 2026-08-02
+Last reviewed: 2026-08-04
 
 ## Stable shape
 
@@ -95,3 +95,16 @@ transport must adapt the same domain boundaries rather than redefine them.
 
 See [plugins](plugin-model.md), [artifacts](artifacts.md), and
 [scheduler](scheduler.md) for the contracts implied by these boundaries.
+
+## Plugin runtime boundary
+
+A plugin package is installed material; a plugin runtime is an isolated process
+that may execute many work units; a work-unit attempt is one leased invocation.
+The long-term path is `worker -> runtime manager -> sandbox launcher -> plugin
+runtime -> plugin/native tools`. Runtime reuse amortizes startup while preserving
+fault and resource isolation from the worker.
+
+Three trust levels are accepted: trusted (potentially in-process), managed
+(separate process), and sandboxed (OS-enforced isolation). Enforcement is
+platform-specific and capabilities must be advertised honestly. See
+[sandbox](sandbox.md); future guarantees may not be inferred from current loading.

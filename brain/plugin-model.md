@@ -1,6 +1,6 @@
 # Plugin model
 
-Last reviewed: 2026-08-02
+Last reviewed: 2026-08-04
 
 ## Accepted contract
 
@@ -42,6 +42,10 @@ public plugin contract, while concrete implementations are collected beneath
 `plugins/`. Concrete plugins may depend on `mechana-api`; infrastructure must not
 depend on a concrete plugin except where an explicit composition or demo layer
 wires that plugin into a runnable application.
+
+The complete stage ordering is normative in the
+[plugin lifecycle specification](../docs/plugin-lifecycle.md). Third-party and
+AI-assisted creation guidance lives in the [plugin author guide](plugin-author-guide.md).
 
 ## Invariants
 

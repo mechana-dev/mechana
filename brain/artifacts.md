@@ -1,6 +1,6 @@
 # Artifacts
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-04
 
 Artifacts abstract inputs and outputs from topology and storage. Core and plugins
 exchange stable references plus metadata; a provider handles byte transfer.
@@ -21,6 +21,19 @@ Local files may back Milestone 1, but local paths are an adapter detail.
   authoritative artifacts follow provider retention rules.
 - The API must support server-side assembly now and later client-side assembly
   without changing artifact meaning.
+
+## Locality and caching direction
+
+Immutable artifacts should have content-verifiable identities. A worker may keep
+a bounded local cache after an attempt releases scratch. Entries are reusable
+copies, never the only authoritative artifact, and eviction cannot affect
+correctness. Workers may advertise cached identities or compact locality hints;
+the scheduler may prefer a compatible worker that already has a large input while
+still honoring capabilities, resources, fairness, and leases.
+
+Caching is an infrastructure optimization. Plugins describe artifact requirements;
+Mechana owns transfer, verification, cache placement, eviction, and locality-aware
+scheduling. Cache storage and attempt scratch are accounted separately.
 
 The video-plugin local slice currently adapts artifacts to paths beneath an
 attempt-specific scratch tree. Segment files, concat manifest, separated audio,
