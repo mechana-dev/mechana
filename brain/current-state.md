@@ -17,6 +17,12 @@ This file reports repository evidence, not desired future status.
   network actions away from the event-dispatch thread.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
+- A first plugin-runtime foundation defines trust modes, immutable policy/request/
+  result/capability contracts, fixed attempt workspaces, managed-process timeout
+  and log capture, and fail-closed platform selection. A separate plugin host
+  accepts one NDJSON request, verifies and loads one `TaskPlugin`, and emits
+  lifecycle events. The experimental macOS adapter reports filesystem/network
+  enforcement only after a live `sandbox-exec` probe succeeds.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
   expired-work requeueing, and stale-completion rejection.
 - Worker presence and task ownership use independent heartbeats. Workers emit a
@@ -117,10 +123,11 @@ This file reports repository evidence, not desired future status.
 - Durable active scheduler state, authentication, or production isolation.
 - Durable worker presence across restarts, richer fleet telemetry, authentication,
   or remote dashboard access.
-- A plugin runtime manager, managed-process isolation, OS-enforced sandbox,
-  runtime manifest, per-platform guarantee matrix, or sandbox compliance and
-  certification harness. The current distributed slice must not be described as
-  sandboxed.
+- Worker integration of the runtime manager, plugin migrations, a runtime
+  manifest, bounded log sizes, guaranteed descendant cleanup, hard CPU/RAM/
+  scratch/process limits, dedicated identities, production sandboxing, or
+  certification. `sandbox-exec` is deprecated and unavailable beneath the MBA's
+  current Codex containment, so the distributed slice is not sandboxed.
 - Durable host-agent child-process adoption after an agent restart, TLS, token
   rotation, role-based access, or operating-system service installers.
 - Generic cross-plugin resume validation, reusable completed-work artifact

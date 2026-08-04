@@ -118,3 +118,8 @@ The canonical [sandbox architecture](sandbox.md) defines the trust levels,
 filesystem and resource model, manifest proposal, author contract, native-runtime
 isolation, and certification direction. Future guarantees may not be inferred
 from current plugin loading.
+
+The first implementation foundation lives in `mechana-plugin-runtime` and
+`plugin-host`. It uses one-request NDJSON over standard input/output because the
+current work-unit contract is request/response-shaped and does not need a network
+listener inside the attempt. Worker integration and plugin migration remain next.

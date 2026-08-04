@@ -678,3 +678,15 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Updated prominent project, website, repository-guidance, development, and
   brand references to use Mechana™ once where appropriate without changing any
   runtime behavior or architectural contract.
+
+## 2026-08-04 19:15:00 EDT — Begin macOS sandbox and plugin-host foundation
+
+- Added common trust, policy, request, result, capability, workspace, launcher,
+  sandbox, and runtime-manager contracts without plugin-specific dependencies.
+- Added managed process execution with an isolated environment, attempt layout,
+  log capture, timeout/cancellation, best-effort cleanup, and a one-request NDJSON
+  host for existing `TaskPlugin` packages.
+- Added an experimental macOS backend using Apple-deprecated `sandbox-exec`. It
+  fails closed and reports filesystem/network enforcement only after a live probe.
+  MBA Codex containment rejects nested profiles, so adversarial tests skip here.
+- Split concrete plugin migration into sequential PR B, starting with sleep.

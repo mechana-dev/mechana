@@ -7,6 +7,12 @@ Last reviewed: 2026-08-04
 Describe the computation; Mechana handles distributed execution. A plugin author
 should not need scheduler, transport, lease, persistence, or cluster knowledge.
 
+Managed or sandboxed plugins use only the supplied logical workspace and
+`TaskContext`, emit bounded progress, tolerate forced cancellation, and declare
+every external executable. Ambient home files, inherited credentials, undeclared
+host paths, and undeclared network access are incompatible. A richer manifest and
+cooperative-cancellation protocol remain pending.
+
 Authors implement or declare:
 
 - supported inputs, outputs, and versioned processing options;

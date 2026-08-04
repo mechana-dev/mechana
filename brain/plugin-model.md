@@ -73,3 +73,9 @@ accepted plan/partition/assemble contract. See [media plugin](media-plugin.md) f
 the first domain-specific local implementation. That implementation keeps its
 descriptor/validation, planner, executor, estimator, assembler, runtime probe, and
 result validator modular, but does not yet implement a generic core plugin API.
+
+The initial separate host adapts the existing `TaskPlugin` contract without
+changing computation semantics. One NDJSON request selects a verified JAR and
+entrypoint; events carry progress, artifact staging, completion, and failure.
+Forced cancellation terminates the host process; cooperative protocol cancellation
+and migration of the five concrete plugins remain pending.
