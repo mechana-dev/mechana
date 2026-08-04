@@ -1,6 +1,8 @@
-# Mechana Brand Assets
+# Mechana™ Brand Assets
 
 Canonical Mechana brand package.
+
+Use of these assets is governed by the [trademark and brand policy](TRADEMARK.md).
 
 ## Canonical mark
 

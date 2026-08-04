@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-04
 
-Mechana is an open-source, plugin-driven distributed computation platform. Plugins
+Mechana™ is an open-source, plugin-driven distributed computation platform. Plugins
 describe complete computations; the platform executes them safely across workers
 without learning their domain semantics.
 
@@ -31,7 +31,8 @@ without learning their domain semantics.
 
 - Language/toolchain target: Java 25 and Maven.
 - Primary development environment: IntelliJ IDEA on macOS.
-- License: Apache License 2.0 (`../LICENSE`).
+- License: Apache License 2.0 (`../LICENSE`); trademark rights are separate and
+  documented in `../assets/brand/TRADEMARK.md`.
 - The constrained parallel model is `plan -> parallel work units -> assemble`,
   not a general DAG engine.
 - Contributor readiness is a product requirement: understandable modules,

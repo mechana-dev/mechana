@@ -1,4 +1,4 @@
-# Mechana development guide
+# Mechana™ development guide
 
 ## First distributed execution slice
 

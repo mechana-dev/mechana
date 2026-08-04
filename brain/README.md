@@ -1,4 +1,4 @@
-# Mechana project brain
+# Mechana™ project brain
 
 This directory is the repository-local source of durable Mechana context. It is
 loaded through the root `AGENTS.md` and does not affect other repositories.

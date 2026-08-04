@@ -665,3 +665,16 @@ Append-only record of material Mechana project changes and accepted decisions.
   [distributed-storage design](architecture/distributed-storage.md) documents and
   linked them from the README, repository guidance, decision index, roadmap, and
   relevant brain files. This documentation update makes no implementation claim.
+
+## 2026-08-04 12:36:27 EDT — Standardize legal and brand notices
+
+- Added the standard Apache License 2.0 copyright header to hand-authored Java
+  and HTML source files, with Mark Vita as the 2026 copyright holder.
+- Verified the full Apache License 2.0 text and added repository NOTICE and
+  contributor guidance covering contribution licensing and retained copyright.
+- Documented Mechana naming, logo, color, acceptable-use, and prohibited-use
+  guidance, including the separation between Apache-licensed software and
+  trademark rights.
+- Updated prominent project, website, repository-guidance, development, and
+  brand references to use Mechana™ once where appropriate without changing any
+  runtime behavior or architectural contract.
