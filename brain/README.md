@@ -14,7 +14,7 @@ loaded through the root `AGENTS.md` and does not affect other repositories.
 - [Plugin model](plugin-model.md): task-agnostic extension boundary
 - [Artifacts](artifacts.md): artifact identity and movement
 - [Scheduler](scheduler.md): leases, capabilities, scratch reservations
-- [Worker management](worker-management.md): operator resource and fleet model
+- [Worker management](worker-management.md): operator resource model, host agent, and controller
 - [Plugin author guide](plugin-author-guide.md): third-party and AI-assisted authoring
 - [Sandbox](sandbox.md): trust levels and plugin runtime isolation direction
 - [Plugin lifecycle](../docs/plugin-lifecycle.md): normative stage ordering and ownership

@@ -2,45 +2,61 @@
 
 Last reviewed: 2026-08-04
 
-Worker management is an operational layer around workers, not part of the plugin
-or scheduling domain. Its purpose is to make contributed compute understandable.
+Worker management is an operational layer around workers, not part of plugin
+semantics or scheduler placement. Its purpose is to make contributed compute
+understandable and controllable.
 
 ## Operator contract
 
-An operator chooses:
+An operator chooses worker count, CPU contribution, memory limit, scratch and
+optional cache allocation, allowed plugins/signers and trust level, network policy,
+and host availability. The control surface should show consumption, reservations,
+active plugin/work-unit progress, and whether runtime or sandbox limits are
+enforced or advisory. Defaults should be safe and few. Operators should not need
+to understand leases, partition plans, artifacts, or scheduler policy.
 
-- worker count and CPU contribution;
-- memory limit;
-- scratch allocation and optional separately bounded cache;
-- allowed plugins/signers and trust level;
-- network policy;
-- start/stop and host availability.
-
-The control surface should show current consumption, reservations, active plugin,
-work-unit progress, runtime/sandbox guarantees, and whether limits are enforced or
-advisory. Defaults should be safe and few. Operators should not need to understand
-leases, partition plans, artifact internals, or scheduler policy.
-
-## Worker advertisement
+## Worker advertisement and scratch
 
 Workers report stable identity plus available CPU, RAM, scratch, plugin
 capabilities, runtime signatures/health, supported trust/enforcement features, and
 later cache/locality hints. Presence is distinct from task-lease ownership.
-Advertisement never grants work by itself; the scheduler matches requirements and
-reserves resources atomically.
+Advertisement never grants work; the scheduler matches and reserves atomically.
 
-## Scratch model
+Scratch holds staged inputs, intermediates, outputs awaiting publication, and a
+safety allowance. Reservation begins with assignment and ends on completion,
+cancellation, definitive failure, or lease expiry, followed by cleanup. The
+scheduler does not knowingly overcommit capacity. Immutable caches use separate
+accounting.
 
-Scratch is temporary capacity for staged inputs, intermediates, outputs awaiting
-publication, and a safety allowance. Reservation begins with assignment and ends
-on authoritative completion, cancellation, definitive failure, or lease expiry,
-followed by deterministic cleanup. The scheduler does not knowingly overcommit
-advertised capacity. Cached immutable artifacts use separate accounting.
+## Implemented optional host management
 
-## Host management direction
+The `worker-host-agent` runs on a controlled machine, and the Swing
+`worker-control-app` connects to an explicitly configured agent over HTTP/JSON.
+An IP address alone does not provide process-creation authority.
 
-An optional host agent may start, stop, and observe a bounded set of local worker
-children. A desktop or web controller calls that explicit API; hostnames never
-become implicit remote shell commands. Authentication, TLS, durable child adoption,
-service installation, and remote administration are production requirements, not
-assumed guarantees.
+- `GET /api/v1/health` reports reachability.
+- `GET /api/v1/workers` reports requested/live child counts, state, diagnostics,
+  IDs, PIDs, and start times.
+- `POST /api/v1/workers/start` adds only the deficit needed to reach the requested
+  count and rejects counts above the configured maximum.
+- `POST /api/v1/workers/stop` gracefully terminates tracked children, then forcibly
+  terminates survivors after the configured timeout.
+
+Agent-generated worker IDs begin with the configured machine name (or normalized
+hostname) and a UUID. The agent launches without shell interpolation, writes
+output below its configured working directory, and manages only children it
+launches. Workers started elsewhere are neither discovered nor stopped, and an
+agent restart does not adopt surviving children.
+
+Management routes require a bearer token for non-loopback binding unless
+`allow-unauthenticated=true` explicitly enables development mode. Loopback may
+omit a token for local tests. Shared tokens are stored in local properties and
+sent over plain HTTP; unauthenticated mode allows any reachable caller to manage
+workers. These modes are suitable only for an appropriately firewalled trusted
+LAN/tailnet. TLS, OS credential storage, token rotation, roles, audit logging,
+service installers, and durable adoption remain production work.
+
+The current host agent controls process count, not the full accepted CPU, RAM,
+scratch, cache, plugin allowlist, network, or sandbox policy. Those remain roadmap
+items and must not be presented as implemented guarantees. See
+[`WORKER-CONTROL.md`](../docs/WORKER-CONTROL.md) for current setup.

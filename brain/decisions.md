@@ -30,6 +30,7 @@ This is the concise decision index. Detailed implications live in the linked fil
 | Third-party authoring | SDK, templates, simulator, certification, packaging, and vendor-neutral plugin definition/context artifacts are first-class goals. |
 | Document processing | OCR evolves toward layout, figures, tables, structured outputs, confidence, assembly, and validation inside the plugin. |
 | Values | Prefer simplicity, clarity, cognitive separation, honest operator guarantees, and architecture readable by humans and AI. |
+| Worker process management | Optional remote lifecycle control uses a distinct authenticated host-agent HTTP API. Hostnames are never treated as permission or a shell transport, and the agent manages only children it launches. |
 | Project record | Append material updates to timestamped `docs/PROJECT-NOTES.md`. |
 
 ## Cross-cutting invariants

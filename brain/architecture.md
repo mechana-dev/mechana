@@ -87,6 +87,11 @@ transport must adapt the same domain boundaries rather than redefine them.
   heartbeat indicates process/server reachability even while plugin code is busy;
   a lease-token heartbeat independently renews one authoritative task attempt.
   Neither signal fabricates plugin progress.
+- Remote worker process lifecycle is a separate operational boundary. The optional
+  Worker Host Agent launches and tracks only its own child worker processes and
+  exposes an HTTP/JSON API that is authenticated by default. The Swing Worker Control App is an API
+  client; it never turns a hostname into an implicit shell command and neither
+  module is a dependency of the scheduler, worker, or plugin infrastructure.
 
 See [plugins](plugin-model.md), [artifacts](artifacts.md), and
 [scheduler](scheduler.md) for the contracts implied by these boundaries.

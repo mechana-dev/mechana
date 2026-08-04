@@ -20,6 +20,8 @@
     <module>plugins</module>
     <module>mechana-server</module>
     <module>mechana-client</module>
+    <module>worker-host-agent</module>
+    <module>worker-control-app</module>
   </modules>
 
   <properties>
