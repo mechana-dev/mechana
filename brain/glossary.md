@@ -16,6 +16,12 @@
 | Processing options | Versioned, plugin-described configuration values that specialize a computation and whose combinations the plugin authoritatively validates. |
 | Result validator | Plugin operation that authoritatively checks an assembled final result before Mechana accepts it. |
 | Runtime signature | Normalized execution profile that must match across all partitions of an initial video job. |
+| Plugin runtime manager | Worker-owned control boundary that resolves policy, launches or reuses a compatible runtime, monitors attempts, delivers cancellation, and guarantees cleanup. |
+| Sandbox runtime | Platform-specific adapter that applies and verifies the execution policy before plugin and native-tool code runs. |
+| Trusted execution | Operator-approved execution with no hostile-code isolation; it may run in process. |
+| Managed execution | Separate-process lifecycle and fault isolation that is not, by itself, a security sandbox. |
+| Sandboxed execution | Separate execution under verified OS-enforced controls represented by the host's guarantee matrix. |
+| Guarantee matrix | Versioned, platform-specific statement of sandbox controls that are actually enforced and verified. |
 | Scratch reservation | Temporary scheduler accounting that commits worker local capacity to an assignment. |
 | Stale completion | Result from an expired or superseded lease; never authoritative. |
 | Work unit | Independently executable item emitted by a parallel execution plan and run under a Mechana-controlled attempt; also called a partition in existing design text. |

@@ -39,7 +39,9 @@ memory. Start with the [architecture](brain/architecture.md),
 and [current state](brain/current-state.md). Third-party authors should read the
 [plugin author guide](brain/plugin-author-guide.md); operators should read
 [worker management](brain/worker-management.md) and the
-[sandbox strategy](brain/sandbox.md). The [roadmap](brain/roadmap.md) distinguishes
+[canonical sandbox architecture](brain/sandbox.md), including its Accepted,
+Directional, Proposed, and Deferred classifications. The
+[roadmap](brain/roadmap.md) distinguishes
 accepted direction from shipped behavior.
 
 Mechana treats vendor-neutral, human- and AI-readable plugin specifications,

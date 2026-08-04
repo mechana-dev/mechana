@@ -2,6 +2,28 @@
 
 Append-only record of material Mechana project changes and accepted decisions.
 
+## 2026-08-04 11:52:29 EDT — Complete Architecture Baseline 1 sandbox design
+
+- Established [sandbox architecture](../brain/sandbox.md) as the canonical,
+  status-classified design for plugin runtime isolation and explicitly kept it a
+  documentation contract rather than an implementation claim.
+- Accepted the trusted, managed, and sandboxed trust levels; the worker-owned
+  plugin runtime manager and platform-specific sandbox runtime boundary; logical
+  workspace/input/output/work/log access; platform-owned resource enforcement;
+  native-tool containment; and sandboxed plugin-author expectations.
+- Reaffirmed that Mechana claims only named, verified OS-enforced guarantees and
+  uses distinct Linux, Windows, and macOS implementations behind a common API,
+  without promising identical guarantees.
+- Proposed a versioned runtime manifest for network, filesystem, CPU, memory,
+  scratch, timeout, process, native-runtime, GPU, environment, and reuse needs.
+- Set direction for adversarial compliance testing and multi-dimensional,
+  platform-specific certification. Deferred production sandbox code, arbitrary
+  host paths, runtime distribution/signing, certification services, and a plugin
+  marketplace.
+- Updated the README, repository guidance, brain index, architecture, decisions,
+  plugin model, author guide, roadmap, current state, and glossary to link to the
+  canonical document rather than duplicate its detailed contract.
+
 ## 2026-08-04 08:25:31 EDT — Freeze Architecture Baseline 1
 
 - Defined Mechana as a **plugin-driven distributed computation platform**, not

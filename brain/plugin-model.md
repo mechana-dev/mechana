@@ -46,6 +46,8 @@ wires that plugin into a runnable application.
 The complete stage ordering is normative in the
 [plugin lifecycle specification](../docs/plugin-lifecycle.md). Third-party and
 AI-assisted creation guidance lives in the [plugin author guide](plugin-author-guide.md).
+The plugin execution environment, trust contract, and proposed runtime manifest
+are canonical in the [sandbox architecture](sandbox.md).
 
 ## Invariants
 
@@ -63,6 +65,8 @@ AI-assisted creation guidance lives in the [plugin author guide](plugin-author-g
 - Plugins report stages and normalized work-unit lifecycle/progress through the
   generic `JobObserver`. Optional display details remain opaque to scheduling and
   dashboard aggregation.
+- Plugins declare resource and runtime needs but neither grant themselves host
+  access nor enforce their own sandbox policy.
 
 The sleep plugin in the current branch is an implementation slice, not the full
 accepted plan/partition/assemble contract. See [media plugin](media-plugin.md) for

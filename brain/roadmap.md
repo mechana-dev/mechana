@@ -45,10 +45,13 @@ explicit superseding decision.
 
 - Provide a simple host control surface where operators set worker count, CPU,
   RAM, scratch, network, and allowed plugins with understandable defaults.
-- Separate plugin runtimes from workers for crash, timeout, and resource isolation;
-  reuse runtimes across work units where appropriate.
-- Implement trusted, managed, and sandboxed modes. Verify platform-specific
-  enforcement before advertising a guarantee.
+- Implement the accepted runtime-manager boundary and trusted, managed, and
+  sandboxed modes from the [canonical sandbox architecture](sandbox.md).
+- Validate the proposed manifest schema and implement per-platform guarantee
+  matrices, adversarial compliance tests, resource enforcement, native-tool
+  containment, attempt isolation, runtime reuse hygiene, and truthful diagnostics.
+- Do not advertise sandboxed execution until the named OS controls are enforced
+  and verified; certification services and marketplace trust remain deferred.
 
 ## Plugin authoring ecosystem
 

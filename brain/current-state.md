@@ -117,6 +117,10 @@ This file reports repository evidence, not desired future status.
 - Durable active scheduler state, authentication, or production isolation.
 - Durable worker presence across restarts, richer fleet telemetry, authentication,
   or remote dashboard access.
+- A plugin runtime manager, managed-process isolation, OS-enforced sandbox,
+  runtime manifest, per-platform guarantee matrix, or sandbox compliance and
+  certification harness. The current distributed slice must not be described as
+  sandboxed.
 - Durable host-agent child-process adoption after an agent restart, TLS, token
   rotation, role-based access, or operating-system service installers.
 - Generic cross-plugin resume validation, reusable completed-work artifact
@@ -140,3 +144,6 @@ The accepted plugin model is now documented as a complete computational contract
 in [plugin model](plugin-model.md). This documentation decision does not change the
 implementation facts above: the generic plan/work-unit/assemble API and its full
 platform ownership boundary are not established by current repository evidence.
+The status-classified [sandbox architecture](sandbox.md) likewise records design
+constraints only; none of its planned isolation guarantees are established by
+this repository today.

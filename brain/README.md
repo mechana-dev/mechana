@@ -18,7 +18,8 @@ loaded through the root `AGENTS.md` and does not affect other repositories.
 - [Worker management](worker-management.md): operator resource model, host agent, and controller
 - [Plugin author guide](plugin-author-guide.md): third-party and AI-assisted authoring
 - [AI plugin authoring](ai-plugin-authoring.md): vendor-neutral artifacts, integrated-assistant direction, and Git-backed knowledge
-- [Sandbox](sandbox.md): trust levels and plugin runtime isolation direction
+- [Sandbox](sandbox.md): canonical, status-classified trust, runtime, enforcement,
+  manifest, filesystem, native-tool, author, and certification architecture
 - [Plugin lifecycle](../docs/plugin-lifecycle.md): normative stage ordering and ownership
 - [Media plugin](media-plugin.md): FFmpeg partitioned-video design
 - [Fractal plugin](fractal-plugin.md): deterministic no-input rendering design

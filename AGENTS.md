@@ -58,6 +58,9 @@ formatting needs correction, then rerun `mvn verify`.
 - Do not introduce a general DAG engine without a new explicit architecture decision.
 - Distinguish plugin packages, plugin runtimes, and work-unit attempts. Do not
   claim sandbox guarantees until OS enforcement is implemented and verified.
+- Treat `brain/sandbox.md` as the canonical sandbox architecture. Link to its
+  status-classified contract instead of duplicating trust, filesystem, manifest,
+  resource, native-runtime, author, or certification rules.
 - Keep plugin-authoring artifacts vendor-neutral and useful to both humans and AI.
 - Keep curated AI authoring knowledge reviewable and portable in Git; do not add
   large base-model weights, private user material, or unsanitized generated code.

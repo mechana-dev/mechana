@@ -30,8 +30,11 @@ This is the concise decision index. Detailed implications live in the linked fil
 | Worker storage | Workers advertise scratch space; the scheduler reserves before assignment. |
 | Worker resources | Workers advertise CPU, RAM, scratch, plugin capabilities, and runtime signatures; matching and reservation remain platform-owned. |
 | Locality and cache | Workers may cache immutable, content-verifiable artifacts; locality is an optimization and never a correctness requirement. |
-| Plugin runtime | Package, long-lived runtime, and work-unit attempt are distinct; managed and sandboxed runtimes execute outside the worker. |
-| Trust levels | Trusted, managed, and sandboxed are explicit modes. Only verified OS enforcement may be presented as a sandbox guarantee. |
+| Plugin runtime | Package, long-lived runtime, and work-unit attempt are distinct; managed and sandboxed execution passes through a worker-owned runtime manager and platform-specific sandbox runtime. |
+| Trust levels | Trusted, managed, and sandboxed are explicit modes. Only verified OS enforcement named by a platform guarantee matrix may be presented as a sandbox guarantee. |
+| Sandbox filesystem | Plugins receive only logical workspace/input/output/work/log locations and assume no arbitrary host filesystem, home directory, ambient credentials, or hidden persistent state. |
+| Sandbox resources | Mechana—not the plugin—resolves, enforces, accounts, and reports CPU, RAM, scratch, timeout, process-tree, network, environment, and cleanup policy. |
+| Native runtimes | FFmpeg, Tesseract, Python, Rust-produced binaries, Blender, CUDA tools, and other native dependencies execute behind the same runtime policy as plugin code. |
 | Third-party authoring | SDK, templates, simulator, certification, packaging, and vendor-neutral plugin definition/context artifacts are first-class goals. |
 | Mechana AI assistant | Directionally provide specialized plugin creation, testing, explanation, refinement, and pattern-reuse assistance without making one AI vendor part of the plugin contract. |
 | Git-backed AI knowledge | Version curated platform context, examples, prompts, evaluations, and reusable plugin patterns in Git so each clone inherits them; exclude large base-model weights and private user material. |
