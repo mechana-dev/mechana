@@ -36,8 +36,8 @@ attempt-fencing path for sleep tasks and distributed video segments, but not
 generic resources or scratch reservations; see [current state](current-state.md).
 The HTTP worker sends presence heartbeats every three seconds and the server marks
 it offline after fifteen seconds without contact. The dashboard retains that offline
-worker for two minutes after its last contact, then removes it from the presence
-registry. Each active assignment also has a lease-token heartbeat paced from its
+worker for ten seconds after the timeout, then removes it from the presence
+registry; a graceful disconnect removes the worker immediately. Each active assignment also has a lease-token heartbeat paced from its
 advertised lease duration, so slow staging
 or quiet external-process startup does not cause a false retry.
 

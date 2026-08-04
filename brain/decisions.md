@@ -23,6 +23,7 @@ This is the concise decision index. Detailed implications live in the linked fil
 | Initial audio path | Transcode video in parallel segments; copy optional audio once as a whole stream before final mux. |
 | Video quality | Default CRF-based visually lossless mode makes no mathematical-losslessness claim; x265 bit-exact lossless is explicit and may increase size. |
 | Worker storage | Workers advertise scratch space; the scheduler reserves before assignment. |
+| Worker process management | Optional remote lifecycle control uses a distinct authenticated host-agent HTTP API. Hostnames are never treated as permission or a shell transport, and the agent manages only children it launches. |
 | Project record | Append material updates to timestamped `docs/PROJECT-NOTES.md`. |
 
 ## Cross-cutting invariants

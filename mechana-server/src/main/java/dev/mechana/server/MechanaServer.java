@@ -84,7 +84,7 @@ public final class MechanaServer implements AutoCloseable {
 	private static final String BLENDER_PLUGIN_VERSION = "1.0.0";
 	private static final String BLENDER_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.blender.BlenderRenderPlugin";
 	private static final long WORKER_TIMEOUT_MILLIS = 15_000;
-	private static final long WORKER_RETENTION_MILLIS = 120_000;
+	private static final long WORKER_RETENTION_MILLIS = 10_000;
 	private static final long HEARTBEAT_CHECK_MILLIS = 1_000;
 
 	private final ObjectMapper json = new ObjectMapper();
@@ -477,10 +477,9 @@ public final class MechanaServer implements AutoCloseable {
 
 		private void disconnect(HttpExchange exchange, String workerId) throws IOException {
 			requirePost(exchange);
-			WorkerPresence disconnected = workers.computeIfPresent(workerId, (id,
-					worker) -> new WorkerPresence(worker.address(), worker.capabilities(), worker.lastSeenAt(), false));
-			if (disconnected != null) {
-				System.out.printf("Worker %s disconnected (graceful shutdown)%n", workerId);
+			WorkerPresence removed = workers.remove(workerId);
+			if (removed != null) {
+				System.out.printf("Worker %s removed (graceful shutdown)%n", workerId);
 			}
 			sendEmpty(exchange, 204);
 		}
@@ -1093,7 +1092,7 @@ public final class MechanaServer implements AutoCloseable {
 		workers.compute(workerId, (id, worker) -> new WorkerPresence(
 				workerAddress == null && worker != null ? worker.address() : workerAddress,
 				supportedPlugins.isEmpty() && worker != null ? worker.capabilities() : Set.copyOf(supportedPlugins),
-				seenAt, true));
+				seenAt, true, 0));
 		if (previous == null || !previous.connected()) {
 			System.out.printf("Worker %s connected; capabilities=%s%n", workerId, supportedPlugins);
 		}
@@ -1111,12 +1110,13 @@ public final class MechanaServer implements AutoCloseable {
 		long disconnectedBefore = nowMillis - WORKER_TIMEOUT_MILLIS;
 		long forgottenBefore = nowMillis - WORKER_RETENTION_MILLIS;
 		workers.forEach((workerId, worker) -> {
-			if (worker.lastSeenAt() < forgottenBefore && workers.remove(workerId, worker)) {
+			if (!worker.connected() && worker.disconnectedAt() < forgottenBefore && workers.remove(workerId, worker)) {
 				System.out.printf("Worker %s removed after extended disconnect%n", workerId);
 				return;
 			}
-			if (worker.connected() && worker.lastSeenAt() < disconnectedBefore && workers.replace(workerId, worker,
-					new WorkerPresence(worker.address(), worker.capabilities(), worker.lastSeenAt(), false))) {
+			if (worker.connected() && worker.lastSeenAt() < disconnectedBefore
+					&& workers.replace(workerId, worker, new WorkerPresence(worker.address(), worker.capabilities(),
+							worker.lastSeenAt(), false, nowMillis))) {
 				System.out.printf("Worker %s disconnected (heartbeat timeout)%n", workerId);
 			}
 		});
@@ -1267,7 +1267,8 @@ public final class MechanaServer implements AutoCloseable {
 		return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
 	}
 
-	private record WorkerPresence(String address, Set<String> capabilities, long lastSeenAt, boolean connected) {
+	private record WorkerPresence(String address, Set<String> capabilities, long lastSeenAt, boolean connected,
+			long disconnectedAt) {
 		private WorkerPresence {
 			address = address == null || address.isBlank() ? "unknown" : address;
 			capabilities = Set.copyOf(capabilities);

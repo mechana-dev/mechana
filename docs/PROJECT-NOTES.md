@@ -467,3 +467,82 @@ Append-only record of material Mechana project changes and accepted decisions.
 - The final artifact validated as a 96-frame, four-second, 960x540, 24 fps,
   `hvc1` HEVC movie. Per-batch Blender startup and scene loading still limit
   scaling, so batch size remains a throughput/latency tradeoff.
+
+## 2026-08-04 03:50 EDT — Add optional worker host management
+
+- Added independent `worker-host-agent` and `worker-control-app` Maven leaf
+  modules without changing scheduler, worker, protocol, or plugin dependencies.
+- Implemented bearer-token-protected HTTP status/start/stop management for only
+  agent-launched child workers, including max-count enforcement, graceful then
+  forced shutdown, per-worker PID/start-time status, diagnostics, and log files.
+- Added a compact Swing controller with editable persisted hosts, port/token/count
+  settings, off-event-thread actions, aggregate state, and per-worker display.
+- Added fake-process and HTTP client/authentication tests plus Windows and
+  macOS/Linux setup guidance. Remaining security and durability limits are
+  recorded in [worker management](../brain/worker-management.md).
+
+## 2026-08-04 04:20 EDT — Correct worker-status time serialization
+
+- Added Jackson's Java-time module to both shaded worker-management applications
+  so non-empty worker status responses serialize and deserialize `Instant` start
+  times correctly.
+- Extended the authenticated host-agent HTTP test to start a fake worker and
+  require its timestamp-bearing response, closing the gap that allowed empty
+  status responses to pass while live-worker responses failed.
+- Deployed the corrected agent to Rocinante and verified a real authenticated
+  start, status, and stop cycle; the test worker was stopped afterward.
+
+## 2026-08-04 04:30 EDT — Identify managed workers by host
+
+- Changed host-agent worker IDs from opaque `managed-<UUID>` values to
+  `<machine-name>-<UUID>`, with a configurable machine name and normalized local
+  hostname default, plus manager and HTTP regression coverage.
+- Reduced server worker-presence retention from two minutes to ten seconds and
+  updated deterministic dashboard coverage and current architecture notes. The
+  independent 15-second offline threshold remains unchanged.
+
+## 2026-08-04 04:38 EDT — Deploy host agents across the active development fleet
+
+- Added `allow-unauthenticated=true` as an explicit development-only escape hatch
+  for blank-token non-loopback agents; secure-by-default validation remains and is
+  covered by a configuration test.
+- Replaced the MBA's three transient keepalive launchd workers with one
+  `dev.mechana.worker-host-agent` job and replaced Linux's three worker template
+  services with one enabled `mechana-worker-host-agent.service`.
+- Updated Rocinante to the same no-token development configuration. Verified all
+  three APIs without authorization headers and completed temporary start/stop
+  cycles producing `mba-...` and `srv959600-...` worker IDs.
+
+## 2026-08-04 04:42 EDT — Separate graceful and timed-out worker removal
+
+- Changed the server presence registry to remove a worker immediately when it
+  sends its graceful disconnect request.
+- Preserved failure detection as a separate path: fifteen seconds without a
+  heartbeat marks the worker disconnected, and its offline row remains for ten
+  additional seconds before removal.
+- Added deterministic dashboard coverage for both immediate graceful removal and
+  delayed heartbeat-timeout retention.
+
+## 2026-08-04 04:56 EDT — Auto-refresh the worker controller
+
+- Made the Swing worker controller check the selected host automatically after
+  startup and whenever the editable host selector changes, while retaining the
+  manual Refresh button.
+- Suppressed initialization/list-maintenance events and added request-generation
+  fencing so a slower response from a previously selected host cannot overwrite
+  the newer host's status.
+
+## 2026-08-04 05:14 EDT — Validate host-agent-managed distributed Blender render
+
+- Corrected development-host Blender runtime configuration and installed the
+  Linux EGL runtime required by headless Blender; these are fleet deployment
+  changes rather than repository dependencies.
+- Verified a 12-frame smoke job used one worker on each of the twelve active
+  workers across the MBA, Rocinante, and Linux host.
+- Completed a 96-frame, 48-work-unit CPU Cycles render at 960x540 and 24 samples
+  across the same three hosts. All work units succeeded without retries or
+  failures, server-side assembly produced `animation.mp4`, and total elapsed time
+  was 6 minutes 42 seconds.
+- Dynamic scheduling assigned 30 work units to the MBA, 8 to Rocinante, and 10 to
+  the Linux host, demonstrating that all nodes participated while faster workers
+  accepted additional batches.
