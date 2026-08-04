@@ -8,6 +8,7 @@ Before changing this repository, read in order:
 2. `brain/current-state.md` to distinguish implemented behavior from accepted plans.
 3. `brain/architecture.md` and the task-specific brain file it links to.
 4. `brain/conventions.md` before editing code, tests, or documentation.
+5. `docs/plugin-lifecycle.md` before changing plugin or execution contracts.
 
 Use `brain/decisions.md` as the accepted-decision index. Do not infer implementation
 status from a decision or roadmap item; verify the code and `brain/current-state.md`.
@@ -22,9 +23,8 @@ mvn --version
 mvn verify
 ```
 
-The accepted toolchain is Java 25, Maven, IntelliJ IDEA, and macOS. The current
-`pom.xml` still targets Java 21; treat that as a recorded current-state mismatch,
-not permission to silently change the build. Use `mvn spotless:apply` only when
+The accepted toolchain is Java 25, Maven, IntelliJ IDEA, and macOS. Use
+`mvn spotless:apply` only when
 formatting needs correction, then rerun `mvn verify`.
 
 ## Architectural boundaries
@@ -47,6 +47,12 @@ formatting needs correction, then rerun `mvn verify`.
 - Media execution uses FFmpeg/FFprobe as external processes; do not embed media
   semantics or native process details in the scheduler.
 - Preserve lease ownership: stale or superseded assignments cannot complete work.
+- Treat plugins as computational contracts, not owners of distributed execution.
+- Do not introduce a general DAG engine without a new explicit architecture decision.
+- Distinguish plugin packages, plugin runtimes, and work-unit attempts. Do not
+  claim sandbox guarantees until OS enforcement is implemented and verified.
+- Keep plugin-authoring artifacts vendor-neutral and useful to both humans and AI.
+- Prefer the simplest design that preserves correctness, safety, and ownership.
 
 ## Keeping context current
 

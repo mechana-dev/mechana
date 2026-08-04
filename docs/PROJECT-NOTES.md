@@ -2,6 +2,65 @@
 
 Append-only record of material Mechana project changes and accepted decisions.
 
+## 2026-08-04 08:25:31 EDT — Freeze Architecture Baseline 1
+
+- Defined Mechana as a **plugin-driven distributed computation platform**, not
+  merely a job runner. Plugins describe complete computations; Mechana supplies
+  distributed execution.
+- Fixed ownership: plugins define inputs, outputs, options, validation,
+  deterministic planning, resource estimates, one-work-unit execution, ordered
+  assembly, and final validation. Mechana owns IDs, persistence, scheduling,
+  worker selection, networking, artifact transfer/integrity, scratch reservation,
+  leases, retries, attempt fencing, cancellation propagation, progress aggregation,
+  cleanup, and retention.
+- Froze `plan -> parallel work units -> assemble`, including one-unit atomic work,
+  and rejected a general DAG for this baseline. Planning and assembly start
+  server-side while contracts preserve a later client-side option.
+- Reaffirmed control-plane/data-plane separation. Scheduling carries metadata and
+  references; artifact bytes move through providers. Artifacts have stable,
+  content-verifiable identity, immutable attempt inputs, atomic publication,
+  explicit ordering, and ownership-aware cleanup.
+- Accepted bounded worker caching and locality-aware scheduling as optimizations.
+  Cached copies are non-authoritative and evictable. Plugins declare requirements;
+  Mechana owns transfer, verification, cache accounting/eviction, and placement.
+- Defined worker resources as CPU, RAM, scratch, plugin capabilities, runtime
+  signatures/health, enforceable trust features, and later cache hints. Plugins
+  estimate; the scheduler matches and atomically reserves. Attempt scratch covers
+  inputs, intermediates, pending outputs, and safety allowance and is always
+  released/cleaned. Cache is accounted separately.
+- Preserved external FFmpeg/FFprobe media execution: validate H.264 input, plan
+  deterministic keyframe-aligned time segments, advertise runtime capabilities,
+  execute normalized H.265 quality profiles, assemble ordered compatible outputs
+  with the explicit audio strategy, and validate using FFprobe. The scheduler has
+  no media semantics.
+- Reframed OCR as document processing. Future page layout, figures, captions,
+  tables, confidence/warnings, Markdown, HTML, searchable PDF, and structured
+  multi-artifact output remain plugin-owned within the common lifecycle.
+- Distinguished installed plugin package, reusable plugin runtime, and leased
+  work-unit attempt. Accepted a runtime-manager/sandbox-launcher boundary so
+  managed and sandboxed code runs outside the worker while attempt authority,
+  resources, artifacts, and scratch remain isolated.
+- Defined **trusted**, **managed**, and **sandboxed** modes. Sandboxed means verified
+  OS enforcement, not process separation. Linux, Windows, and macOS use
+  platform-specific mechanisms and truthful guarantee matrices; network is denied
+  by default and unimplemented protection is never advertised.
+- Elevated third-party authoring to a first-class subsystem: small SDK contracts,
+  buildable templates, simulator, verification/certification, documentation,
+  packaging, and vendor-neutral `plugin-definition.yaml` and `plugin-context.md`.
+  These support direct and AI-assisted work with ChatGPT, Claude, Gemini, Copilot,
+  or future tools. Generated code receives normal review, tests, and trust policy.
+- Recorded permanent values: simplicity before sophistication; plugins describe
+  computation; infrastructure owns distributed systems; responsibilities stay
+  cognitively separate; complexity earns its place; architecture is readable by
+  humans and AI; operators understand contributed resources and real guarantees.
+- Added and cross-linked the author guide, sandbox/runtime architecture,
+  worker-management model, and normative lifecycle. Updated the README, agent
+  guidance, decisions, artifacts, scheduler, OCR direction, current state, and
+  roadmap without adding implementation or claiming planned contracts are shipped.
+- Set the next implementation iteration to the **Parallel Plugin Execution
+  Framework**: lifecycle/plan contracts, artifact references, scratch/resource
+  contracts, and a minimal local plugin template.
+
 ## 2026-08-01 02:35:08 EDT — Adopt repository-local project brain
 
 - Added root `AGENTS.md` as the agent entry point and canonical `brain/` context.

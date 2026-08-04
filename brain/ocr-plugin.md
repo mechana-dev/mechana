@@ -1,6 +1,6 @@
 # OCR plugin
 
-Last reviewed: 2026-08-02
+Last reviewed: 2026-08-04
 
 The initial `ocr-tesseract` path accepts a server-local PDF, rasterizes each page
 server-side with PDFBox, and distributes only grayscale PNG pages to workers. Each
@@ -27,3 +27,15 @@ Current limitations:
 - Markdown and LaTeX preserve page boundaries but do not infer semantic document structure.
 - LaTeX compilation is not currently part of the job.
 - Mid-page checkpoints and generic artifact-backed resume are not implemented.
+
+## Accepted document-processing direction
+
+OCR is the first capability, not the final boundary. The long-term plugin covers
+page rendering, OCR, layout classification, figures, captions, tables, structured
+Markdown/HTML/searchable-PDF or data artifacts, per-page confidence and warnings,
+ordered assembly, and final validation. Page work units may return multiple
+artifacts: text, images, tables, metadata, and diagnostics.
+
+Every PDF/layout/OCR decision remains inside the plugin. Mechana sees a validated
+plan, opaque work units, declared resources, artifacts, progress, and assembly
+requirements.

@@ -1,6 +1,6 @@
 # Media plugin
 
-Last reviewed: 2026-08-02
+Last reviewed: 2026-08-04
 
 The first local media-plugin slice is the reference partitioned-workload plugin.
 Its implementation lives in `plugins/video-ffmpeg-plugin`. It invokes FFprobe and

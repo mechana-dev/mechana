@@ -1,11 +1,50 @@
-# mechana
-A plugin-driven distributed execution platform for Java
+# Mechana
 
-Concrete plugin implementations live under [`plugins/`](plugins/). The public
-plugin contract remains in [`mechana-api/`](mechana-api/), separate from plugin
-implementations and infrastructure modules.
+Mechana is an open-source, plugin-driven distributed computation platform. A
+plugin describes a computation; Mechana supplies the distributed execution
+environment that places work, moves artifacts, reserves resources, schedules and
+retries attempts, aggregates progress, propagates cancellation, and cleans up.
 
-Current concrete demonstrations include distributed sleep work, FFmpeg video
-compression, deterministic Mandelbrot/Julia collection rendering, and distributed
-Tesseract OCR of server-rendered PDF pages. See
-[`DEVELOPMENT.md`](DEVELOPMENT.md) for runnable server, worker, and client examples.
+The first deliberately constrained execution model is:
+
+`plan -> parallel work units -> assemble`
+
+It is not a general DAG engine. The narrow shape keeps the platform understandable
+while supporting media and document processing, rendering, simulations, and other
+partitionable computations.
+
+## Three audiences, three clear responsibilities
+
+- **Worker operators** choose the CPU, memory, scratch, network, and plugin trust
+  they contribute. Mechana states guarantees it actually enforces; it does not
+  imply isolation that is only planned.
+- **Plugin authors** define inputs, outputs, options, validation, planning,
+  resource estimates, one-work-unit execution, assembly, and final validation.
+  They do not implement scheduling, networking, retries, leases, persistence,
+  artifact movement, worker selection, or cleanup.
+- **Infrastructure contributors** implement distributed-systems concerns without
+  learning PDF, OCR, FFmpeg, Blender, or another plugin domain.
+
+Concrete plugins live under [`plugins/`](plugins/); the public contract remains in
+[`mechana-api/`](mechana-api/). Current demonstrations include distributed sleep
+work, FFmpeg video compression, Mandelbrot/Julia rendering, Tesseract document
+processing, and Blender rendering. These prove useful slices but do not imply that
+every accepted Architecture Baseline 1 contract is implemented.
+
+## Architecture Baseline 1
+
+The repository-local [project brain](brain/README.md) is the canonical design
+memory. Start with the [architecture](brain/architecture.md),
+[plugin model](brain/plugin-model.md), [plugin lifecycle](docs/plugin-lifecycle.md),
+and [current state](brain/current-state.md). Third-party authors should read the
+[plugin author guide](brain/plugin-author-guide.md); operators should read
+[worker management](brain/worker-management.md) and the
+[sandbox strategy](brain/sandbox.md). The [roadmap](brain/roadmap.md) distinguishes
+accepted direction from shipped behavior.
+
+Mechana treats vendor-neutral, human- and AI-readable plugin specifications,
+templates, examples, and certification rules as first-class SDK artifacts. The
+goal is for a domain expert to describe a computation and implement it directly or
+use any capable coding assistant without learning Mechana internals.
+
+See [`DEVELOPMENT.md`](DEVELOPMENT.md) for runnable examples.

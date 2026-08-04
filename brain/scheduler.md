@@ -1,6 +1,6 @@
 # Scheduler
 
-Last reviewed: 2026-08-02
+Last reviewed: 2026-08-04
 
 The scheduler is task-agnostic. It assigns runnable stages using dependencies,
 plugin/runtime capabilities, leases, and declared resources. It does not inspect
@@ -11,6 +11,12 @@ An assignment requiring scratch is eligible only when compatible unreserved
 capacity is available. Reservation and assignment must act as one logical state
 transition; capacity is released on completion, cancellation, definitive failure,
 or lease expiry.
+
+The accepted advertisement grows to CPU, RAM, scratch capacity, plugin
+capabilities, runtime signatures/health, and later cache/locality hints. The
+scheduler owns matching and reservations; plugins supply estimates but cannot
+choose workers. Evolution remains incremental: capability-aware, resource-aware,
+then locality-aware after artifact identity and cache reporting are reliable.
 
 ## Invariants
 
