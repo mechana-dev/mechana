@@ -16,6 +16,11 @@
 package dev.mechana.runtime.plugin;
 
 import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -44,13 +49,31 @@ public class ProcessSandbox implements PluginSandbox {
 		Path stdout = request.workspace().logs().resolve("stdout.log");
 		Path stderr = request.workspace().logs().resolve("stderr.log");
 		ProcessBuilder builder = new ProcessBuilder(command).directory(request.workspace().work().toFile())
-				.redirectOutput(stdout.toFile()).redirectError(stderr.toFile());
+				.redirectError(stderr.toFile());
+		if (request.standardInput() != null)
+			builder.redirectInput(request.standardInput().toFile());
 		builder.environment().clear();
 		builder.environment().putAll(request.environment());
 		builder.environment().put("HOME", request.workspace().work().toString());
 		builder.environment().put("TMPDIR", request.workspace().work().toString());
 		Instant started = Instant.now();
 		Process process = builder.start();
+		Thread stdoutReader = Thread.ofVirtual().name("mechana-sandbox-stdout").start(() -> {
+			try (BufferedReader reader = new BufferedReader(
+					new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
+					BufferedWriter log = Files.newBufferedWriter(stdout, StandardCharsets.UTF_8)) {
+				String line;
+				while ((line = reader.readLine()) != null) {
+					log.write(line);
+					log.newLine();
+					log.flush();
+					if (request.stdoutLineConsumer() != null)
+						request.stdoutLineConsumer().accept(line);
+				}
+			} catch (IOException ignored) {
+				// Process termination may close the stream while it is being consumed.
+			}
+		});
 		long deadline = System.nanoTime() + request.policy().timeout().toNanos();
 		boolean timedOut = false;
 		while (process.isAlive()) {
@@ -66,6 +89,7 @@ public class ProcessSandbox implements PluginSandbox {
 			process.waitFor(25, TimeUnit.MILLISECONDS);
 		}
 		int exitCode = process.isAlive() ? -1 : process.exitValue();
+		stdoutReader.join();
 		return new SandboxResult(exitCode, timedOut, cancellation.get(), Duration.between(started, Instant.now()),
 				stdout, stderr, capabilities);
 	}

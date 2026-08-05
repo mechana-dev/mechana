@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -40,6 +41,20 @@ class ProcessSandboxTest {
 		SandboxResult result = run(List.of("/bin/sh", "-c", "sleep 30 & wait"), Duration.ofMillis(150));
 		assertTrue(result.timedOut());
 		assertTrue(result.elapsed().compareTo(Duration.ofSeconds(5)) < 0);
+	}
+	@Test
+	void feedsStandardInputAndStreamsProtocolLines() throws Exception {
+		AttemptWorkspace workspace = AttemptWorkspace.create(temporary, "job", "protocol");
+		Path input = workspace.input().resolve("request.ndjson");
+		Files.writeString(input, "request-frame\n");
+		List<String> lines = new ArrayList<>();
+		SandboxPolicy policy = new SandboxPolicy(TrustMode.MANAGED, true, 1, 1, 1, Duration.ofSeconds(2), 1);
+		SandboxRequest request = new SandboxRequest(List.of("/bin/sh", "-c", "read frame; echo event:$frame"),
+				Map.of("PATH", "/usr/bin:/bin"), workspace, policy, input, lines::add);
+		SandboxResult result = new ProcessSandbox().execute(request, new AtomicBoolean());
+		assertEquals(0, result.exitCode());
+		assertEquals(List.of("event:request-frame"), lines);
+		assertEquals("event:request-frame", Files.readString(result.stdout()).trim());
 	}
 	private SandboxResult run(List<String> command, Duration timeout) throws Exception {
 		AttemptWorkspace workspace = AttemptWorkspace.create(temporary, "job", "attempt" + System.nanoTime());

@@ -18,10 +18,16 @@ package dev.mechana.runtime.plugin;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.nio.file.Path;
+import java.util.function.Consumer;
 
 /** One process launch under an attempt policy. */
 public record SandboxRequest(List<String> command, Map<String, String> environment, AttemptWorkspace workspace,
-		SandboxPolicy policy) {
+		SandboxPolicy policy, Path standardInput, Consumer<String> stdoutLineConsumer) {
+	public SandboxRequest(List<String> command, Map<String, String> environment, AttemptWorkspace workspace,
+			SandboxPolicy policy) {
+		this(command, environment, workspace, policy, null, null);
+	}
 	public SandboxRequest {
 		command = List.copyOf(command);
 		environment = Map.copyOf(environment);

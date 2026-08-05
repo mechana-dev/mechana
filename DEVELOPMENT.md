@@ -61,6 +61,26 @@ java -jar mechana-worker/target/mechana-worker.jar http://localhost:8787 \
   sleep,video-ffmpeg,fractal-render,ocr-tesseract worker-1
 ```
 
+On macOS, `fractal-render` now runs in the separate plugin host through the
+experimental sandbox backend. The default attempt root is
+`/private/tmp/mechana-sandbox`; override it only with another location outside
+your home directory:
+
+```shell
+java -Dmechana.sandbox.root=/private/tmp/mechana-sandbox-test \
+  -jar mechana-worker/target/mechana-worker.jar http://localhost:8787 \
+  fractal-render sandbox-worker-1
+```
+
+Start that command in four terminals with unique worker IDs, then submit a job
+with four tasks. Tahoe currently enforces denial of plugin reads beneath the
+user home directory, denial of network access, and writes limited to the
+attempt's `work/`, `output/`, and `logs/` directories. It does not provide
+workspace-only reads of system/runtime files or hard CPU, memory, scratch, or
+process-count limits. `sandbox-exec` is deprecated by Apple, so this backend is
+an explicitly experimental development foundation rather than a production
+security boundary.
+
 Submit a job containing four five-second tasks:
 
 ```shell

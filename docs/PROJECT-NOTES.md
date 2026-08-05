@@ -1,5 +1,27 @@
 # Project notes
 
+## 2026-08-05 01:10:00 EDT — Run fractal work through the macOS sandbox host
+
+- Wired distributed `fractal-render` assignments through the runtime manager,
+  separate plugin-host JVM, and experimental macOS backend while retaining the
+  existing in-process path for plugins not yet migrated.
+- Added framed stdin delivery and live stdout event consumption to the managed
+  process runtime. Plugin stdout is separated from the NDJSON protocol, and the
+  worker translates progress and artifact events into the existing lease-fenced
+  server calls.
+- Staged the worker host runtime and plugin JAR under each attempt's `input/`
+  directory so Tahoe can deny reads beneath the user's home without granting an
+  exception for the repository or Maven cache. Explicitly bound Java temporary
+  files to `work/`.
+- Verified `mvn verify` on the MBA, including four macOS policy integration tests.
+  Then completed job `94185b72-47c7-4335-982d-47133177ee42` with eight images in
+  four tasks: four distinct sandbox workers each succeeded on attempt one and the
+  server assembled the job at 100%.
+- The verified macOS controls remain home-directory read denial, network denial,
+  workspace write restriction, and wall-clock timeout. General system/runtime
+  reads remain available; CPU, memory, scratch-size, process-count, and guaranteed
+  descendant-tree limits are not enforced.
+
 Append-only record of material Mechana project changes and accepted decisions.
 
 ## 2026-08-04 11:52:29 EDT — Complete Architecture Baseline 1 sandbox design

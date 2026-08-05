@@ -39,14 +39,17 @@ public final class PluginHostMain {
 	public static void main(String[] args) {
 		ObjectMapper json = new ObjectMapper();
 		PrintStream protocol = System.out;
-		try (BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))) {
+		try {
+			BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
 			String frame = input.readLine();
 			if (frame == null || frame.isBlank())
 				throw new IllegalArgumentException("Host request frame is required");
 			HostRequest request = json.readValue(frame, HostRequest.class);
+			System.setOut(System.err);
 			execute(request, event -> write(json, protocol, event));
 			write(json, protocol, new HostEvent("completed", 100, null, Map.of()));
 		} catch (Throwable failure) {
+			failure.printStackTrace(System.err);
 			write(json, protocol, new HostEvent("failed", null, safeMessage(failure), Map.of()));
 			System.exit(1);
 		}
@@ -74,7 +77,15 @@ public final class PluginHostMain {
 		}
 	}
 	private static String safeMessage(Throwable failure) {
-		return failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
+		StringBuilder message = new StringBuilder();
+		for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+			if (!message.isEmpty())
+				message.append(": ");
+			message.append(cause.getClass().getSimpleName());
+			if (cause.getMessage() != null)
+				message.append(" (").append(cause.getMessage()).append(')');
+		}
+		return message.toString();
 	}
 	@FunctionalInterface
 	interface EventSink {
@@ -96,7 +107,9 @@ public final class PluginHostMain {
 			if (!target.startsWith(output))
 				throw new IllegalArgumentException("Artifact path escapes output directory");
 			try {
-				Files.copy(source, target);
+				try (var input = Files.newInputStream(source)) {
+					Files.copy(input, target);
+				}
 			} catch (IOException failure) {
 				throw new IllegalStateException("Could not stage artifact", failure);
 			}

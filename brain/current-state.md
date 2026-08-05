@@ -24,6 +24,12 @@ This file reports repository evidence, not desired future status.
   lifecycle events. The experimental macOS adapter reports workspace write
   restriction, user-home read denial, and network denial after a live
   `sandbox-exec` probe, but does not claim workspace-only read isolation.
+- The distributed worker routes `fractal-render` assignments through that runtime
+  manager and separate plugin host on macOS. It stages the host runtime and plugin
+  JAR under attempt `input/`, streams NDJSON progress and artifact events, uploads
+  staged outputs with the existing lease fencing, enforces timeout/cancellation at
+  the child-process boundary, and cleans the attempt workspace. The other four
+  concrete plugins retain their existing execution paths pending migration.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
   expired-work requeueing, and stale-completion rejection.
 - Worker presence and task ownership use independent heartbeats. Workers emit a
@@ -124,11 +130,12 @@ This file reports repository evidence, not desired future status.
 - Durable active scheduler state, authentication, or production isolation.
 - Durable worker presence across restarts, richer fleet telemetry, authentication,
   or remote dashboard access.
-- Worker integration of the runtime manager, plugin migrations, a runtime
-  manifest, bounded log sizes, guaranteed descendant cleanup, hard CPU/RAM/
+- Migration of sleep, video, OCR, and Blender plugins, a runtime manifest,
+  bounded log sizes, guaranteed descendant cleanup, hard CPU/RAM/
   scratch/process limits, dedicated identities, production sandboxing, or
   certification. `sandbox-exec` is deprecated and unavailable beneath the MBA's
-  current Codex containment, so the distributed slice is not sandboxed.
+  current Codex containment. The fractal path was verified directly on the MBA;
+  the remaining distributed plugin paths are not sandboxed.
 - Durable host-agent child-process adoption after an agent restart, TLS, token
   rotation, role-based access, or operating-system service installers.
 - Generic cross-plugin resume validation, reusable completed-work artifact

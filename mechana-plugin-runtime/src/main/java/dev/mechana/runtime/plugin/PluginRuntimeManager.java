@@ -36,7 +36,10 @@ public final class PluginRuntimeManager {
 		PluginSandbox selected = request.policy().trustMode() == TrustMode.MANAGED ? managed : sandboxed;
 		SandboxCapabilities capabilities = selected.capabilities(request.policy());
 		if (request.policy().trustMode() == TrustMode.SANDBOXED) {
-			if (!capabilities.enforces(SandboxControl.FILESYSTEM_RESTRICTION)
+			boolean filesystemBoundary = capabilities.enforces(SandboxControl.FILESYSTEM_RESTRICTION)
+					|| (capabilities.enforces(SandboxControl.FILESYSTEM_WRITE_RESTRICTION)
+							&& capabilities.enforces(SandboxControl.HOME_DIRECTORY_DENIAL));
+			if (!filesystemBoundary
 					|| (!request.policy().networkAllowed() && !capabilities.enforces(SandboxControl.NETWORK_DENIAL)))
 				throw new IllegalStateException("Host cannot enforce the requested sandbox policy");
 		}
