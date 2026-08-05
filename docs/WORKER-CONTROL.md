@@ -125,6 +125,11 @@ an explicit private-key path. Host-key verification is strict by default; select
 5. waits for the authenticated agent API; and
 6. starts the requested number of workers with the selected mode and plugins.
 
+On macOS, reinstall also checks the configured agent HTTP port after unloading the
+launchd job. A stale same-user process is terminated only when its command identifies
+it as `mechana-worker-host-agent.jar`. If an unrelated process owns the port, reinstall
+fails with an explicit diagnostic and does not kill that process.
+
 No root access is requested. Linux user services require a functioning user
 systemd session; staying active after logout may require an administrator to
 enable lingering for that account. The generated agent listens on port 8790 (or

@@ -58,6 +58,10 @@ class SshProvisionerTest {
 		assertEquals(SshProvisioner.RemoteOs.MACOS, result.os());
 		assertTrue(commands.stream().anyMatch(command -> command.getFirst().equals("scp")));
 		assertTrue(commands.stream().flatMap(List::stream).anyMatch(value -> value.contains("launchctl bootstrap")));
+		assertTrue(commands.stream().map(List::getLast)
+				.anyMatch(value -> value.contains("lsof -nP -tiTCP:8790")
+						&& value.contains("*mechana-worker-host-agent.jar*")
+						&& value.contains("occupied by a non-Mechana process")));
 		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("sandbox-root=/private/tmp/mechana")));
 		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("dev.mechana.worker-host-agent")));
 		assertTrue(commands.stream().flatMap(List::stream).anyMatch(value -> value.equals("BatchMode=yes")));
@@ -84,6 +88,16 @@ class SshProvisionerTest {
 	void serviceTemplatesContainRestartAndEscapedMacValues() {
 		assertTrue(SshProvisioner.linuxService("/usr/bin/java", "/home/mechana").contains("Restart=on-failure"));
 		assertTrue(SshProvisioner.macOsPlist("/Java & Tools/java", "/Users/a<b").contains("/Java &amp; Tools/java"));
+	}
+
+	@Test
+	void staleAgentCleanupIsRestrictedToVerifiedMechanaListeners() throws Exception {
+		String command = SshProvisioner.macOsPortReleaseCommand(21012);
+		assertTrue(command.contains("lsof -nP -tiTCP:21012"));
+		assertTrue(command.contains("ps -p \"$agent_pid\" -o command="));
+		assertTrue(command.contains("*mechana-worker-host-agent.jar*"));
+		assertTrue(command.contains("Port 21012 is occupied by a non-Mechana process"));
+		assertEquals("", SshProvisioner.runCommand(List.of("/bin/sh", "-n", "-c", command), Duration.ofSeconds(5)));
 	}
 
 	@Test
