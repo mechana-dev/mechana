@@ -21,8 +21,9 @@ This file reports repository evidence, not desired future status.
   result/capability contracts, fixed attempt workspaces, managed-process timeout
   and log capture, and fail-closed platform selection. A separate plugin host
   accepts one NDJSON request, verifies and loads one `TaskPlugin`, and emits
-  lifecycle events. The experimental macOS adapter reports filesystem/network
-  enforcement only after a live `sandbox-exec` probe succeeds.
+  lifecycle events. The experimental macOS adapter reports workspace write
+  restriction, user-home read denial, and network denial after a live
+  `sandbox-exec` probe, but does not claim workspace-only read isolation.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
   expired-work requeueing, and stale-completion rejection.
 - Worker presence and task ownership use independent heartbeats. Workers emit a

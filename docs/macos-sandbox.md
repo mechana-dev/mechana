@@ -28,10 +28,12 @@ Use an operator-controlled temporary root such as
   logs/    platform-owned stdout/stderr capture
 ```
 
-The generated profile denies by default, grants required system/runtime reads,
-grants only the workspace access above, and grants network only when policy allows
-it. `HOME` and `TMPDIR` point to `work/`. A dedicated low-privilege macOS account
-is not yet configured or enforced.
+The generated profile permits broad system/runtime reads because a narrow dynamic
+allowlist aborts even basic signed tools on Tahoe. It explicitly denies reads
+beneath the user's home directory, permits writes only in `work/`, `output/`, and
+`logs/`, and grants network only when policy allows it. The sandbox root must be
+outside the user's home. `HOME` and `TMPDIR` point to `work/`. This is not full
+workspace-only read isolation, so `SANDBOXED` scheduling remains fail-closed.
 
 Run outside an already sandboxed parent process:
 
@@ -51,7 +53,9 @@ not permitted`; that means unavailable, not passed.
 | Separate process; ordinary crash does not stop worker | yes | yes |
 | Wall-clock timeout and direct-child termination | yes | yes |
 | Stdout/stderr capture | yes, size cap pending | yes, size cap pending |
-| Workspace filesystem restriction | no | only after live probe/test |
+| Workspace-only filesystem restriction | no | no |
+| Filesystem writes restricted to workspace | no | only after live probe/test |
+| User home reads denied | no | only after live probe/test |
 | Network denial | no | only after live probe/test |
 | Whole descendant-tree termination | best effort, not claimed | best effort, not claimed |
 | CPU, memory, scratch-size, process-count limits | no | no |

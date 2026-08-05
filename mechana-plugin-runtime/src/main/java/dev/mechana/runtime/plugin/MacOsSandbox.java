@@ -56,7 +56,9 @@ public final class MacOsSandbox extends ProcessSandbox implements PlatformLaunch
 	@Override
 	public SandboxCapabilities capabilities(SandboxPolicy policy) {
 		Map<SandboxControl, Boolean> controls = new EnumMap<>(SandboxControl.class);
-		controls.put(SandboxControl.FILESYSTEM_RESTRICTION, supportsCurrentHost());
+		controls.put(SandboxControl.FILESYSTEM_RESTRICTION, false);
+		controls.put(SandboxControl.FILESYSTEM_WRITE_RESTRICTION, supportsCurrentHost());
+		controls.put(SandboxControl.HOME_DIRECTORY_DENIAL, supportsCurrentHost());
 		controls.put(SandboxControl.NETWORK_DENIAL, supportsCurrentHost() && !policy.networkAllowed());
 		controls.put(SandboxControl.TIMEOUT, true);
 		controls.put(SandboxControl.PROCESS_TREE_TERMINATION, false);
@@ -79,13 +81,17 @@ public final class MacOsSandbox extends ProcessSandbox implements PlatformLaunch
 
 	String profile(SandboxRequest request) {
 		String root = literal(request.workspace().root());
+		String userHome = literal(Path.of(System.getProperty("user.home")).toAbsolutePath().normalize());
+		if (request.workspace().root()
+				.startsWith(Path.of(System.getProperty("user.home")).toAbsolutePath().normalize()))
+			throw new IllegalArgumentException("macOS sandbox workspaces must be outside the user's home directory");
 		StringBuilder profile = new StringBuilder("(version 1)\n(deny default)\n")
-				.append("(allow process*)\n(allow sysctl-read)\n(allow mach-lookup)\n")
+				.append("(allow process*)\n(allow sysctl-read)\n(allow mach-lookup)\n").append("(allow file-read*)\n")
+				.append("(deny file-read* (subpath \"").append(userHome).append("\"))\n")
 				.append("(allow file-read* (subpath \"").append(root).append("/input\"))\n")
 				.append("(allow file-read* file-write* (subpath \"").append(root).append("/work\"))\n")
 				.append("(allow file-read* file-write* (subpath \"").append(root).append("/output\"))\n")
-				.append("(allow file-read* file-write* (subpath \"").append(root).append("/logs\"))\n")
-				.append("(allow file-read* (subpath \"/System\") (subpath \"/usr\") (subpath \"/bin\") (subpath \"/opt/homebrew\") (subpath \"/Library/Java\"))\n");
+				.append("(allow file-read* file-write* (subpath \"").append(root).append("/logs\"))\n");
 		if (request.policy().networkAllowed())
 			profile.append("(allow network*)\n");
 		return profile.toString();

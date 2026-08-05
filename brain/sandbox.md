@@ -251,7 +251,9 @@ plugin marketplace are **Deferred**.
 The first implementation foundation defines common contracts, managed child
 process lifecycle, a fixed attempt workspace, fail-closed capability selection,
 and a one-request plugin host. The macOS backend is experimental because
-`sandbox-exec` is explicitly deprecated by Apple. It claims filesystem and
-network controls only after a live probe; CPU, memory, scratch-size, process-count,
+`sandbox-exec` is explicitly deprecated by Apple. Tahoe requires broad runtime
+reads even for basic system tools, so the backend claims workspace write
+restriction and user-home read denial but not workspace-only read isolation.
+It reports network denial only after a live probe; CPU, memory, scratch-size, process-count,
 dedicated identity, bounded-log-size, and guaranteed descendant-tree controls
 remain unimplemented. See the [macOS guide](../docs/macos-sandbox.md).

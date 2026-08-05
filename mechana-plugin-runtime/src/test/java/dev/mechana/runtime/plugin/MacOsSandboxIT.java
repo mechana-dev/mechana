@@ -47,7 +47,7 @@ class MacOsSandboxIT {
 		assertEquals("input", Files.readString(workspace.output().resolve("result.txt")));
 		assertNotEquals(0,
 				execute(List.of("/usr/bin/touch", workspace.input().resolve("source.txt").toString())).exitCode());
-		assertNotEquals(0, execute(List.of("/bin/cat", "/etc/passwd")).exitCode());
+		assertNotEquals(0, execute(List.of("/usr/bin/stat", System.getProperty("user.home"))).exitCode());
 		assertNotEquals(0, execute(List.of("/usr/bin/touch", "/tmp/mechana-sandbox-escape")).exitCode());
 	}
 	@Test
@@ -59,12 +59,20 @@ class MacOsSandboxIT {
 	@Test
 	void reportsOnlyControlsActuallyApplied() {
 		SandboxCapabilities capabilities = sandbox.capabilities(policy());
-		assertAll(() -> assertTrue(capabilities.enforces(SandboxControl.FILESYSTEM_RESTRICTION)),
+		assertAll(() -> assertFalse(capabilities.enforces(SandboxControl.FILESYSTEM_RESTRICTION)),
+				() -> assertTrue(capabilities.enforces(SandboxControl.FILESYSTEM_WRITE_RESTRICTION)),
+				() -> assertTrue(capabilities.enforces(SandboxControl.HOME_DIRECTORY_DENIAL)),
 				() -> assertTrue(capabilities.enforces(SandboxControl.NETWORK_DENIAL)),
 				() -> assertTrue(capabilities.enforces(SandboxControl.TIMEOUT)),
 				() -> assertFalse(capabilities.enforces(SandboxControl.MEMORY_LIMIT)),
 				() -> assertFalse(capabilities.enforces(SandboxControl.CPU_LIMIT)),
 				() -> assertFalse(capabilities.enforces(SandboxControl.PROCESS_LIMIT)));
+	}
+
+	@Test
+	void generatedProfileIsAcceptedBySandboxExec() throws Exception {
+		SandboxResult result = execute(List.of("/usr/bin/true"));
+		assertEquals(0, result.exitCode(), () -> diagnostics(result));
 	}
 	private SandboxResult execute(List<String> command) throws Exception {
 		return sandbox.execute(new SandboxRequest(command, Map.of("PATH", "/usr/bin:/bin"), workspace, policy()),
