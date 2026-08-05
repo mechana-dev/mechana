@@ -70,6 +70,10 @@ This file reports repository evidence, not desired future status.
   `../DEVELOPMENT.md`.
 - Server-authoritative plugin JAR download, SHA-256 verification, per-execution
   loading, and temporary-file cleanup in the distributed slice.
+- Server startup automatically registers all five current plugin artifacts from
+  their standard build outputs. Its positional arguments are limited to port,
+  public URL, and data directory; optional packaged-deployment overrides use JVM
+  properties rather than plugin-specific command-line positions.
 - Spotless and SpotBugs checks bound to Maven `verify`.
 - Apache License 2.0 text in `../LICENSE`.
 - A modular FFmpeg/FFprobe video plugin local slice with H.264 MP4/MKV validation,

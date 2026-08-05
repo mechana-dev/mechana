@@ -825,3 +825,13 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Generated launchd and systemd definitions persist verified absolute runtime
   paths as JVM properties, ensuring sandboxed workers inherit deliberate native
   runtime grants without depending on an interactive shell environment.
+
+## 2026-08-05 06:05:00 EDT — Remove plugin JARs from server arguments
+
+- Simplified server startup to `[port] [public-server-url] [data-directory]` and
+  automatically registered all current plugin artifacts from standard build
+  outputs.
+- Simplified dashboard-driven server restart to preserve only those generic server
+  settings; plugin-specific paths no longer leak into the process command line.
+- Retained optional `mechana.plugin.<id>.jar` JVM properties for packaged layouts
+  whose plugin artifacts do not use repository build-output locations.

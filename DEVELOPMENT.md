@@ -186,12 +186,18 @@ The server is authoritative for plugin code. A worker advertises the plugin IDs 
 assigned plugin JAR into temporary storage, verifies its SHA-256 checksum, loads it for that execution, and deletes
 the temporary artifact afterward.
 
-Server arguments are `[port] [sleep-plugin-jar] [public-server-url] [data-directory] [video-plugin-jar] [fractal-plugin-jar] [ocr-plugin-jar]`.
-The default data directory is `.mechana/server`; it is ignored by Git. When workers connect over a network, set the
-public URL to an address they can reach:
+Server arguments are `[port] [public-server-url] [data-directory]`. All current
+plugin packages are registered automatically from their standard build outputs;
+no plugin JAR arguments are required. The default data directory is
+`.mechana/server`; it is ignored by Git. When workers connect over a network, set
+the public URL to an address they can reach:
 
 ```shell
 java -jar mechana-server/target/mechana-server.jar 8787 \
-  plugins/sleep-plugin/target/mechana-plugin-sleep-0.1.0-SNAPSHOT.jar https://server.example \
-  /var/lib/mechana
+  https://server.example /var/lib/mechana
 ```
+
+Packaged deployments may override an automatically registered artifact with a
+`mechana.plugin.<id>.jar` JVM property, where `<id>` is `sleep`, `video`,
+`fractal`, `ocr`, or `blender`. These are deployment overrides, not normal server
+arguments.
