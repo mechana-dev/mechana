@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -81,8 +82,25 @@ class SshProvisionerTest {
 
 	@Test
 	void serviceTemplatesContainRestartAndEscapedMacValues() {
-		assertTrue(SshProvisioner.linuxService("/usr/bin/java", "/home/mechana").contains("Restart=on-failure"));
-		assertTrue(SshProvisioner.macOsPlist("/Java & Tools/java", "/Users/a<b").contains("/Java &amp; Tools/java"));
+		Map<String, String> runtimes = Map.of("ffmpeg", "/opt/homebrew/bin/ffmpeg", "blender",
+				"/Applications/Blender.app/Contents/MacOS/Blender");
+		String linux = SshProvisioner.linuxService("/usr/bin/java", "/home/mechana", runtimes);
+		String mac = SshProvisioner.macOsPlist("/Java & Tools/java", "/Users/a<b", runtimes);
+		assertTrue(linux.contains("Restart=on-failure"));
+		assertTrue(linux.contains("-Dmechana.runtime.ffmpeg=/opt/homebrew/bin/ffmpeg"));
+		assertTrue(linux.contains("Blender.app/Contents/MacOS/Blender"));
+		assertTrue(mac.contains("/Java &amp; Tools/java"));
+		assertTrue(mac.contains("-Dmechana.runtime.ffmpeg=/opt/homebrew/bin/ffmpeg"));
+		assertTrue(mac.contains("-Dmechana.runtime.blender=/Applications/Blender.app/Contents/MacOS/Blender"));
+	}
+
+	@Test
+	void discoversHomebrewAndApplicationRuntimesOnMacOs() {
+		String ffmpeg = SshProvisioner.runtimeDiscoveryCommand(SshProvisioner.RemoteOs.MACOS, "ffmpeg");
+		String blender = SshProvisioner.runtimeDiscoveryCommand(SshProvisioner.RemoteOs.MACOS, "blender");
+		assertTrue(ffmpeg.contains("command -v ffmpeg"));
+		assertTrue(ffmpeg.contains("/opt/homebrew/bin/ffmpeg"));
+		assertTrue(blender.contains("/Applications/Blender.app/Contents/MacOS/Blender"));
 	}
 
 	@Test

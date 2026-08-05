@@ -85,7 +85,9 @@ configured `mechana.sandbox.root` system property. Native plugins also require t
 agent JVM to be started with explicit absolute `mechana.runtime.ffmpeg`,
 `mechana.runtime.ffprobe`, `mechana.runtime.tesseract`, or
 `mechana.runtime.blender` system properties as applicable; the agent copies only
-those declared grants to sandboxed workers. The status panel reports the
+those declared grants to sandboxed workers. **Reinstall + start via SSH** discovers
+and persists these paths automatically. Manual agent launches must still provide
+the properties explicitly. The status panel reports the
 actual mode, plugins, and sandbox root used by the running group. Stop all workers
 before changing mode or plugin selection.
 
@@ -122,12 +124,19 @@ an explicit private-key path. Host-key verification is strict by default; select
 **Reinstall + start via SSH** performs this sequence:
 
 1. connects with batch-mode `ssh` and detects `Darwin` or `Linux`;
-2. discovers the remote home and Java executable;
-3. uploads the host-agent JAR, worker JAR, and generated token-protected config;
-4. installs and starts `dev.mechana.worker-host-agent` as a per-user launchd job
+2. discovers the remote home, Java executable, and native plugin runtimes;
+3. verifies every runtime required by the configured sandbox plugin set and fails
+   with the missing prerequisite instead of deploying workers that cannot run it;
+4. uploads the host-agent JAR, worker JAR, and generated token-protected config;
+5. installs the verified runtime paths and starts `dev.mechana.worker-host-agent` as a per-user launchd job
    on macOS or systemd user service on Linux;
-5. waits for the authenticated agent API; and
-6. starts the requested number of workers with the selected mode and plugins.
+6. waits for the authenticated agent API; and
+7. starts the requested number of workers with the selected mode and plugins.
+
+Discovery covers the normal executable `PATH`, Apple Silicon and Intel Homebrew,
+the standard macOS Blender application bundle, `/usr/bin`, `/usr/local/bin`, and
+the Linux Blender snap path. The generated launchd or systemd definition contains
+absolute paths, so it does not depend on an interactive shell's `PATH`.
 
 No root access is requested. Linux user services require a functioning user
 systemd session; staying active after logout may require an administrator to

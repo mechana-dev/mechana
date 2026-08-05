@@ -34,7 +34,10 @@ This file reports repository evidence, not desired future status.
   selected agent responds. It distinguishes an unreachable endpoint from a
   responding agent with rejected credentials. SSH recovery can restart an existing
   service without upload, while reinstall overwrites artifacts/configuration,
-  reloads the service, and starts the requested workers.
+  reloads the service, and starts the requested workers. Reinstall discovers
+  FFmpeg, FFprobe, Tesseract, and Blender through standard macOS/Linux locations,
+  fails before deployment when the configured plugin set lacks a required tool,
+  and persists verified absolute paths in the launchd/systemd definition.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/

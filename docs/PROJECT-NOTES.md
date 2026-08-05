@@ -814,3 +814,14 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Verified the full 18-module reactor with Java 25.0.4 and Maven 3.9.16 on macOS
   26.5.2 arm64. All four live macOS sandbox integration checks passed, along with
   unit tests, Spotless, and SpotBugs.
+
+## 2026-08-05 05:45:00 EDT — Provision native runtimes for all plugins
+
+- Extended SSH reinstall to discover FFmpeg, FFprobe, Tesseract, and Blender on
+  each macOS or Linux target using the command path and standard installation
+  locations.
+- Deployment now fails early with the exact missing prerequisite when the selected
+  sandbox capability set requires an unavailable tool.
+- Generated launchd and systemd definitions persist verified absolute runtime
+  paths as JVM properties, ensuring sandboxed workers inherit deliberate native
+  runtime grants without depending on an interactive shell environment.
