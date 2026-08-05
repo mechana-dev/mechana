@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -64,9 +65,31 @@ class WorkerManagerTest {
 		assertEquals("STOPPED", manager.status().state());
 	}
 
+	@Test
+	void validatesSandboxModeAndBuildsSandboxedWorkerCommandOnMacOs() throws Exception {
+		List<String> launched = new ArrayList<>();
+		WorkerManager manager = new WorkerManager(config(2), (command, directory, log) -> {
+			launched.addAll(command);
+			return new FakeProcess(7);
+		});
+		WorkerManager.LaunchRequest request = new WorkerManager.LaunchRequest(1, WorkerLaunchMode.SANDBOXED,
+				"fractal-render");
+		if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac")) {
+			WorkerManager.Status status = manager.start(request);
+			assertEquals(WorkerLaunchMode.SANDBOXED, status.launchMode());
+			assertTrue(launched.stream().anyMatch(value -> value.startsWith("-Dmechana.sandbox.root=")));
+			assertTrue(launched.contains("fractal-render"));
+		} else {
+			assertThrows(IllegalArgumentException.class, () -> manager.start(request));
+		}
+		assertThrows(IllegalArgumentException.class,
+				() -> manager.start(new WorkerManager.LaunchRequest(1, WorkerLaunchMode.SANDBOXED, "sleep")));
+	}
+
 	private AgentConfig config(int max) {
 		return new AgentConfig("127.0.0.1", 0, "", URI.create("http://coordinator:8787"), Path.of("java"),
-				Path.of("worker.jar"), temporary, max, "sleep", Duration.ofMillis(5), "test-host", false);
+				Path.of("worker.jar"), temporary, max, "sleep", Duration.ofMillis(5), "test-host", false,
+				temporary.resolve("sandbox"), "fractal-render");
 	}
 
 	private static final class FakeProcess implements ManagedProcess {

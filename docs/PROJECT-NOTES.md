@@ -1,5 +1,19 @@
 # Project notes
 
+## 2026-08-05 02:25:00 EDT — Control sandboxed workers from the desktop app
+
+- Extended the host-agent start API with explicit `SANDBOXED` and `LEGACY`
+  launch modes plus a per-group plugin capability selection.
+- Added agent configuration for the sandbox root and the allowlist of migrated
+  sandbox plugins. Sandboxed launch validates macOS, rejects roots beneath the
+  user home, rejects capabilities outside that allowlist, and passes the root to
+  every worker JVM.
+- Updated the desktop controller with mode and plugin controls and with status
+  reporting for the effective mode, plugins, and sandbox root. Changing a running
+  group's mode or plugin set requires stopping it first.
+- Kept non-migrated plugins available only through the explicitly labeled legacy
+  mode; the app does not claim they are sandboxed.
+
 ## 2026-08-05 02:10:00 EDT — Harden sandbox cleanup and crash recovery
 
 - Added per-attempt ownership metadata and an operating-system file lock so

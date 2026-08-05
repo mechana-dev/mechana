@@ -32,6 +32,8 @@ final class WorkerControlFrame extends JFrame {
 	private final JSpinner port = new JSpinner(new SpinnerNumberModel(8790, 1, 65535, 1));
 	private final JPasswordField token = new JPasswordField(16);
 	private final JSpinner count = new JSpinner(new SpinnerNumberModel(1, 0, 128, 1));
+	private final JComboBox<AgentClient.LaunchMode> launchMode = new JComboBox<>(AgentClient.LaunchMode.values());
+	private final JTextField capabilities = new JTextField("fractal-render", 28);
 	private final JLabel state = new JLabel("Not checked");
 	private final JTextArea workers = new JTextArea(9, 52);
 	private final JButton refresh = new JButton("Refresh");
@@ -46,6 +48,7 @@ final class WorkerControlFrame extends JFrame {
 		this.store = store;
 		host.setEditable(true);
 		workers.setEditable(false);
+		capabilities.setToolTipText("Comma-separated plugin capabilities allowed by the selected host agent");
 		workers.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12));
 		JPanel connection = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		connection.add(new JLabel("Host"));
@@ -58,6 +61,10 @@ final class WorkerControlFrame extends JFrame {
 		JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		actions.add(new JLabel("Workers"));
 		actions.add(count);
+		actions.add(new JLabel("Mode"));
+		actions.add(launchMode);
+		actions.add(new JLabel("Plugins"));
+		actions.add(capabilities);
 		actions.add(start);
 		actions.add(stop);
 		actions.add(state);
@@ -71,8 +78,9 @@ final class WorkerControlFrame extends JFrame {
 			if (!changingHostList)
 				refreshStatus();
 		});
-		start.addActionListener(
-				event -> run("Starting", () -> client.start(baseUri(), tokenValue(), (Integer) count.getValue())));
+		launchMode.addActionListener(event -> applyModeDefaults());
+		start.addActionListener(event -> run("Starting", () -> client.start(baseUri(), tokenValue(),
+				(Integer) count.getValue(), selectedMode(), capabilities.getText().strip())));
 		stop.addActionListener(event -> run("Stopping", () -> client.stop(baseUri(), tokenValue())));
 		loadSettings();
 		setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -111,6 +119,12 @@ final class WorkerControlFrame extends JFrame {
 		state.setText(status.state() + " — " + status.runningCount() + " running / " + status.requestedCount()
 				+ " requested");
 		StringBuilder text = new StringBuilder();
+		if (status.launchMode() != null) {
+			text.append("Mode: ").append(status.launchMode()).append("   Plugins: ").append(status.capabilities());
+			if (status.sandboxRoot() != null && !status.sandboxRoot().isBlank())
+				text.append("   Sandbox: ").append(status.sandboxRoot());
+			text.append("\n\n");
+		}
 		for (AgentClient.Worker worker : status.workers())
 			text.append(worker.id()).append("   PID ").append(worker.pid()).append("   ")
 					.append(worker.alive() ? "RUNNING" : "STOPPED").append("   since ").append(worker.startedAt())
@@ -134,6 +148,14 @@ final class WorkerControlFrame extends JFrame {
 	private String tokenValue() {
 		return new String(token.getPassword());
 	}
+	private AgentClient.LaunchMode selectedMode() {
+		return (AgentClient.LaunchMode) launchMode.getSelectedItem();
+	}
+	private void applyModeDefaults() {
+		boolean sandboxed = selectedMode() == AgentClient.LaunchMode.SANDBOXED;
+		if (sandboxed)
+			capabilities.setText("fractal-render");
+	}
 	private void setBusy(boolean busy) {
 		refresh.setEnabled(!busy);
 		start.setEnabled(!busy);
@@ -149,6 +171,9 @@ final class WorkerControlFrame extends JFrame {
 			port.setValue(s.port());
 			token.setText(s.token());
 			count.setValue(s.count());
+			launchMode.setSelectedItem(s.launchMode());
+			capabilities.setText(s.capabilities());
+			applyModeDefaults();
 		} catch (Exception failure) {
 			workers.setText("Could not load settings: " + failure.getMessage());
 		} finally {
@@ -170,7 +195,7 @@ final class WorkerControlFrame extends JFrame {
 				}
 			}
 			store.save(new SettingsStore.Settings(hosts, hostValue(), (Integer) port.getValue(), tokenValue(),
-					(Integer) count.getValue()));
+					(Integer) count.getValue(), selectedMode(), capabilities.getText().strip()));
 		} catch (IOException failure) {
 			workers.setText("Could not save settings: " + failure.getMessage());
 		}

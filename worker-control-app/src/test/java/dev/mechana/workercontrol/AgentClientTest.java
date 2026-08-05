@@ -48,6 +48,7 @@ class AgentClientTest {
 			assertEquals(2, status.runningCount());
 			assertEquals("Bearer secret", authorization.get());
 			assertTrue(body.get().contains("\"count\":2"));
+			assertTrue(body.get().contains("\"executionMode\":\"LEGACY\""));
 		} finally {
 			server.stop(0);
 		}

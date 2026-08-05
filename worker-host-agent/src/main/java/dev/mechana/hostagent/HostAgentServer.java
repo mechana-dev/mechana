@@ -67,7 +67,8 @@ final class HostAgentServer implements AutoCloseable {
 				send(exchange, 200, manager.status());
 			else if ("POST".equals(method) && path.endsWith("/start")) {
 				StartRequest request = json.readValue(exchange.getRequestBody(), StartRequest.class);
-				send(exchange, 200, manager.start(request.count()));
+				send(exchange, 200, manager.start(new WorkerManager.LaunchRequest(request.count(),
+						request.executionMode(), request.capabilities())));
 			} else if ("POST".equals(method) && path.endsWith("/stop"))
 				send(exchange, 200, manager.stopAll());
 			else
@@ -102,7 +103,7 @@ final class HostAgentServer implements AutoCloseable {
 	private static String message(Throwable failure) {
 		return failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
 	}
-	record StartRequest(int count) {
+	record StartRequest(int count, WorkerLaunchMode executionMode, String capabilities) {
 	}
 	public void close() {
 		server.stop(0);

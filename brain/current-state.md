@@ -15,6 +15,12 @@ This file reports repository evidence, not desired future status.
   configured worker limit, and tracks only child workers it launches. The compact
   Swing controller persists known hosts and last settings locally and performs
   network actions away from the event-dispatch thread.
+- The host-agent API and Swing controller can start a worker group in explicit
+  `SANDBOXED` or `LEGACY` mode with a selected plugin capability set. Sandboxed
+  launch is currently macOS-only, uses an agent-configured root outside the user
+  home, and is allowlisted to the migrated `fractal-render` plugin by default.
+  Status reports the effective mode, plugins, and sandbox root; a running group
+  must be stopped before changing its mode or capabilities.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/

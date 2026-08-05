@@ -26,7 +26,7 @@ import java.util.Properties;
 
 public record AgentConfig(String bindAddress, int port, String token, URI coordinator, Path javaExecutable,
 		Path workerJar, Path workingDirectory, int maxWorkers, String capabilities, Duration stopTimeout,
-		String machineName, boolean allowUnauthenticated) {
+		String machineName, boolean allowUnauthenticated, Path sandboxRoot, String sandboxedCapabilities) {
 	public AgentConfig {
 		Objects.requireNonNull(bindAddress);
 		Objects.requireNonNull(token);
@@ -37,6 +37,8 @@ public record AgentConfig(String bindAddress, int port, String token, URI coordi
 		Objects.requireNonNull(capabilities);
 		Objects.requireNonNull(stopTimeout);
 		Objects.requireNonNull(machineName);
+		Objects.requireNonNull(sandboxRoot);
+		Objects.requireNonNull(sandboxedCapabilities);
 		if (port < 0 || port > 65535 || maxWorkers < 1 || stopTimeout.isNegative() || stopTimeout.isZero())
 			throw new IllegalArgumentException("Invalid port, max-workers, or stop-timeout");
 		if (machineName.isBlank())
@@ -56,7 +58,9 @@ public record AgentConfig(String bindAddress, int port, String token, URI coordi
 				p.getProperty("capabilities", "sleep"),
 				Duration.ofMillis(Long.parseLong(p.getProperty("stop-timeout-ms", "10000"))),
 				normalizeMachineName(p.getProperty("machine-name", localMachineName())),
-				Boolean.parseBoolean(p.getProperty("allow-unauthenticated", "false")));
+				Boolean.parseBoolean(p.getProperty("allow-unauthenticated", "false")),
+				Path.of(p.getProperty("sandbox-root", defaultSandboxRoot())),
+				p.getProperty("sandboxed-capabilities", "fractal-render"));
 	}
 
 	private static String localMachineName() {
@@ -78,6 +82,12 @@ public record AgentConfig(String bindAddress, int port, String token, URI coordi
 		return Path.of(System.getProperty("java.home"), "bin",
 				System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win") ? "java.exe" : "java")
 				.toString();
+	}
+
+	private static String defaultSandboxRoot() {
+		return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac")
+				? "/private/tmp/mechana-sandbox"
+				: Path.of(System.getProperty("java.io.tmpdir"), "mechana-sandbox").toString();
 	}
 
 	private static boolean isLoopback(String address) {

@@ -27,7 +27,8 @@ import java.util.List;
 import java.util.Properties;
 
 final class SettingsStore {
-	record Settings(List<String> hosts, String lastHost, int port, String token, int count) {
+	record Settings(List<String> hosts, String lastHost, int port, String token, int count,
+			AgentClient.LaunchMode launchMode, String capabilities) {
 	}
 	private final Path file;
 	SettingsStore(Path file) {
@@ -53,7 +54,9 @@ final class SettingsStore {
 		}
 		return new Settings(List.copyOf(hosts), p.getProperty("last-host", "localhost"),
 				Integer.parseInt(p.getProperty("port", "8790")), p.getProperty("token", ""),
-				Integer.parseInt(p.getProperty("count", "1")));
+				Integer.parseInt(p.getProperty("count", "1")),
+				AgentClient.LaunchMode.valueOf(p.getProperty("launch-mode", "SANDBOXED")),
+				p.getProperty("capabilities", "fractal-render"));
 	}
 
 	void save(Settings settings) throws IOException {
@@ -65,6 +68,8 @@ final class SettingsStore {
 		p.setProperty("port", Integer.toString(settings.port()));
 		p.setProperty("token", settings.token());
 		p.setProperty("count", Integer.toString(settings.count()));
+		p.setProperty("launch-mode", settings.launchMode().name());
+		p.setProperty("capabilities", settings.capabilities());
 		Path parent = file.getParent();
 		if (parent != null)
 			Files.createDirectories(parent);
