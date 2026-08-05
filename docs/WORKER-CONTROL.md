@@ -138,6 +138,11 @@ the standard macOS Blender application bundle, `/usr/bin`, `/usr/local/bin`, and
 the Linux Blender snap path. The generated launchd or systemd definition contains
 absolute paths, so it does not depend on an interactive shell's `PATH`.
 
+On macOS, reinstall also checks the configured agent HTTP port after unloading the
+launchd job. A stale same-user process is terminated only when its command identifies
+it as `mechana-worker-host-agent.jar`. If an unrelated process owns the port, reinstall
+fails with an explicit diagnostic and does not kill that process.
+
 No root access is requested. Linux user services require a functioning user
 systemd session; staying active after logout may require an administrator to
 enable lingering for that account. The generated agent listens on port 8790 (or

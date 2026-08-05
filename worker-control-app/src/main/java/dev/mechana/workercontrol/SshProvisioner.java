@@ -133,7 +133,8 @@ final class SshProvisioner {
 		ssh(request, target, "mkdir -p " + quote(launchAgents));
 		copy(request, target, plist, launchAgents + "/" + LABEL + ".plist");
 		ssh(request, target,
-				"launchctl bootout gui/$(id -u)/" + LABEL + " 2>/dev/null || true; launchctl bootstrap gui/$(id -u) "
+				"launchctl bootout gui/$(id -u)/" + LABEL + " 2>/dev/null || true; "
+						+ macOsPortReleaseCommand(request.agentPort()) + "; launchctl bootstrap gui/$(id -u) "
 						+ quote(launchAgents + "/" + LABEL + ".plist"));
 	}
 
@@ -291,6 +292,17 @@ final class SshProvisioner {
 
 	private static String systemdEscape(String value) {
 		return value.replace("\\", "\\\\").replace(" ", "\\x20");
+	}
+
+	static String macOsPortReleaseCommand(int port) {
+		return "agent_pid=$(lsof -nP -tiTCP:" + port
+				+ " -sTCP:LISTEN 2>/dev/null | head -n 1); while [ -n \"$agent_pid\" ]; do "
+				+ "agent_command=$(ps -p \"$agent_pid\" -o command=); case \"$agent_command\" in "
+				+ "*mechana-worker-host-agent.jar*) kill \"$agent_pid\" 2>/dev/null || true; agent_wait=0; "
+				+ "while kill -0 \"$agent_pid\" 2>/dev/null && [ \"$agent_wait\" -lt 50 ]; do sleep 0.1; "
+				+ "agent_wait=$((agent_wait + 1)); done; kill -9 \"$agent_pid\" 2>/dev/null || true ;; "
+				+ "*) echo \"Port " + port + " is occupied by a non-Mechana process: $agent_command\" >&2; exit 1 ;; "
+				+ "esac; agent_pid=$(lsof -nP -tiTCP:" + port + " -sTCP:LISTEN 2>/dev/null | head -n 1); done";
 	}
 
 	private static void validate(Request request) throws IOException {

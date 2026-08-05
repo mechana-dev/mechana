@@ -1,5 +1,12 @@
 # Project notes
 
+## 2026-08-05 05:05:00 EDT — Recover from stale manually launched host agents
+
+- Made macOS reinstall detect a stale Mechana host-agent listener left outside the
+  managed launchd service, terminate it gracefully, and force it down after timeout.
+- Restricted cleanup to commands identifying `mechana-worker-host-agent.jar`; an
+  unrelated owner of the configured port fails safely with an explicit diagnostic.
+
 ## 2026-08-05 04:50:00 EDT — Render ports without grouping separators
 
 - Formatted the agent HTTP and SSH port spinners as plain integer identifiers so
