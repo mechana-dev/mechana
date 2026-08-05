@@ -1,5 +1,120 @@
 # Project notes
 
+## 2026-08-05 05:05:00 EDT — Recover from stale manually launched host agents
+
+- Made macOS reinstall detect a stale Mechana host-agent listener left outside the
+  managed launchd service, terminate it gracefully, and force it down after timeout.
+- Restricted cleanup to commands identifying `mechana-worker-host-agent.jar`; an
+  unrelated owner of the configured port fails safely with an explicit diagnostic.
+
+## 2026-08-05 04:50:00 EDT — Render ports without grouping separators
+
+- Formatted the agent HTTP and SSH port spinners as plain integer identifiers so
+  values display as `8790` and `21012`, never `8,790` or `21,012`.
+- Added a Swing formatting regression test for the custom SSH port.
+
+## 2026-08-05 04:40:00 EDT — Keep SSH diagnostics out of command results
+
+- Separated SSH/SCP stderr from stdout so OpenSSH security warnings no longer
+  corrupt remote `uname`, home-directory, or Java-path detection.
+- Preserved stderr in nonzero-exit diagnostics and added process-level regression
+  tests for successful warnings and failed commands.
+
+## 2026-08-05 04:25:00 EDT — Support custom remote SSH ports
+
+- Added a persisted SSH port field to Worker Control, separate from the host-agent
+  HTTP port.
+- Applied the selected port with the correct OpenSSH syntax for both `ssh -p` and
+  `scp -P`, with regression coverage for custom-port deployment commands.
+
+## 2026-08-05 03:50:00 EDT — Stabilize agent restart and desired worker count
+
+- Kept the desired worker spinner independent from the agent's current requested
+  count so an online agent with zero workers no longer erases the user's selection.
+- Changed macOS SSH restart to use launchd `kickstart -k` first and bootstrap only
+  as recovery, avoiding both an unload/reload race and inconsistent launchd
+  presence checks during transient service states.
+
+## 2026-08-05 03:35:00 EDT — Agent-aware controls and SSH recovery
+
+- Made authenticated agent status authoritative for the Worker Control display,
+  including live worker records, counts, execution mode, and plugin capabilities.
+- Disabled worker start/stop actions until the selected agent responds successfully;
+  unreachable and HTTP-rejected agents now have distinct visible states.
+- Added SSH-based clean agent restart for hung or unreachable HTTP endpoints and
+  clarified that deployment reinstalls files/configuration, reloads the service,
+  and starts the requested worker group.
+- Added macOS restart-path regression coverage using the resolved remote home.
+
+## 2026-08-05 02:35:00 EDT — Provision worker hosts over SSH
+
+- Added an SSH provisioning workflow to the desktop controller for macOS and
+  Linux user accounts. It uses the local OpenSSH client and existing SSH agent or
+  identity file, retains strict host-key checking by default, and never stores an
+  SSH password or requests sudo.
+- The controller detects the remote OS and Java path, uploads the host-agent and
+  worker JARs plus generated secured configuration, and installs a per-user
+  launchd or systemd service. After the agent becomes reachable it starts the
+  requested worker count, execution mode, and plugin selection.
+- Added a remote stop action that requests graceful worker shutdown when possible
+  and then unloads/disables the agent service over SSH. Install files remain for
+  restart or upgrade.
+- Added deterministic tests for SSH/scp command construction, batch and host-key
+  options, platform rejection, generated configuration, and launchd/systemd
+  templates. Java installation, SSH bootstrap, firewalls, Linux lingering,
+  Windows services, and system-wide/root installation remain out of scope.
+
+## 2026-08-05 02:25:00 EDT — Control sandboxed workers from the desktop app
+
+- Extended the host-agent start API with explicit `SANDBOXED` and `LEGACY`
+  launch modes plus a per-group plugin capability selection.
+- Added agent configuration for the sandbox root and the allowlist of migrated
+  sandbox plugins. Sandboxed launch validates macOS, rejects roots beneath the
+  user home, rejects capabilities outside that allowlist, and passes the root to
+  every worker JVM.
+- Updated the desktop controller with mode and plugin controls and with status
+  reporting for the effective mode, plugins, and sandbox root. Changing a running
+  group's mode or plugin set requires stopping it first.
+- Kept non-migrated plugins available only through the explicitly labeled legacy
+  mode; the app does not claim they are sandboxed.
+
+## 2026-08-05 02:10:00 EDT — Harden sandbox cleanup and crash recovery
+
+- Added per-attempt ownership metadata and an operating-system file lock so
+  multiple workers sharing one sandbox root can distinguish live attempts from
+  abandoned ones without trusting stale PID data alone.
+- Normal attempt close now removes the complete attempt directory and its empty
+  job parent. Worker startup reclaims only marked attempts whose ownership lock
+  can be acquired; active and unmarked directories are preserved.
+- Graceful worker disconnect now signals the active sandbox cancellation token
+  and waits up to ten seconds for host termination and attempt cleanup before
+  reporting the worker disconnected.
+- Added tests for normal recursive cleanup, active-lock protection, and abandoned
+  workspace recovery. Abrupt host-process descendant containment and periodic
+  scavenging remain future hardening work.
+
+## 2026-08-05 01:10:00 EDT — Run fractal work through the macOS sandbox host
+
+- Wired distributed `fractal-render` assignments through the runtime manager,
+  separate plugin-host JVM, and experimental macOS backend while retaining the
+  existing in-process path for plugins not yet migrated.
+- Added framed stdin delivery and live stdout event consumption to the managed
+  process runtime. Plugin stdout is separated from the NDJSON protocol, and the
+  worker translates progress and artifact events into the existing lease-fenced
+  server calls.
+- Staged the worker host runtime and plugin JAR under each attempt's `input/`
+  directory so Tahoe can deny reads beneath the user's home without granting an
+  exception for the repository or Maven cache. Explicitly bound Java temporary
+  files to `work/`.
+- Verified `mvn verify` on the MBA, including four macOS policy integration tests.
+  Then completed job `94185b72-47c7-4335-982d-47133177ee42` with eight images in
+  four tasks: four distinct sandbox workers each succeeded on attempt one and the
+  server assembled the job at 100%.
+- The verified macOS controls remain home-directory read denial, network denial,
+  workspace write restriction, and wall-clock timeout. General system/runtime
+  reads remain available; CPU, memory, scratch-size, process-count, and guaranteed
+  descendant-tree limits are not enforced.
+
 Append-only record of material Mechana project changes and accepted decisions.
 
 ## 2026-08-04 11:52:29 EDT — Complete Architecture Baseline 1 sandbox design
@@ -678,3 +793,15 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Updated prominent project, website, repository-guidance, development, and
   brand references to use Mechana™ once where appropriate without changing any
   runtime behavior or architectural contract.
+
+## 2026-08-04 19:15:00 EDT — Begin macOS sandbox and plugin-host foundation
+
+- Added common trust, policy, request, result, capability, workspace, launcher,
+  sandbox, and runtime-manager contracts without plugin-specific dependencies.
+- Added managed process execution with an isolated environment, attempt layout,
+  log capture, timeout/cancellation, best-effort cleanup, and a one-request NDJSON
+  host for existing `TaskPlugin` packages.
+- Added an experimental macOS backend using Apple-deprecated `sandbox-exec`. It
+  fails closed and reports filesystem/network enforcement only after a live probe.
+  MBA Codex containment rejects nested profiles, so adversarial tests skip here.
+- Split concrete plugin migration into sequential PR B, starting with sleep.

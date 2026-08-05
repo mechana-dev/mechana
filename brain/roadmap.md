@@ -7,6 +7,15 @@ This sequence expresses intent, not completion. Check
 1 closes design stabilization; implementation should preserve it or record an
 explicit superseding decision.
 
+## Active sandbox sequence
+
+1. **PR A — macOS foundation:** runtime/policy/capability interfaces, workspace
+   layout, managed lifecycle, experimental macOS adapter, host, and tests.
+2. **PR B — plugin migration:** connect the worker, migrate sleep then fractal,
+   OCR/Tesseract, FFmpeg, and Blender, and declare native tools explicitly.
+3. **Later backends:** independently implement and verify Linux, then Windows.
+   No support is claimed before adversarial tests run.
+
 ## Next — Parallel Plugin Execution Framework
 
 - Define stable descriptor, validation, deterministic plan, work-unit, resource,

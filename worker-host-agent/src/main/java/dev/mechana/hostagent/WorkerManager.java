@@ -21,15 +21,22 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 final class WorkerManager {
+	private static final Set<String> IMPLEMENTED_SANDBOX_PLUGINS = Set.of("fractal-render");
 	record WorkerStatus(String id, long pid, Instant startedAt, boolean alive) {
 	}
-	record Status(int requestedCount, int runningCount, String state, List<WorkerStatus> workers, String diagnostic) {
+	record LaunchRequest(int count, WorkerLaunchMode mode, String capabilities) {
+	}
+	record Status(int requestedCount, int runningCount, String state, List<WorkerStatus> workers, String diagnostic,
+			WorkerLaunchMode launchMode, String capabilities, String sandboxRoot) {
 	}
 	private record Entry(String id, ManagedProcess process, Instant startedAt) {
 	}
@@ -39,6 +46,8 @@ final class WorkerManager {
 	private final Map<String, Entry> workers = new LinkedHashMap<>();
 	private int requestedCount;
 	private String diagnostic = "";
+	private WorkerLaunchMode launchMode;
+	private String launchCapabilities = "";
 
 	WorkerManager(AgentConfig config, ProcessLauncher launcher) {
 		this.config = config;
@@ -46,18 +55,27 @@ final class WorkerManager {
 	}
 
 	synchronized Status start(int count) throws IOException {
+		return start(new LaunchRequest(count, WorkerLaunchMode.LEGACY, config.capabilities()));
+	}
+
+	synchronized Status start(LaunchRequest request) throws IOException {
 		pruneDead();
+		int count = request.count();
 		if (count < 0 || count > config.maxWorkers())
 			throw new IllegalArgumentException("Worker count must be between 0 and " + config.maxWorkers());
+		WorkerLaunchMode mode = request.mode() == null ? WorkerLaunchMode.LEGACY : request.mode();
+		String capabilities = validatedCapabilities(mode, request.capabilities());
+		if (!workers.isEmpty() && (mode != launchMode || !capabilities.equals(launchCapabilities)))
+			throw new IllegalArgumentException("Stop all workers before changing launch mode or plugins");
 		requestedCount = count;
+		launchMode = mode;
+		launchCapabilities = capabilities;
 		Path logs = config.workingDirectory().resolve("worker-logs");
 		Files.createDirectories(logs);
 		try {
 			for (int i = workers.size(); i < count; i++) {
 				String id = config.machineName() + "-" + UUID.randomUUID();
-				List<String> command = List.of(config.javaExecutable().toString(), "-jar",
-						config.workerJar().toAbsolutePath().normalize().toString(), config.coordinator().toString(),
-						config.capabilities(), id);
+				List<String> command = command(mode, capabilities, id);
 				ManagedProcess process = launcher.launch(command, config.workingDirectory(), logs.resolve(id + ".log"));
 				workers.put(id, new Entry(id, process, Instant.now()));
 			}
@@ -78,6 +96,8 @@ final class WorkerManager {
 				entry.process().destroyForcibly();
 		workers.clear();
 		diagnostic = "";
+		launchMode = null;
+		launchCapabilities = "";
 		return status();
 	}
 
@@ -86,7 +106,52 @@ final class WorkerManager {
 		List<WorkerStatus> items = workers.values().stream()
 				.map(e -> new WorkerStatus(e.id(), e.process().pid(), e.startedAt(), e.process().isAlive())).toList();
 		String state = workers.isEmpty() ? "STOPPED" : workers.size() == requestedCount ? "RUNNING" : "ERROR";
-		return new Status(requestedCount, workers.size(), state, items, diagnostic);
+		return new Status(requestedCount, workers.size(), state, items, diagnostic, launchMode, launchCapabilities,
+				launchMode == WorkerLaunchMode.SANDBOXED ? config.sandboxRoot().toString() : "");
+	}
+
+	private List<String> command(WorkerLaunchMode mode, String capabilities, String id) {
+		List<String> command = new ArrayList<>();
+		command.add(config.javaExecutable().toString());
+		if (mode == WorkerLaunchMode.SANDBOXED)
+			command.add("-Dmechana.sandbox.root=" + config.sandboxRoot().toAbsolutePath().normalize());
+		command.add("-jar");
+		command.add(config.workerJar().toAbsolutePath().normalize().toString());
+		command.add(config.coordinator().toString());
+		command.add(capabilities);
+		command.add(id);
+		return List.copyOf(command);
+	}
+
+	private String validatedCapabilities(WorkerLaunchMode mode, String requested) {
+		String configured = mode == WorkerLaunchMode.SANDBOXED ? config.sandboxedCapabilities() : config.capabilities();
+		Set<String> allowed = capabilitySet(configured);
+		if (mode == WorkerLaunchMode.SANDBOXED)
+			allowed.retainAll(IMPLEMENTED_SANDBOX_PLUGINS);
+		Set<String> selected = capabilitySet(requested == null || requested.isBlank() ? configured : requested);
+		if (selected.isEmpty() || !allowed.containsAll(selected))
+			throw new IllegalArgumentException("Requested plugins are not allowed for " + mode + ": " + selected);
+		if (mode == WorkerLaunchMode.SANDBOXED) {
+			if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac"))
+				throw new IllegalArgumentException("Sandboxed workers are currently supported only on macOS");
+			Path home = Path.of(System.getProperty("user.home")).toAbsolutePath().normalize();
+			if (config.sandboxRoot().toAbsolutePath().normalize().startsWith(home))
+				throw new IllegalArgumentException("Sandbox root must be outside the user home directory");
+		}
+		return String.join(",", selected);
+	}
+
+	private static Set<String> capabilitySet(String value) {
+		Set<String> result = new LinkedHashSet<>();
+		for (String item : value.split(",")) {
+			String capability = item.strip();
+			if (!capability.isEmpty()) {
+				if (!capability.matches("[a-z0-9][a-z0-9-]*"))
+					throw new IllegalArgumentException("Invalid plugin capability: " + capability);
+				result.add(capability);
+			}
+		}
+		return result;
 	}
 
 	private void pruneDead() {

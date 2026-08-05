@@ -20,6 +20,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mechana.api.PluginDescriptor;
 import dev.mechana.api.TaskContext;
 import dev.mechana.api.TaskPlugin;
+import dev.mechana.pluginhost.HostEvent;
+import dev.mechana.pluginhost.HostRequest;
 import dev.mechana.protocol.Messages.LeaseRequest;
 import dev.mechana.protocol.Messages.ProgressUpdate;
 import dev.mechana.protocol.Messages.TaskCompletion;
@@ -27,7 +29,17 @@ import dev.mechana.protocol.Messages.TaskFailure;
 import dev.mechana.protocol.Messages.TaskHeartbeat;
 import dev.mechana.protocol.Messages.TaskLease;
 import dev.mechana.protocol.Messages.WorkerRegistration;
+import dev.mechana.runtime.plugin.AttemptWorkspace;
+import dev.mechana.runtime.plugin.MacOsSandbox;
+import dev.mechana.runtime.plugin.OwnedAttemptWorkspace;
+import dev.mechana.runtime.plugin.PluginRuntimeManager;
+import dev.mechana.runtime.plugin.ProcessSandbox;
+import dev.mechana.runtime.plugin.SandboxPolicy;
+import dev.mechana.runtime.plugin.SandboxRequest;
+import dev.mechana.runtime.plugin.SandboxResult;
+import dev.mechana.runtime.plugin.TrustMode;
 import java.io.IOException;
+import java.io.File;
 import java.net.URI;
 import java.net.URLClassLoader;
 import java.net.Inet4Address;
@@ -46,6 +58,7 @@ import java.util.Enumeration;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Pull-based worker that downloads each assigned plugin into ephemeral storage.
@@ -59,6 +72,8 @@ public final class WorkerAgent {
 	private final String workerAddress;
 	private final Set<String> supportedPlugins;
 	private final AtomicBoolean running = new AtomicBoolean(true);
+	private final AtomicReference<AtomicBoolean> activeCancellation = new AtomicReference<>();
+	private final AtomicReference<Thread> activeExecution = new AtomicReference<>();
 
 	public WorkerAgent(URI server, String workerId, Set<String> supportedPlugins) {
 		this(server, workerId, localAddress(), supportedPlugins);
@@ -69,6 +84,7 @@ public final class WorkerAgent {
 		this.workerId = Objects.requireNonNull(workerId, "workerId");
 		this.workerAddress = Objects.requireNonNull(workerAddress, "workerAddress");
 		this.supportedPlugins = Set.copyOf(supportedPlugins);
+		reclaimAbandonedAttempts();
 	}
 
 	public void runForever() {
@@ -97,6 +113,7 @@ public final class WorkerAgent {
 
 	public void disconnect() throws IOException, InterruptedException {
 		running.set(false);
+		cancelAndAwaitActiveAttempt();
 		Response response = post("/api/workers/" + workerId + "/disconnect", Set.of());
 		requireStatus(response, 204);
 		System.out.printf("Worker %s disconnected from server%n", workerId);
@@ -124,25 +141,31 @@ public final class WorkerAgent {
 
 	private void execute(TaskLease lease) throws IOException, InterruptedException {
 		AtomicBoolean cancelled = new AtomicBoolean();
+		activeCancellation.set(cancelled);
+		activeExecution.set(Thread.currentThread());
 		AtomicBoolean finished = new AtomicBoolean();
 		Thread leaseHeartbeat = startLeaseHeartbeat(lease, cancelled, finished);
 		Path pluginFile = null;
 		try {
 			pluginFile = downloadPlugin(lease);
-			try (URLClassLoader loader = new URLClassLoader(new java.net.URL[]{pluginFile.toUri().toURL()},
-					TaskPlugin.class.getClassLoader())) {
-				Class<? extends TaskPlugin> pluginType = Class.forName(lease.pluginEntrypoint(), true, loader)
-						.asSubclass(TaskPlugin.class);
-				TaskPlugin plugin = pluginType.getConstructor().newInstance();
-				verifyDescriptor(plugin.descriptor(), lease);
-				System.out.printf("Worker %s running task %s%n", workerId, lease.taskId());
-				TaskContext context = new RemoteTaskContext(lease, cancelled);
-				plugin.execute(context);
-				Response completion = post(taskPath(lease, "complete"), new TaskCompletion(lease.leaseToken()));
-				requireStatus(completion, 204);
-				System.out.printf("Worker %s finished task %s successfully%n", workerId, lease.taskId());
-			}
-		} catch (ReflectiveOperationException | RuntimeException | dev.mechana.api.PluginExecutionException failure) {
+			if ("fractal-render".equals(lease.pluginId())) {
+				executeSandboxed(lease, pluginFile, cancelled);
+			} else
+				try (URLClassLoader loader = new URLClassLoader(new java.net.URL[]{pluginFile.toUri().toURL()},
+						TaskPlugin.class.getClassLoader())) {
+					Class<? extends TaskPlugin> pluginType = Class.forName(lease.pluginEntrypoint(), true, loader)
+							.asSubclass(TaskPlugin.class);
+					TaskPlugin plugin = pluginType.getConstructor().newInstance();
+					verifyDescriptor(plugin.descriptor(), lease);
+					System.out.printf("Worker %s running task %s%n", workerId, lease.taskId());
+					TaskContext context = new RemoteTaskContext(lease, cancelled);
+					plugin.execute(context);
+					Response completion = post(taskPath(lease, "complete"), new TaskCompletion(lease.leaseToken()));
+					requireStatus(completion, 204);
+					System.out.printf("Worker %s finished task %s successfully%n", workerId, lease.taskId());
+				}
+		} catch (IOException | ReflectiveOperationException | RuntimeException
+				| dev.mechana.api.PluginExecutionException failure) {
 			cancelled.set(true);
 			try {
 				post(taskPath(lease, "fail"), new TaskFailure(lease.leaseToken(), safeMessage(failure)));
@@ -156,7 +179,136 @@ public final class WorkerAgent {
 			leaseHeartbeat.interrupt();
 			if (pluginFile != null)
 				Files.deleteIfExists(pluginFile);
+			activeExecution.compareAndSet(Thread.currentThread(), null);
+			activeCancellation.compareAndSet(cancelled, null);
 		}
+	}
+
+	private void executeSandboxed(TaskLease lease, Path downloadedPlugin, AtomicBoolean cancelled)
+			throws IOException, InterruptedException {
+		try (OwnedAttemptWorkspace owned = OwnedAttemptWorkspace.create(sandboxRoot(), lease.jobId(),
+				lease.taskId() + "-" + lease.attempt(), workerId)) {
+			AttemptWorkspace workspace = owned.workspace();
+			RemoteTaskContext context = new RemoteTaskContext(lease, cancelled);
+			AtomicReference<Throwable> protocolFailure = new AtomicReference<>();
+			AtomicBoolean completed = new AtomicBoolean();
+			Path plugin = workspace.input().resolve("plugin.jar");
+			Files.copy(downloadedPlugin, plugin);
+			HostRequest hostRequest = new HostRequest(plugin.toString(), lease.pluginEntrypoint(), lease.pluginId(),
+					lease.pluginVersion(), lease.durationMillis(), lease.parameters(), workspace.output().toString());
+			Path requestFrame = workspace.input().resolve("request.ndjson");
+			Files.writeString(requestFrame, json.writeValueAsString(hostRequest) + System.lineSeparator());
+			String hostClasspath = stageHostClasspath(workspace.input().resolve("runtime"));
+			Path javaBinary = Path.of(System.getProperty("java.home"), "bin", "java");
+			SandboxPolicy policy = new SandboxPolicy(TrustMode.SANDBOXED, false,
+					Runtime.getRuntime().availableProcessors(), Runtime.getRuntime().maxMemory(),
+					10L * 1024 * 1024 * 1024, Duration.ofHours(6), 1);
+			SandboxRequest request = new SandboxRequest(
+					java.util.List.of(javaBinary.toString(), "-Djava.awt.headless=true",
+							"-Djava.io.tmpdir=" + workspace.work(), "-cp", hostClasspath,
+							"dev.mechana.pluginhost.PluginHostMain"),
+					java.util.Map.of("PATH", "/usr/bin:/bin"), workspace, policy, requestFrame,
+					line -> handleHostEvent(line, context, completed, protocolFailure));
+			MacOsSandbox macOs = new MacOsSandbox();
+			if (!macOs.supportsCurrentHost())
+				throw new IOException("SANDBOXED fractal execution currently requires the macOS backend");
+			System.out.printf("Worker %s running task %s in %s%n", workerId, lease.taskId(),
+					macOs.capabilities(policy).backend());
+			SandboxResult result = new PluginRuntimeManager(new ProcessSandbox(), macOs).execute(request, cancelled);
+			if (protocolFailure.get() != null)
+				throw new IOException(
+						"Plugin-host protocol failed: " + safeMessage(protocolFailure.get()) + diagnostic(result),
+						protocolFailure.get());
+			if (result.timedOut())
+				throw new IOException("Sandboxed plugin timed out");
+			if (result.cancelled())
+				throw new IOException("Sandboxed plugin was cancelled");
+			if (result.exitCode() != 0 || !completed.get())
+				throw new IOException(
+						"Sandboxed plugin host exited with code " + result.exitCode() + diagnostic(result));
+			Response completion = post(taskPath(lease, "complete"), new TaskCompletion(lease.leaseToken()));
+			requireStatus(completion, 204);
+			System.out.printf("Worker %s finished sandboxed task %s successfully%n", workerId, lease.taskId());
+		}
+	}
+
+	private static String stageHostClasspath(Path runtimeDirectory) throws IOException {
+		Files.createDirectories(runtimeDirectory);
+		String[] entries = System.getProperty("java.class.path")
+				.split(java.util.regex.Pattern.quote(File.pathSeparator));
+		java.util.List<String> staged = new java.util.ArrayList<>();
+		for (int index = 0; index < entries.length; index++) {
+			Path source = Path.of(entries[index]).toAbsolutePath().normalize();
+			Path target = runtimeDirectory.resolve(index + "-" + source.getFileName());
+			if (Files.isDirectory(source))
+				copyTree(source, target);
+			else
+				Files.copy(source, target);
+			staged.add(target.toString());
+		}
+		return String.join(File.pathSeparator, staged);
+	}
+
+	private static void copyTree(Path source, Path target) throws IOException {
+		try (var paths = Files.walk(source)) {
+			for (Path path : paths.toList()) {
+				Path destination = target.resolve(source.relativize(path));
+				if (Files.isDirectory(path))
+					Files.createDirectories(destination);
+				else
+					Files.copy(path, destination);
+			}
+		}
+	}
+
+	private void handleHostEvent(String line, RemoteTaskContext context, AtomicBoolean completed,
+			AtomicReference<Throwable> failure) {
+		try {
+			HostEvent event = json.readValue(line, HostEvent.class);
+			switch (event.type()) {
+				case "progress" -> context.reportProgress(event.progress());
+				case "artifact" ->
+					context.publishArtifact(event.details().get("name"), Path.of(event.details().get("path")));
+				case "completed" -> completed.set(true);
+				case "failed" -> failure.compareAndSet(null, new IOException(event.message()));
+				default -> failure.compareAndSet(null, new IOException("Unknown plugin-host event: " + event.type()));
+			}
+		} catch (Throwable eventFailure) {
+			failure.compareAndSet(null, eventFailure);
+		}
+	}
+
+	private static String diagnostic(SandboxResult result) {
+		try {
+			String stderr = Files.readString(result.stderr()).trim();
+			return stderr.isEmpty() ? "" : ": " + stderr;
+		} catch (IOException ignored) {
+			return "";
+		}
+	}
+
+	private void cancelAndAwaitActiveAttempt() throws InterruptedException {
+		AtomicBoolean cancellation = activeCancellation.get();
+		if (cancellation != null)
+			cancellation.set(true);
+		Thread execution = activeExecution.get();
+		if (execution != null && execution != Thread.currentThread())
+			execution.join(10_000);
+	}
+
+	private void reclaimAbandonedAttempts() {
+		try {
+			int reclaimed = OwnedAttemptWorkspace.reclaimAbandoned(sandboxRoot());
+			if (reclaimed > 0)
+				System.out.printf("Worker %s reclaimed %d abandoned sandbox attempt(s)%n", workerId, reclaimed);
+		} catch (IOException failure) {
+			System.err.printf("Worker %s could not reclaim abandoned sandbox attempts: %s%n", workerId,
+					failure.getMessage());
+		}
+	}
+
+	private static Path sandboxRoot() {
+		return Path.of(System.getProperty("mechana.sandbox.root", "/private/tmp/mechana-sandbox"));
 	}
 
 	private Thread startPresenceHeartbeat() {

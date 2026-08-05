@@ -27,9 +27,28 @@ import java.time.Instant;
 import java.util.List;
 
 final class AgentClient {
+	static final class AgentResponseException extends IOException {
+		private static final long serialVersionUID = 1L;
+		private final int statusCode;
+
+		AgentResponseException(int statusCode, String body) {
+			super("Agent returned HTTP " + statusCode + ": " + body);
+			this.statusCode = statusCode;
+		}
+
+		int statusCode() {
+			return statusCode;
+		}
+	}
+	enum LaunchMode {
+		LEGACY, SANDBOXED
+	}
 	record Worker(String id, long pid, Instant startedAt, boolean alive) {
 	}
-	record Status(int requestedCount, int runningCount, String state, List<Worker> workers, String diagnostic) {
+	record Status(int requestedCount, int runningCount, String state, List<Worker> workers, String diagnostic,
+			LaunchMode launchMode, String capabilities, String sandboxRoot) {
+	}
+	private record StartRequest(int count, LaunchMode executionMode, String capabilities) {
 	}
 
 	private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
@@ -46,7 +65,12 @@ final class AgentClient {
 		return send(base, token, "GET", "", "/api/v1/workers");
 	}
 	Status start(URI base, String token, int count) throws IOException, InterruptedException {
-		return send(base, token, "POST", "{\"count\":" + count + "}", "/api/v1/workers/start");
+		return start(base, token, count, LaunchMode.LEGACY, "");
+	}
+	Status start(URI base, String token, int count, LaunchMode mode, String capabilities)
+			throws IOException, InterruptedException {
+		return send(base, token, "POST", json.writeValueAsString(new StartRequest(count, mode, capabilities)),
+				"/api/v1/workers/start");
 	}
 	Status stop(URI base, String token) throws IOException, InterruptedException {
 		return send(base, token, "POST", "{}", "/api/v1/workers/stop");
@@ -64,7 +88,7 @@ final class AgentClient {
 			builder.GET();
 		HttpResponse<String> response = http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
 		if (response.statusCode() != 200)
-			throw new IOException("Agent returned HTTP " + response.statusCode() + ": " + response.body());
+			throw new AgentResponseException(response.statusCode(), response.body());
 		return json.readValue(response.body(), Status.class);
 	}
 }

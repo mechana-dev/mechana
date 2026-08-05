@@ -17,6 +17,7 @@
 package dev.mechana.workercontrol;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sun.net.httpserver.HttpServer;
@@ -48,6 +49,27 @@ class AgentClientTest {
 			assertEquals(2, status.runningCount());
 			assertEquals("Bearer secret", authorization.get());
 			assertTrue(body.get().contains("\"count\":2"));
+			assertTrue(body.get().contains("\"executionMode\":\"LEGACY\""));
+		} finally {
+			server.stop(0);
+		}
+	}
+
+	@Test
+	void exposesHttpResponseAsProofThatAgentEndpointWasDetected() throws Exception {
+		HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/api/v1/workers", exchange -> {
+			byte[] response = "invalid token".getBytes(StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(401, response.length);
+			exchange.getResponseBody().write(response);
+			exchange.close();
+		});
+		server.start();
+		try {
+			URI base = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
+			AgentClient.AgentResponseException failure = assertThrows(AgentClient.AgentResponseException.class,
+					() -> new AgentClient().status(base, "wrong"));
+			assertEquals(401, failure.statusCode());
 		} finally {
 			server.stop(0);
 		}

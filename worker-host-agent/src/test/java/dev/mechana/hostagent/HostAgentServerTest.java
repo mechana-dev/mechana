@@ -34,8 +34,8 @@ class HostAgentServerTest {
 	@Test
 	void protectsManagementEndpoints() throws Exception {
 		AgentConfig config = new AgentConfig("127.0.0.1", 0, "secret", URI.create("http://server:8787"),
-				Path.of("java"), Path.of("worker.jar"), temporary, 2, "sleep", Duration.ofMillis(5), "test-host",
-				false);
+				Path.of("java"), Path.of("worker.jar"), temporary, 2, "sleep", Duration.ofMillis(5), "test-host", false,
+				temporary.resolve("sandbox"), "fractal-render");
 		WorkerManager manager = new WorkerManager(config, (c, d, l) -> new FakeProcess());
 		try (HostAgentServer server = new HostAgentServer(config, manager);
 				HttpClient client = HttpClient.newHttpClient()) {
