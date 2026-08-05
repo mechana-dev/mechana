@@ -28,6 +28,12 @@ This file reports repository evidence, not desired future status.
   workers and unload/disable the remote agent service over SSH. This requires an
   existing Java 25 runtime and SSH trust; it does not install prerequisites, use
   sudo, modify firewalls, enable Linux lingering, or support Windows services.
+- The controller treats authenticated agent status as authoritative: it mirrors
+  live workers, counts, mode, and plugins and disables worker actions until the
+  selected agent responds. It distinguishes an unreachable endpoint from a
+  responding agent with rejected credentials. SSH recovery can restart an existing
+  service without upload, while reinstall overwrites artifacts/configuration,
+  reloads the service, and starts the requested workers.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/

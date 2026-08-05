@@ -81,6 +81,26 @@ class SshProvisionerTest {
 		assertTrue(SshProvisioner.macOsPlist("/Java & Tools/java", "/Users/a<b").contains("/Java &amp; Tools/java"));
 	}
 
+	@Test
+	void restartsExistingMacOsAgentUsingResolvedHome() throws Exception {
+		Path agent = Files.writeString(temporary.resolve("agent.jar"), "agent");
+		Path worker = Files.writeString(temporary.resolve("worker.jar"), "worker");
+		List<List<String>> commands = new ArrayList<>();
+		SshProvisioner provisioner = new SshProvisioner((command, timeout) -> {
+			commands.add(List.copyOf(command));
+			if (command.getLast().equals("uname -s"))
+				return "Darwin\n";
+			if (command.getLast().equals("pwd"))
+				return "/Users/remote\n";
+			return "";
+		});
+		provisioner.restart(request(agent, worker));
+		assertTrue(commands.stream().map(List::getLast)
+				.anyMatch(value -> value.contains("launchctl bootstrap")
+						&& value.contains("/Users/remote/Library/LaunchAgents/dev.mechana.worker-host-agent.plist")
+						&& !value.contains("$HOME")));
+	}
+
 	private SshProvisioner.Request request(Path agent, Path worker) {
 		return new SshProvisioner.Request("mba.example", "mark", null, false, agent, worker, ".mechana/host-agent",
 				"http://coordinator:8787", 8790, "secret", "sleep,fractal-render", "fractal-render",

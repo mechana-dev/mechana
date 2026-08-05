@@ -82,6 +82,7 @@ final class SshProvisioner {
 	}
 
 	Result stop(Request request) throws IOException, InterruptedException {
+		validateConnection(request);
 		String target = target(request);
 		RemoteOs os = detect(request, target);
 		if (os == RemoteOs.MACOS)
@@ -89,6 +90,21 @@ final class SshProvisioner {
 		else
 			ssh(request, target, "systemctl --user disable --now " + LABEL + ".service");
 		return new Result(os, request.remoteDirectory(), "Agent and its managed workers stopped");
+	}
+
+	Result restart(Request request) throws IOException, InterruptedException {
+		validateConnection(request);
+		String target = target(request);
+		RemoteOs os = detect(request, target);
+		String home = ssh(request, target, "pwd").strip();
+		if (os == RemoteOs.MACOS) {
+			String plist = home + "/Library/LaunchAgents/" + LABEL + ".plist";
+			ssh(request, target, "test -f " + quote(plist) + "; launchctl bootout gui/$(id -u)/" + LABEL
+					+ " 2>/dev/null || true; launchctl bootstrap gui/$(id -u) " + quote(plist));
+		} else {
+			ssh(request, target, "systemctl --user restart " + LABEL + ".service");
+		}
+		return new Result(os, request.remoteDirectory(), "Agent restarted");
 	}
 
 	private RemoteOs detect(Request request, String target) throws IOException, InterruptedException {
@@ -206,6 +222,7 @@ final class SshProvisioner {
 	}
 
 	private static void validate(Request request) throws IOException {
+		validateConnection(request);
 		if (request.host().isBlank() || request.sshUser().isBlank() || request.token().isBlank()
 				|| request.coordinator().isBlank())
 			throw new IllegalArgumentException("Host, SSH user, token, and coordinator are required");
@@ -215,6 +232,13 @@ final class SshProvisioner {
 			throw new IllegalArgumentException("Sandbox root must be an absolute remote path");
 		if (!Files.isRegularFile(request.agentJar()) || !Files.isRegularFile(request.workerJar()))
 			throw new IOException("Build the host-agent and worker JARs before deployment");
+		if (request.identityFile() != null && !Files.isRegularFile(request.identityFile()))
+			throw new IOException("SSH identity file not found: " + request.identityFile());
+	}
+
+	private static void validateConnection(Request request) throws IOException {
+		if (request.host().isBlank() || request.sshUser().isBlank())
+			throw new IllegalArgumentException("Host and SSH user are required");
 		if (request.identityFile() != null && !Files.isRegularFile(request.identityFile()))
 			throw new IOException("SSH identity file not found: " + request.identityFile());
 	}

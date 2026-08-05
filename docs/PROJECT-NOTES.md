@@ -1,5 +1,16 @@
 # Project notes
 
+## 2026-08-05 03:35:00 EDT — Agent-aware controls and SSH recovery
+
+- Made authenticated agent status authoritative for the Worker Control display,
+  including live worker records, counts, execution mode, and plugin capabilities.
+- Disabled worker start/stop actions until the selected agent responds successfully;
+  unreachable and HTTP-rejected agents now have distinct visible states.
+- Added SSH-based clean agent restart for hung or unreachable HTTP endpoints and
+  clarified that deployment reinstalls files/configuration, reloads the service,
+  and starts the requested worker group.
+- Added macOS restart-path regression coverage using the resolved remote home.
+
 ## 2026-08-05 02:35:00 EDT — Provision worker hosts over SSH
 
 - Added an SSH provisioning workflow to the desktop controller for macOS and

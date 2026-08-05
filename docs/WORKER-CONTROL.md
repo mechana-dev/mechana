@@ -69,9 +69,14 @@ every client that can reach the port full worker start/stop authority. If
 java -jar worker-control-app/target/mechana-worker-control.jar
 ```
 
-Enter the agent hostname/IP, port, and matching token. **Refresh** reports only
-workers launched by this agent. Select a count, execution mode, and comma-separated
-plugin list, then press **Start** to add the deficit up to that count.
+Enter the agent hostname/IP, port, and matching token. The app probes the selected
+agent at startup, after host selection, and on **Refresh**. An authenticated response
+is shown as **AGENT ONLINE** and its live worker records, counts, execution mode, and
+plugins replace stale display values. **Start** and **Stop all** remain disabled until
+that probe succeeds. An HTTP-responding agent that rejects the token is shown as
+detected with controls locked; an endpoint that does not answer is unavailable.
+Select a count, execution mode, and comma-separated plugin list, then press **Start**
+to add the deficit up to that count.
 
 On the MBA, choose **SANDBOXED** and `fractal-render`. The agent verifies that the
 host is macOS, the requested plugin is listed in `sandboxed-capabilities`, and the
@@ -109,7 +114,7 @@ sandbox root. Leave **Identity** blank to use the normal SSH agent/config, or se
 an explicit private-key path. Host-key verification is strict by default; select
 **Accept new host key** only after independently verifying the target.
 
-**Deploy + start via SSH** performs this sequence:
+**Reinstall + start via SSH** performs this sequence:
 
 1. connects with batch-mode `ssh` and detects `Darwin` or `Linux`;
 2. discovers the remote home and Java executable;
@@ -130,6 +135,13 @@ firewall.
 then unloads/disables the remote launchd or systemd user service. Uploaded files
 and service definitions are retained for a later restart or upgrade. The action
 still works through SSH when the agent HTTP endpoint is unavailable.
+
+**Restart agent via SSH** first attempts a graceful worker stop through the agent
+API, then reloads the existing launchd job or restarts the existing systemd user
+service. The SSH path can recover an installed agent whose HTTP API is hung or
+unreachable, and it does not upload files. Use **Reinstall + start via SSH** when
+the installed artifacts or configuration may be damaged or stale; it overwrites
+them, reloads the service, and starts the requested workers.
 
 This is "from scratch" for Mechana files and service registration; it does not
 install Java, configure SSH itself, change firewalls, enable Linux lingering, or

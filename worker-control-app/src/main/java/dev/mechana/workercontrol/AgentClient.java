@@ -27,6 +27,19 @@ import java.time.Instant;
 import java.util.List;
 
 final class AgentClient {
+	static final class AgentResponseException extends IOException {
+		private static final long serialVersionUID = 1L;
+		private final int statusCode;
+
+		AgentResponseException(int statusCode, String body) {
+			super("Agent returned HTTP " + statusCode + ": " + body);
+			this.statusCode = statusCode;
+		}
+
+		int statusCode() {
+			return statusCode;
+		}
+	}
 	enum LaunchMode {
 		LEGACY, SANDBOXED
 	}
@@ -75,7 +88,7 @@ final class AgentClient {
 			builder.GET();
 		HttpResponse<String> response = http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
 		if (response.statusCode() != 200)
-			throw new IOException("Agent returned HTTP " + response.statusCode() + ": " + response.body());
+			throw new AgentResponseException(response.statusCode(), response.body());
 		return json.readValue(response.body(), Status.class);
 	}
 }

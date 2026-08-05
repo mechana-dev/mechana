@@ -53,9 +53,12 @@ final class WorkerControlFrame extends JFrame {
 	private final JButton refresh = new JButton("Refresh");
 	private final JButton start = new JButton("Start");
 	private final JButton stop = new JButton("Stop all");
-	private final JButton deploy = new JButton("Deploy + start via SSH");
+	private final JButton deploy = new JButton("Reinstall + start via SSH");
+	private final JButton restartAgent = new JButton("Restart agent via SSH");
 	private final JButton stopAgent = new JButton("Stop remote agent via SSH");
 	private boolean changingHostList;
+	private boolean agentReady;
+	private boolean busy;
 	private long requestGeneration;
 
 	WorkerControlFrame(AgentClient client, SettingsStore store) {
@@ -112,6 +115,7 @@ final class WorkerControlFrame extends JFrame {
 		artifacts.add(new JLabel("Worker JAR"));
 		artifacts.add(workerJar);
 		artifacts.add(deploy);
+		artifacts.add(restartAgent);
 		artifacts.add(stopAgent);
 		provisioning.add(ssh);
 		provisioning.add(paths);
@@ -126,17 +130,27 @@ final class WorkerControlFrame extends JFrame {
 		});
 		launchMode.addActionListener(event -> applyModeDefaults());
 		start.addActionListener(event -> run("Starting", () -> client.start(baseUri(), tokenValue(),
-				(Integer) count.getValue(), selectedMode(), capabilities.getText().strip())));
-		stop.addActionListener(event -> run("Stopping", () -> client.stop(baseUri(), tokenValue())));
+				(Integer) count.getValue(), selectedMode(), capabilities.getText().strip()), Availability.KEEP));
+		stop.addActionListener(event -> run("Stopping", () -> client.stop(baseUri(), tokenValue()), Availability.KEEP));
 		deploy.addActionListener(event -> {
 			ensureToken();
-			run("Deploying", () -> {
+			run("Reinstalling", () -> {
 				provisioner.deploy(provisionRequest());
 				waitForAgent();
 				return client.start(baseUri(), tokenValue(), (Integer) count.getValue(), selectedMode(),
 						capabilities.getText().strip());
-			});
+			}, Availability.ON_SUCCESS);
 		});
+		restartAgent.addActionListener(event -> run("Restarting agent", () -> {
+			try {
+				client.stop(baseUri(), tokenValue());
+			} catch (IOException ignored) {
+				// SSH can recover an agent that does not answer its HTTP API.
+			}
+			provisioner.restart(provisionRequest());
+			waitForAgent();
+			return client.status(baseUri(), tokenValue());
+		}, Availability.PROBE));
 		stopAgent.addActionListener(event -> run("Stopping remote agent", () -> {
 			try {
 				client.stop(baseUri(), tokenValue());
@@ -145,19 +159,20 @@ final class WorkerControlFrame extends JFrame {
 			}
 			provisioner.stop(provisionRequest());
 			return new AgentClient.Status(0, 0, "STOPPED", List.of(), "Remote agent stopped", null, "", "");
-		}));
+		}, Availability.OFF_ON_SUCCESS));
 		loadSettings();
 		setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		pack();
 		setLocationByPlatform(true);
+		updateControls();
 		SwingUtilities.invokeLater(this::refreshStatus);
 	}
 
 	private void refreshStatus() {
-		run("Checking", () -> client.status(baseUri(), tokenValue()));
+		run("Checking", () -> client.status(baseUri(), tokenValue()), Availability.PROBE);
 	}
 
-	private void run(String activity, Operation operation) {
+	private void run(String activity, Operation operation, Availability availability) {
 		long generation = ++requestGeneration;
 		setBusy(true);
 		state.setText(activity + "…");
@@ -171,17 +186,29 @@ final class WorkerControlFrame extends JFrame {
 		}).whenComplete((result, failure) -> SwingUtilities.invokeLater(() -> {
 			if (generation != requestGeneration)
 				return;
-			setBusy(false);
-			if (failure == null)
+			if (failure == null) {
+				if (availability == Availability.PROBE || availability == Availability.ON_SUCCESS)
+					agentReady = true;
+				else if (availability == Availability.OFF_ON_SUCCESS)
+					agentReady = false;
 				show(result);
-			else
-				showError(failure);
+			} else {
+				if (availability == Availability.PROBE)
+					agentReady = false;
+				showError(failure, availability == Availability.PROBE);
+			}
+			setBusy(false);
 		}));
 	}
 
 	private void show(AgentClient.Status status) {
-		state.setText(status.state() + " — " + status.runningCount() + " running / " + status.requestedCount()
-				+ " requested");
+		state.setText((agentReady ? "AGENT ONLINE — " : "AGENT STOPPED — ") + status.state() + " — "
+				+ status.runningCount() + " running / " + status.requestedCount() + " requested");
+		count.setValue(status.requestedCount());
+		if (status.launchMode() != null) {
+			launchMode.setSelectedItem(status.launchMode());
+			capabilities.setText(status.capabilities());
+		}
 		StringBuilder text = new StringBuilder();
 		if (status.launchMode() != null) {
 			text.append("Mode: ").append(status.launchMode()).append("   Plugins: ").append(status.capabilities());
@@ -198,9 +225,12 @@ final class WorkerControlFrame extends JFrame {
 		workers.setText(text.toString());
 	}
 
-	private void showError(Throwable failure) {
+	private void showError(Throwable failure, boolean agentUnavailable) {
 		Throwable cause = failure.getCause() == null ? failure : failure.getCause();
-		state.setText("ERROR");
+		if (agentUnavailable && cause instanceof AgentClient.AgentResponseException response)
+			state.setText("AGENT DETECTED — HTTP " + response.statusCode() + " — CONTROLS LOCKED");
+		else
+			state.setText(agentUnavailable ? "AGENT UNAVAILABLE" : "ERROR");
 		workers.setText(cause.getMessage());
 	}
 	private URI baseUri() {
@@ -221,10 +251,15 @@ final class WorkerControlFrame extends JFrame {
 			capabilities.setText("fractal-render");
 	}
 	private void setBusy(boolean busy) {
+		this.busy = busy;
+		updateControls();
+	}
+	private void updateControls() {
 		refresh.setEnabled(!busy);
-		start.setEnabled(!busy);
-		stop.setEnabled(!busy);
+		start.setEnabled(!busy && agentReady);
+		stop.setEnabled(!busy && agentReady);
 		deploy.setEnabled(!busy);
+		restartAgent.setEnabled(!busy);
 		stopAgent.setEnabled(!busy);
 	}
 
@@ -312,5 +347,8 @@ final class WorkerControlFrame extends JFrame {
 	@FunctionalInterface
 	private interface Operation {
 		AgentClient.Status run() throws IOException, InterruptedException;
+	}
+	private enum Availability {
+		PROBE, ON_SUCCESS, OFF_ON_SUCCESS, KEEP
 	}
 }
