@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -122,6 +123,24 @@ class SshProvisionerTest {
 						&& !value.contains("launchctl print")
 						&& value.contains("/Users/remote/Library/LaunchAgents/dev.mechana.worker-host-agent.plist")
 						&& !value.contains("$HOME")));
+	}
+
+	@Test
+	void keepsSuccessfulCommandDiagnosticsOutOfStdout() throws Exception {
+		Path command = Files.writeString(temporary.resolve("ssh-warning.sh"),
+				"#!/bin/sh\nprintf 'post-quantum warning\\n' >&2\nprintf 'Darwin\\n'\n");
+		assertTrue(command.toFile().setExecutable(true));
+		assertEquals("Darwin\n", SshProvisioner.runCommand(List.of(command.toString()), Duration.ofSeconds(5)));
+	}
+
+	@Test
+	void includesCommandStderrWhenTheCommandFails() throws Exception {
+		Path command = Files.writeString(temporary.resolve("ssh-failure.sh"),
+				"#!/bin/sh\nprintf 'connection refused\\n' >&2\nexit 7\n");
+		assertTrue(command.toFile().setExecutable(true));
+		java.io.IOException failure = assertThrows(java.io.IOException.class,
+				() -> SshProvisioner.runCommand(List.of(command.toString()), Duration.ofSeconds(5)));
+		assertTrue(failure.getMessage().contains("connection refused"));
 	}
 
 	private SshProvisioner.Request request(Path agent, Path worker) {

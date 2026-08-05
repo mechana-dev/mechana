@@ -6,6 +6,13 @@
   values display as `8790` and `21012`, never `8,790` or `21,012`.
 - Added a Swing formatting regression test for the custom SSH port.
 
+## 2026-08-05 04:40:00 EDT — Keep SSH diagnostics out of command results
+
+- Separated SSH/SCP stderr from stdout so OpenSSH security warnings no longer
+  corrupt remote `uname`, home-directory, or Java-path detection.
+- Preserved stderr in nonzero-exit diagnostics and added process-level regression
+  tests for successful warnings and failed commands.
+
 ## 2026-08-05 04:25:00 EDT — Support custom remote SSH ports
 
 - Added a persisted SSH port field to Worker Control, separate from the host-agent
