@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 /** Installs and controls the host agent over an existing OpenSSH connection. */
 final class SshProvisioner {
@@ -268,17 +270,43 @@ final class SshProvisioner {
 		return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
 	}
 
-	private static String runCommand(List<String> command, Duration timeout) throws IOException, InterruptedException {
-		Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+	static String runCommand(List<String> command, Duration timeout) throws IOException, InterruptedException {
+		Process process = new ProcessBuilder(command).start();
+		CompletableFuture<String> stdout = readAsync(process.getInputStream());
+		CompletableFuture<String> stderr = readAsync(process.getErrorStream());
 		boolean finished = process.waitFor(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
 		if (!finished) {
 			process.destroyForcibly();
 			throw new IOException("Command timed out: " + command.getFirst());
 		}
-		String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-		if (process.exitValue() != 0)
-			throw new IOException(command.getFirst() + " failed (exit " + process.exitValue() + "): " + output.strip());
+		String output = await(stdout);
+		String diagnostic = await(stderr).strip();
+		if (process.exitValue() != 0) {
+			if (diagnostic.isBlank())
+				diagnostic = output.strip();
+			throw new IOException(command.getFirst() + " failed (exit " + process.exitValue() + "): " + diagnostic);
+		}
 		return output;
+	}
+
+	private static CompletableFuture<String> readAsync(java.io.InputStream input) {
+		return CompletableFuture.supplyAsync(() -> {
+			try {
+				return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+			} catch (IOException failure) {
+				throw new CompletionException(failure);
+			}
+		});
+	}
+
+	private static String await(CompletableFuture<String> output) throws IOException {
+		try {
+			return output.join();
+		} catch (CompletionException failure) {
+			if (failure.getCause() instanceof IOException io)
+				throw io;
+			throw failure;
+		}
 	}
 
 	private static void deleteTree(Path root) throws IOException {
