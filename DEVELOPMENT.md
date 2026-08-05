@@ -81,6 +81,14 @@ process-count limits. `sandbox-exec` is deprecated by Apple, so this backend is
 an explicitly experimental development foundation rather than a production
 security boundary.
 
+Each sandbox attempt records its worker, process, job, attempt, and creation time
+and holds an operating-system lock for its lifetime. Normal completion, handled
+failure, timeout, cancellation, and graceful worker shutdown delete the complete
+attempt tree. If the worker JVM crashes or is forcibly killed, the OS releases
+the ownership lock; the next worker started against the same sandbox root safely
+reclaims marked, unlocked attempts. Unmarked directories and attempts still
+locked by another worker are never removed by this startup pass.
+
 Submit a job containing four five-second tasks:
 
 ```shell

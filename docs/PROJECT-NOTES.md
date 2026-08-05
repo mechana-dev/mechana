@@ -1,5 +1,20 @@
 # Project notes
 
+## 2026-08-05 02:10:00 EDT — Harden sandbox cleanup and crash recovery
+
+- Added per-attempt ownership metadata and an operating-system file lock so
+  multiple workers sharing one sandbox root can distinguish live attempts from
+  abandoned ones without trusting stale PID data alone.
+- Normal attempt close now removes the complete attempt directory and its empty
+  job parent. Worker startup reclaims only marked attempts whose ownership lock
+  can be acquired; active and unmarked directories are preserved.
+- Graceful worker disconnect now signals the active sandbox cancellation token
+  and waits up to ten seconds for host termination and attempt cleanup before
+  reporting the worker disconnected.
+- Added tests for normal recursive cleanup, active-lock protection, and abandoned
+  workspace recovery. Abrupt host-process descendant containment and periodic
+  scavenging remain future hardening work.
+
 ## 2026-08-05 01:10:00 EDT — Run fractal work through the macOS sandbox host
 
 - Wired distributed `fractal-render` assignments through the runtime manager,

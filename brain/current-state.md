@@ -28,7 +28,10 @@ This file reports repository evidence, not desired future status.
   manager and separate plugin host on macOS. It stages the host runtime and plugin
   JAR under attempt `input/`, streams NDJSON progress and artifact events, uploads
   staged outputs with the existing lease fencing, enforces timeout/cancellation at
-  the child-process boundary, and cleans the attempt workspace. The other four
+  the child-process boundary, and cleans the attempt workspace. Attempt ownership
+  metadata and OS locks protect active workspaces; graceful worker shutdown waits
+  for active cancellation and cleanup, while worker startup reclaims marked,
+  unlocked attempts abandoned by a crash. The other four
   concrete plugins retain their existing execution paths pending migration.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
   expired-work requeueing, and stale-completion rejection.
@@ -131,7 +134,8 @@ This file reports repository evidence, not desired future status.
 - Durable worker presence across restarts, richer fleet telemetry, authentication,
   or remote dashboard access.
 - Migration of sleep, video, OCR, and Blender plugins, a runtime manifest,
-  bounded log sizes, guaranteed descendant cleanup, hard CPU/RAM/
+  bounded log sizes, guaranteed descendant cleanup after abrupt worker death,
+  periodic stale-attempt scavenging, hard CPU/RAM/
   scratch/process limits, dedicated identities, production sandboxing, or
   certification. `sandbox-exec` is deprecated and unavailable beneath the MBA's
   current Codex containment. The fractal path was verified directly on the MBA;

@@ -31,6 +31,7 @@ import dev.mechana.protocol.Messages.TaskLease;
 import dev.mechana.protocol.Messages.WorkerRegistration;
 import dev.mechana.runtime.plugin.AttemptWorkspace;
 import dev.mechana.runtime.plugin.MacOsSandbox;
+import dev.mechana.runtime.plugin.OwnedAttemptWorkspace;
 import dev.mechana.runtime.plugin.PluginRuntimeManager;
 import dev.mechana.runtime.plugin.ProcessSandbox;
 import dev.mechana.runtime.plugin.SandboxPolicy;
@@ -52,7 +53,6 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.Enumeration;
 import java.util.Objects;
@@ -72,6 +72,8 @@ public final class WorkerAgent {
 	private final String workerAddress;
 	private final Set<String> supportedPlugins;
 	private final AtomicBoolean running = new AtomicBoolean(true);
+	private final AtomicReference<AtomicBoolean> activeCancellation = new AtomicReference<>();
+	private final AtomicReference<Thread> activeExecution = new AtomicReference<>();
 
 	public WorkerAgent(URI server, String workerId, Set<String> supportedPlugins) {
 		this(server, workerId, localAddress(), supportedPlugins);
@@ -82,6 +84,7 @@ public final class WorkerAgent {
 		this.workerId = Objects.requireNonNull(workerId, "workerId");
 		this.workerAddress = Objects.requireNonNull(workerAddress, "workerAddress");
 		this.supportedPlugins = Set.copyOf(supportedPlugins);
+		reclaimAbandonedAttempts();
 	}
 
 	public void runForever() {
@@ -110,6 +113,7 @@ public final class WorkerAgent {
 
 	public void disconnect() throws IOException, InterruptedException {
 		running.set(false);
+		cancelAndAwaitActiveAttempt();
 		Response response = post("/api/workers/" + workerId + "/disconnect", Set.of());
 		requireStatus(response, 204);
 		System.out.printf("Worker %s disconnected from server%n", workerId);
@@ -137,6 +141,8 @@ public final class WorkerAgent {
 
 	private void execute(TaskLease lease) throws IOException, InterruptedException {
 		AtomicBoolean cancelled = new AtomicBoolean();
+		activeCancellation.set(cancelled);
+		activeExecution.set(Thread.currentThread());
 		AtomicBoolean finished = new AtomicBoolean();
 		Thread leaseHeartbeat = startLeaseHeartbeat(lease, cancelled, finished);
 		Path pluginFile = null;
@@ -173,18 +179,19 @@ public final class WorkerAgent {
 			leaseHeartbeat.interrupt();
 			if (pluginFile != null)
 				Files.deleteIfExists(pluginFile);
+			activeExecution.compareAndSet(Thread.currentThread(), null);
+			activeCancellation.compareAndSet(cancelled, null);
 		}
 	}
 
 	private void executeSandboxed(TaskLease lease, Path downloadedPlugin, AtomicBoolean cancelled)
 			throws IOException, InterruptedException {
-		Path sandboxRoot = Path.of(System.getProperty("mechana.sandbox.root", "/private/tmp/mechana-sandbox"));
-		AttemptWorkspace workspace = AttemptWorkspace.create(sandboxRoot, lease.jobId(),
-				lease.taskId() + "-" + lease.attempt());
-		RemoteTaskContext context = new RemoteTaskContext(lease, cancelled);
-		AtomicReference<Throwable> protocolFailure = new AtomicReference<>();
-		AtomicBoolean completed = new AtomicBoolean();
-		try {
+		try (OwnedAttemptWorkspace owned = OwnedAttemptWorkspace.create(sandboxRoot(), lease.jobId(),
+				lease.taskId() + "-" + lease.attempt(), workerId)) {
+			AttemptWorkspace workspace = owned.workspace();
+			RemoteTaskContext context = new RemoteTaskContext(lease, cancelled);
+			AtomicReference<Throwable> protocolFailure = new AtomicReference<>();
+			AtomicBoolean completed = new AtomicBoolean();
 			Path plugin = workspace.input().resolve("plugin.jar");
 			Files.copy(downloadedPlugin, plugin);
 			HostRequest hostRequest = new HostRequest(plugin.toString(), lease.pluginEntrypoint(), lease.pluginId(),
@@ -222,8 +229,6 @@ public final class WorkerAgent {
 			Response completion = post(taskPath(lease, "complete"), new TaskCompletion(lease.leaseToken()));
 			requireStatus(completion, 204);
 			System.out.printf("Worker %s finished sandboxed task %s successfully%n", workerId, lease.taskId());
-		} finally {
-			deleteTree(workspace.root());
 		}
 	}
 
@@ -282,13 +287,28 @@ public final class WorkerAgent {
 		}
 	}
 
-	private static void deleteTree(Path root) throws IOException {
-		if (!Files.exists(root))
-			return;
-		try (var paths = Files.walk(root)) {
-			for (Path path : paths.sorted(Comparator.reverseOrder()).toList())
-				Files.deleteIfExists(path);
+	private void cancelAndAwaitActiveAttempt() throws InterruptedException {
+		AtomicBoolean cancellation = activeCancellation.get();
+		if (cancellation != null)
+			cancellation.set(true);
+		Thread execution = activeExecution.get();
+		if (execution != null && execution != Thread.currentThread())
+			execution.join(10_000);
+	}
+
+	private void reclaimAbandonedAttempts() {
+		try {
+			int reclaimed = OwnedAttemptWorkspace.reclaimAbandoned(sandboxRoot());
+			if (reclaimed > 0)
+				System.out.printf("Worker %s reclaimed %d abandoned sandbox attempt(s)%n", workerId, reclaimed);
+		} catch (IOException failure) {
+			System.err.printf("Worker %s could not reclaim abandoned sandbox attempts: %s%n", workerId,
+					failure.getMessage());
 		}
+	}
+
+	private static Path sandboxRoot() {
+		return Path.of(System.getProperty("mechana.sandbox.root", "/private/tmp/mechana-sandbox"));
 	}
 
 	private Thread startPresenceHeartbeat() {
