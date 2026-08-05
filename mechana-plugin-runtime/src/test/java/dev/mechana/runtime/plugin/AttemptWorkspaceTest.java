@@ -27,6 +27,7 @@ class AttemptWorkspaceTest {
 	void createsFixedAttemptLayoutAndRejectsTraversal() throws Exception {
 		AttemptWorkspace workspace = AttemptWorkspace.create(temporary, "job-1", "attempt-2");
 		assertAll(() -> assertTrue(workspace.input().toFile().isDirectory()),
+				() -> assertEquals(workspace.root().toRealPath(), workspace.root()),
 				() -> assertTrue(workspace.work().toFile().isDirectory()),
 				() -> assertTrue(workspace.output().toFile().isDirectory()),
 				() -> assertTrue(workspace.logs().toFile().isDirectory()),

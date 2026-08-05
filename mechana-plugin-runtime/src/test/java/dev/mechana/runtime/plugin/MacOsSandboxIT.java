@@ -41,7 +41,8 @@ class MacOsSandboxIT {
 	@Test
 	void allowsWorkspaceIoButDeniesInputWritesAndOutsideReadsAndWrites() throws Exception {
 		Files.writeString(workspace.input().resolve("source.txt"), "input");
-		assertEquals(0, execute("cat ../input/source.txt > ../output/result.txt").exitCode());
+		SandboxResult allowed = execute("cat ../input/source.txt > ../output/result.txt");
+		assertEquals(0, allowed.exitCode(), () -> diagnostics(allowed));
 		assertEquals("input", Files.readString(workspace.output().resolve("result.txt")));
 		assertNotEquals(0, execute("echo bad >> ../input/source.txt").exitCode());
 		assertNotEquals(0, execute("cat /etc/passwd").exitCode());
@@ -66,6 +67,14 @@ class MacOsSandboxIT {
 	private SandboxResult execute(String shell) throws Exception {
 		return sandbox.execute(new SandboxRequest(List.of("/bin/sh", "-c", shell), Map.of("PATH", "/usr/bin:/bin"),
 				workspace, policy()), new AtomicBoolean());
+	}
+
+	private static String diagnostics(SandboxResult result) {
+		try {
+			return "stderr: " + Files.readString(result.stderr());
+		} catch (java.io.IOException failure) {
+			return "stderr could not be read: " + failure.getMessage();
+		}
 	}
 	private SandboxPolicy policy() {
 		return new SandboxPolicy(TrustMode.SANDBOXED, false, 1, 1024, 1024, Duration.ofSeconds(3), 2);

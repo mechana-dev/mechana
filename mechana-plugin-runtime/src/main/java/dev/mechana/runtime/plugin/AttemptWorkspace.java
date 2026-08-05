@@ -24,8 +24,9 @@ import java.util.Objects;
 /** Fixed job/attempt workspace layout. */
 public record AttemptWorkspace(Path root, Path input, Path work, Path output, Path logs) {
 	public static AttemptWorkspace create(Path sandboxRoot, String jobId, String attemptId) throws IOException {
-		Path root = sandboxRoot.toAbsolutePath().normalize().resolve(safe(jobId)).resolve(safe(attemptId));
-		Files.createDirectories(root);
+		Path requestedRoot = sandboxRoot.toAbsolutePath().normalize().resolve(safe(jobId)).resolve(safe(attemptId));
+		Files.createDirectories(requestedRoot);
+		Path root = requestedRoot.toRealPath();
 		try {
 			Files.setPosixFilePermissions(root, PosixFilePermissions.fromString("rwx------"));
 		} catch (UnsupportedOperationException ignored) {
