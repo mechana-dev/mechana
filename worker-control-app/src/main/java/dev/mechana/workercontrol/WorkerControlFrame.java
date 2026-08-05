@@ -204,7 +204,6 @@ final class WorkerControlFrame extends JFrame {
 	private void show(AgentClient.Status status) {
 		state.setText((agentReady ? "AGENT ONLINE — " : "AGENT STOPPED — ") + status.state() + " — "
 				+ status.runningCount() + " running / " + status.requestedCount() + " requested");
-		count.setValue(status.requestedCount());
 		if (status.launchMode() != null) {
 			launchMode.setSelectedItem(status.launchMode());
 			capabilities.setText(status.capabilities());

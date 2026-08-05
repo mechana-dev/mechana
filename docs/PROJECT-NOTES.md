@@ -1,5 +1,12 @@
 # Project notes
 
+## 2026-08-05 03:50:00 EDT — Stabilize agent restart and desired worker count
+
+- Kept the desired worker spinner independent from the agent's current requested
+  count so an online agent with zero workers no longer erases the user's selection.
+- Changed macOS SSH restart to use launchd `kickstart -k` for a loaded service and
+  bootstrap only when it is not loaded, avoiding an unload/reload race.
+
 ## 2026-08-05 03:35:00 EDT — Agent-aware controls and SSH recovery
 
 - Made authenticated agent status authoritative for the Worker Control display,

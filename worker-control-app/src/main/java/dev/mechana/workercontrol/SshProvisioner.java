@@ -99,8 +99,11 @@ final class SshProvisioner {
 		String home = ssh(request, target, "pwd").strip();
 		if (os == RemoteOs.MACOS) {
 			String plist = home + "/Library/LaunchAgents/" + LABEL + ".plist";
-			ssh(request, target, "test -f " + quote(plist) + "; launchctl bootout gui/$(id -u)/" + LABEL
-					+ " 2>/dev/null || true; launchctl bootstrap gui/$(id -u) " + quote(plist));
+			String service = "gui/$(id -u)/" + LABEL;
+			ssh(request, target,
+					"test -f " + quote(plist) + "; if launchctl print " + service
+							+ " >/dev/null 2>&1; then launchctl kickstart -k " + service
+							+ "; else launchctl bootstrap gui/$(id -u) " + quote(plist) + "; fi");
 		} else {
 			ssh(request, target, "systemctl --user restart " + LABEL + ".service");
 		}
