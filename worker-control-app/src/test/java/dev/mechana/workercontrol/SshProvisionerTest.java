@@ -60,6 +60,11 @@ class SshProvisionerTest {
 		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("sandbox-root=/private/tmp/mechana")));
 		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("dev.mechana.worker-host-agent")));
 		assertTrue(commands.stream().flatMap(List::stream).anyMatch(value -> value.equals("BatchMode=yes")));
+		assertTrue(commands.stream().filter(command -> command.getFirst().equals("scp")).map(List::getLast)
+				.anyMatch(value -> value.equals(
+						"mark@mba.example:/Users/remote/Library/LaunchAgents/dev.mechana.worker-host-agent.plist")));
+		assertTrue(commands.stream().filter(command -> command.getFirst().equals("scp")).map(List::getLast)
+				.noneMatch(value -> value.contains("$HOME")));
 	}
 
 	@Test

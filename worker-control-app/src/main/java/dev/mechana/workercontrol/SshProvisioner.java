@@ -72,9 +72,9 @@ final class SshProvisioner {
 			copy(request, target, request.workerJar(), remote + "/mechana-worker.jar");
 			copy(request, target, config, remote + "/worker-host-agent.properties");
 			if (os == RemoteOs.MACOS)
-				installMacOs(request, target, temporary, java, remote);
+				installMacOs(request, target, temporary, java, remote, home);
 			else
-				installLinux(request, target, temporary, java, remote);
+				installLinux(request, target, temporary, java, remote, home);
 		} finally {
 			deleteTree(temporary);
 		}
@@ -101,24 +101,25 @@ final class SshProvisioner {
 		};
 	}
 
-	private void installMacOs(Request request, String target, Path temporary, String java, String remote)
+	private void installMacOs(Request request, String target, Path temporary, String java, String remote, String home)
 			throws IOException, InterruptedException {
 		Path plist = temporary.resolve(LABEL + ".plist");
 		Files.writeString(plist, macOsPlist(java, remote), StandardCharsets.UTF_8);
-		ssh(request, target, "mkdir -p \"$HOME/Library/LaunchAgents\"");
-		copy(request, target, plist, "$HOME/Library/LaunchAgents/" + LABEL + ".plist");
+		String launchAgents = home + "/Library/LaunchAgents";
+		ssh(request, target, "mkdir -p " + quote(launchAgents));
+		copy(request, target, plist, launchAgents + "/" + LABEL + ".plist");
 		ssh(request, target,
-				"launchctl bootout gui/$(id -u)/" + LABEL
-						+ " 2>/dev/null || true; launchctl bootstrap gui/$(id -u) \"$HOME/Library/LaunchAgents/" + LABEL
-						+ ".plist\"");
+				"launchctl bootout gui/$(id -u)/" + LABEL + " 2>/dev/null || true; launchctl bootstrap gui/$(id -u) "
+						+ quote(launchAgents + "/" + LABEL + ".plist"));
 	}
 
-	private void installLinux(Request request, String target, Path temporary, String java, String remote)
+	private void installLinux(Request request, String target, Path temporary, String java, String remote, String home)
 			throws IOException, InterruptedException {
 		Path service = temporary.resolve(LABEL + ".service");
 		Files.writeString(service, linuxService(java, remote), StandardCharsets.UTF_8);
-		ssh(request, target, "mkdir -p \"$HOME/.config/systemd/user\"");
-		copy(request, target, service, "$HOME/.config/systemd/user/" + LABEL + ".service");
+		String serviceDirectory = home + "/.config/systemd/user";
+		ssh(request, target, "mkdir -p " + quote(serviceDirectory));
+		copy(request, target, service, serviceDirectory + "/" + LABEL + ".service");
 		ssh(request, target, "systemctl --user daemon-reload; systemctl --user enable --now " + LABEL + ".service");
 	}
 
