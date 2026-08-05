@@ -49,11 +49,13 @@ This file reports repository evidence, not desired future status.
   runtime, plugin JAR, and remote task inputs under attempt `input/`, streams NDJSON
   progress and artifact events, uploads
   staged outputs with the existing lease fencing, enforces timeout/cancellation at
-  the child-process boundary, and cleans the attempt workspace. Attempt ownership
+  the child-process boundary, and cleans the attempt workspace. Sleep and fractal
+  require no native runtime; video, OCR, and Blender fail closed unless their
+  required absolute executable paths are configured. Attempt ownership
   metadata and OS locks protect active workspaces; graceful worker shutdown waits
   for active cancellation and cleanup, while worker startup reclaims marked,
-  unlocked attempts abandoned by a crash. The other four
-  concrete plugins retain their existing execution paths pending migration.
+  unlocked attempts abandoned by a crash. Legacy workers retain the existing
+  in-process execution paths for compatibility.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
   expired-work requeueing, and stale-completion rejection.
 - Worker presence and task ownership use independent heartbeats. Workers emit a

@@ -79,8 +79,7 @@ public final class BlenderRenderPlugin implements TaskPlugin {
 		}
 	}
 
-	private static void stageInput(Map<String, String> parameters, Path destination)
-			throws IOException, InterruptedException {
+	static void stageInput(Map<String, String> parameters, Path destination) throws IOException, InterruptedException {
 		String local = parameters.get("inputPath");
 		if (local != null) {
 			Files.copy(Path.of(local), destination);

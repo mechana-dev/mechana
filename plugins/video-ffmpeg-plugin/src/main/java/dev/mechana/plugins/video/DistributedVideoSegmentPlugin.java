@@ -74,7 +74,7 @@ public final class DistributedVideoSegmentPlugin implements TaskPlugin {
 		}
 	}
 
-	private static void stageInput(Map<String, String> parameters, Path destination, TaskContext context)
+	static void stageInput(Map<String, String> parameters, Path destination, TaskContext context)
 			throws IOException, InterruptedException {
 		String local = parameters.get("inputPath");
 		if (local != null) {

@@ -803,3 +803,14 @@ Append-only record of material Mechana project changes and accepted decisions.
   writes outside work/output/logs are denied after a successful live probe;
   workspace-only system reads and hard CPU, memory, scratch, process-count, and
   descendant-tree guarantees remain unavailable.
+
+## 2026-08-05 05:31:22 EDT — Verify remaining sandbox plugin adapters
+
+- Added focused tests proving the FFmpeg, Tesseract, and Blender plugin adapters
+  consume worker-staged local inputs without performing plugin-side network
+  downloads. Sleep remains pure Java and requires no input adapter.
+- Corrected architecture, plugin-model, and current-state text that still described
+  the four remaining plugin migrations as pending after their implementation.
+- Verified the full 18-module reactor with Java 25.0.4 and Maven 3.9.16 on macOS
+  26.5.2 arm64. All four live macOS sandbox integration checks passed, along with
+  unit tests, Spotless, and SpotBugs.

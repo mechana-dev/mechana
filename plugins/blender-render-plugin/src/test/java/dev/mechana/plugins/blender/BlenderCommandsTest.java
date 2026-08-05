@@ -19,10 +19,28 @@ package dev.mechana.plugins.blender;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class BlenderCommandsTest {
+	@TempDir
+	Path temporary;
+
+	@Test
+	void stagesWorkerProvidedSceneWithoutNetworkAccess() throws Exception {
+		Path source = temporary.resolve("staged.blend");
+		Path destination = temporary.resolve("work/scene.blend");
+		Files.writeString(source, "packed-scene");
+		Files.createDirectories(destination.getParent());
+
+		BlenderRenderPlugin.stageInput(Map.of("inputPath", source.toString()), destination);
+
+		assertEquals("packed-scene", Files.readString(destination));
+	}
+
 	@Test
 	void constructsSafeCpuFrameRangeCommand() {
 		var command = new BlenderCommands("blender").render(Path.of("scene.blend"), Path.of("frame_######"), 11, 20,

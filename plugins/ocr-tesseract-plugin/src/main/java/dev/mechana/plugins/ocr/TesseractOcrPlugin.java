@@ -87,7 +87,7 @@ public final class TesseractOcrPlugin implements TaskPlugin {
 		}
 	}
 
-	private static void stageInput(Map<String, String> parameters, int offset, Path destination)
+	static void stageInput(Map<String, String> parameters, int offset, Path destination)
 			throws IOException, InterruptedException {
 		String local = parameters.get("pagePath." + offset);
 		if (local != null) {
