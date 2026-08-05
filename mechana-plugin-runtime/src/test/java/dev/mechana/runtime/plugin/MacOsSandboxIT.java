@@ -41,16 +41,18 @@ class MacOsSandboxIT {
 	@Test
 	void allowsWorkspaceIoButDeniesInputWritesAndOutsideReadsAndWrites() throws Exception {
 		Files.writeString(workspace.input().resolve("source.txt"), "input");
-		SandboxResult allowed = execute("cat ../input/source.txt > ../output/result.txt");
+		SandboxResult allowed = execute(List.of("/bin/cp", workspace.input().resolve("source.txt").toString(),
+				workspace.output().resolve("result.txt").toString()));
 		assertEquals(0, allowed.exitCode(), () -> diagnostics(allowed));
 		assertEquals("input", Files.readString(workspace.output().resolve("result.txt")));
-		assertNotEquals(0, execute("echo bad >> ../input/source.txt").exitCode());
-		assertNotEquals(0, execute("cat /etc/passwd").exitCode());
-		assertNotEquals(0, execute("echo bad > /tmp/mechana-sandbox-escape").exitCode());
+		assertNotEquals(0,
+				execute(List.of("/usr/bin/touch", workspace.input().resolve("source.txt").toString())).exitCode());
+		assertNotEquals(0, execute(List.of("/bin/cat", "/etc/passwd")).exitCode());
+		assertNotEquals(0, execute(List.of("/usr/bin/touch", "/tmp/mechana-sandbox-escape")).exitCode());
 	}
 	@Test
 	void deniesNetworkWhenPolicyRequiresIt() throws Exception {
-		SandboxResult result = execute("/usr/bin/curl --connect-timeout 1 http://127.0.0.1:9");
+		SandboxResult result = execute(List.of("/usr/bin/curl", "--connect-timeout", "1", "http://127.0.0.1:9"));
 		assertNotEquals(0, result.exitCode());
 		assertTrue(result.capabilities().enforces(SandboxControl.NETWORK_DENIAL));
 	}
@@ -64,9 +66,9 @@ class MacOsSandboxIT {
 				() -> assertFalse(capabilities.enforces(SandboxControl.CPU_LIMIT)),
 				() -> assertFalse(capabilities.enforces(SandboxControl.PROCESS_LIMIT)));
 	}
-	private SandboxResult execute(String shell) throws Exception {
-		return sandbox.execute(new SandboxRequest(List.of("/bin/sh", "-c", shell), Map.of("PATH", "/usr/bin:/bin"),
-				workspace, policy()), new AtomicBoolean());
+	private SandboxResult execute(List<String> command) throws Exception {
+		return sandbox.execute(new SandboxRequest(command, Map.of("PATH", "/usr/bin:/bin"), workspace, policy()),
+				new AtomicBoolean());
 	}
 
 	private static String diagnostics(SandboxResult result) {
