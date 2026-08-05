@@ -21,6 +21,13 @@ This file reports repository evidence, not desired future status.
   home, and is allowlisted to the migrated `fractal-render` plugin by default.
   Status reports the effective mode, plugins, and sandbox root; a running group
   must be stopped before changing its mode or capabilities.
+- The desktop controller can provision the host-agent and worker JARs over
+  existing batch-mode SSH to a macOS or Linux user account, generate the secured
+  agent configuration, install a per-user launchd or systemd service, wait for
+  agent readiness, and start the requested worker group. It can also stop managed
+  workers and unload/disable the remote agent service over SSH. This requires an
+  existing Java 25 runtime and SSH trust; it does not install prerequisites, use
+  sudo, modify firewalls, enable Linux lingering, or support Windows services.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/
@@ -147,7 +154,8 @@ This file reports repository evidence, not desired future status.
   current Codex containment. The fractal path was verified directly on the MBA;
   the remaining distributed plugin paths are not sandboxed.
 - Durable host-agent child-process adoption after an agent restart, TLS, token
-  rotation, role-based access, or operating-system service installers.
+  rotation, role-based access, Windows/system-wide service installers, Java
+  runtime deployment, or firewall/SSH bootstrap automation.
 - Generic cross-plugin resume validation, reusable completed-work artifact
   manifests, or plugin-defined mid-work-unit checkpoints. Resume-as-new is
   currently limited to scheduler-managed sleep jobs and reuses their logical

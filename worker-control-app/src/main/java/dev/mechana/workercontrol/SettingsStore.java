@@ -28,7 +28,9 @@ import java.util.Properties;
 
 final class SettingsStore {
 	record Settings(List<String> hosts, String lastHost, int port, String token, int count,
-			AgentClient.LaunchMode launchMode, String capabilities) {
+			AgentClient.LaunchMode launchMode, String capabilities, String sshUser, String identityFile,
+			boolean acceptNewHostKey, String coordinator, String remoteDirectory, String agentJar, String workerJar,
+			String sandboxRoot) {
 	}
 	private final Path file;
 	SettingsStore(Path file) {
@@ -56,7 +58,14 @@ final class SettingsStore {
 				Integer.parseInt(p.getProperty("port", "8790")), p.getProperty("token", ""),
 				Integer.parseInt(p.getProperty("count", "1")),
 				AgentClient.LaunchMode.valueOf(p.getProperty("launch-mode", "SANDBOXED")),
-				p.getProperty("capabilities", "fractal-render"));
+				p.getProperty("capabilities", "fractal-render"),
+				p.getProperty("ssh-user", System.getProperty("user.name")), p.getProperty("identity-file", ""),
+				Boolean.parseBoolean(p.getProperty("accept-new-host-key", "false")),
+				p.getProperty("coordinator", "http://127.0.0.1:8787"),
+				p.getProperty("remote-directory", ".mechana/host-agent"),
+				p.getProperty("agent-jar", "worker-host-agent/target/mechana-worker-host-agent.jar"),
+				p.getProperty("worker-jar", "mechana-worker/target/mechana-worker.jar"),
+				p.getProperty("sandbox-root", "/private/tmp/mechana-sandbox"));
 	}
 
 	void save(Settings settings) throws IOException {
@@ -70,6 +79,14 @@ final class SettingsStore {
 		p.setProperty("count", Integer.toString(settings.count()));
 		p.setProperty("launch-mode", settings.launchMode().name());
 		p.setProperty("capabilities", settings.capabilities());
+		p.setProperty("ssh-user", settings.sshUser());
+		p.setProperty("identity-file", settings.identityFile());
+		p.setProperty("accept-new-host-key", Boolean.toString(settings.acceptNewHostKey()));
+		p.setProperty("coordinator", settings.coordinator());
+		p.setProperty("remote-directory", settings.remoteDirectory());
+		p.setProperty("agent-jar", settings.agentJar());
+		p.setProperty("worker-jar", settings.workerJar());
+		p.setProperty("sandbox-root", settings.sandboxRoot());
 		Path parent = file.getParent();
 		if (parent != null)
 			Files.createDirectories(parent);

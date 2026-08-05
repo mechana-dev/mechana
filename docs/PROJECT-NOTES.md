@@ -1,5 +1,23 @@
 # Project notes
 
+## 2026-08-05 02:35:00 EDT — Provision worker hosts over SSH
+
+- Added an SSH provisioning workflow to the desktop controller for macOS and
+  Linux user accounts. It uses the local OpenSSH client and existing SSH agent or
+  identity file, retains strict host-key checking by default, and never stores an
+  SSH password or requests sudo.
+- The controller detects the remote OS and Java path, uploads the host-agent and
+  worker JARs plus generated secured configuration, and installs a per-user
+  launchd or systemd service. After the agent becomes reachable it starts the
+  requested worker count, execution mode, and plugin selection.
+- Added a remote stop action that requests graceful worker shutdown when possible
+  and then unloads/disables the agent service over SSH. Install files remain for
+  restart or upgrade.
+- Added deterministic tests for SSH/scp command construction, batch and host-key
+  options, platform rejection, generated configuration, and launchd/systemd
+  templates. Java installation, SSH bootstrap, firewalls, Linux lingering,
+  Windows services, and system-wide/root installation remain out of scope.
+
 ## 2026-08-05 02:25:00 EDT — Control sandboxed workers from the desktop app
 
 - Extended the host-agent start API with explicit `SANDBOXED` and `LEGACY`
