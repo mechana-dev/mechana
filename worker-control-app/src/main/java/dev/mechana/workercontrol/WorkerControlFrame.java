@@ -39,8 +39,7 @@ final class WorkerControlFrame extends JFrame {
 	private final JPasswordField token = new JPasswordField(16);
 	private final JSpinner count = new JSpinner(new SpinnerNumberModel(1, 0, 128, 1));
 	private final JComboBox<AgentClient.LaunchMode> launchMode = new JComboBox<>(AgentClient.LaunchMode.values());
-	private final JTextField capabilities = new JTextField(
-			"sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render", 28);
+	private final JTextField capabilities = new JTextField("fractal-render", 28);
 	private final JTextField sshUser = new JTextField(System.getProperty("user.name"), 10);
 	private final JSpinner sshPort = new JSpinner(new SpinnerNumberModel(22, 1, 65535, 1));
 	private final JTextField identityFile = new JTextField(18);
@@ -251,7 +250,7 @@ final class WorkerControlFrame extends JFrame {
 	private void applyModeDefaults() {
 		boolean sandboxed = selectedMode() == AgentClient.LaunchMode.SANDBOXED;
 		if (sandboxed)
-			capabilities.setText("sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render");
+			capabilities.setText("fractal-render");
 	}
 	private void setBusy(boolean busy) {
 		this.busy = busy;
@@ -323,8 +322,8 @@ final class WorkerControlFrame extends JFrame {
 				identity.isBlank() ? null : Path.of(identity), acceptNewHostKey.isSelected(),
 				Path.of(agentJar.getText().strip()), Path.of(workerJar.getText().strip()),
 				remoteDirectory.getText().strip(), coordinator.getText().strip(), (Integer) port.getValue(),
-				tokenValue(), "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render",
-				"sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render", sandboxRoot.getText().strip());
+				tokenValue(), "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render", "fractal-render",
+				sandboxRoot.getText().strip());
 	}
 
 	private void waitForAgent() throws IOException, InterruptedException {

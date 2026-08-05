@@ -36,7 +36,7 @@ working-directory=/absolute/path/to/mechana-agent-data
 max-workers=12
 capabilities=sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render
 sandbox-root=/private/tmp/mechana-sandbox
-sandboxed-capabilities=sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render
+sandboxed-capabilities=fractal-render
 stop-timeout-ms=10000
 ```
 
@@ -78,18 +78,14 @@ detected with controls locked; an endpoint that does not answer is unavailable.
 Select a count, execution mode, and comma-separated plugin list, then press **Start**
 to add the deficit up to that count.
 
-On the MBA, choose **SANDBOXED** and one or more listed plugins. The agent verifies that the
+On the MBA, choose **SANDBOXED** and `fractal-render`. The agent verifies that the
 host is macOS, the requested plugin is listed in `sandboxed-capabilities`, and the
 sandbox root is outside the user's home directory. It launches each child with the
-configured `mechana.sandbox.root` system property. Native plugins also require the
-agent JVM to be started with explicit absolute `mechana.runtime.ffmpeg`,
-`mechana.runtime.ffprobe`, `mechana.runtime.tesseract`, or
-`mechana.runtime.blender` system properties as applicable; the agent copies only
-those declared grants to sandboxed workers. The status panel reports the
+configured `mechana.sandbox.root` system property. The status panel reports the
 actual mode, plugins, and sandbox root used by the running group. Stop all workers
 before changing mode or plugin selection.
 
-Choose **LEGACY** only when deliberately running without the macOS sandbox.
+Choose **LEGACY** only for plugins that have not yet migrated to the sandbox host.
 The agent limits those selections to `capabilities`; this label intentionally does
 not imply OS isolation. **Stop all** gracefully stops all tracked children and
 forces remaining processes down after the configured timeout. Known hosts and the
@@ -162,7 +158,7 @@ token rotation, OS keychain storage, roles, audit logging, or host identity proo
 It does not find or kill arbitrary Java processes or adopt children after an agent
 restart. SSH provisioning installs a per-user launchd or systemd unit, but not a
 Windows service or a system-wide/root service.
-Sandbox mode is currently macOS-only. All current concrete plugins are migrated.
-The agent's implementation allowlist cannot be expanded through
+Sandbox mode is currently macOS-only and `fractal-render` is the only migrated
+concrete plugin. The agent's implementation allowlist cannot be expanded through
 configuration alone; a later plugin migration must update code and tests before
 that plugin can be launched as sandboxed.

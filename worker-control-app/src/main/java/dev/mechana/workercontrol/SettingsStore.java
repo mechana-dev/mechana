@@ -58,7 +58,7 @@ final class SettingsStore {
 				Integer.parseInt(p.getProperty("port", "8790")), p.getProperty("token", ""),
 				Integer.parseInt(p.getProperty("count", "1")),
 				AgentClient.LaunchMode.valueOf(p.getProperty("launch-mode", "SANDBOXED")),
-				p.getProperty("capabilities", "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render"),
+				p.getProperty("capabilities", "fractal-render"),
 				p.getProperty("ssh-user", System.getProperty("user.name")),
 				Integer.parseInt(p.getProperty("ssh-port", "22")), p.getProperty("identity-file", ""),
 				Boolean.parseBoolean(p.getProperty("accept-new-host-key", "false")),
