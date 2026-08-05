@@ -101,9 +101,9 @@ final class SshProvisioner {
 			String plist = home + "/Library/LaunchAgents/" + LABEL + ".plist";
 			String service = "gui/$(id -u)/" + LABEL;
 			ssh(request, target,
-					"test -f " + quote(plist) + "; if launchctl print " + service
-							+ " >/dev/null 2>&1; then launchctl kickstart -k " + service
-							+ "; else launchctl bootstrap gui/$(id -u) " + quote(plist) + "; fi");
+					"test -f " + quote(plist) + "; launchctl kickstart -k " + service + " 2>/dev/null || { "
+							+ "launchctl bootstrap gui/$(id -u) " + quote(plist) + " || launchctl kickstart -k "
+							+ service + "; }");
 		} else {
 			ssh(request, target, "systemctl --user restart " + LABEL + ".service");
 		}

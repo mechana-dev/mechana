@@ -97,6 +97,7 @@ class SshProvisionerTest {
 		provisioner.restart(request(agent, worker));
 		assertTrue(commands.stream().map(List::getLast)
 				.anyMatch(value -> value.contains("launchctl kickstart -k") && value.contains("launchctl bootstrap")
+						&& !value.contains("launchctl print")
 						&& value.contains("/Users/remote/Library/LaunchAgents/dev.mechana.worker-host-agent.plist")
 						&& !value.contains("$HOME")));
 	}

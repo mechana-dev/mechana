@@ -333,7 +333,7 @@ final class WorkerControlFrame extends JFrame {
 				Thread.sleep(500);
 			}
 		}
-		throw new IOException("Installed agent did not become reachable", last);
+		throw new IOException("Installed agent did not become reachable: " + last.getMessage(), last);
 	}
 
 	private void ensureToken() {
