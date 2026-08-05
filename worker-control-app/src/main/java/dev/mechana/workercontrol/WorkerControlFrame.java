@@ -72,6 +72,8 @@ final class WorkerControlFrame extends JFrame {
 		this.client = client;
 		this.store = store;
 		this.provisioner = provisioner;
+		usePlainIntegerFormat(port);
+		usePlainIntegerFormat(sshPort);
 		host.setEditable(true);
 		workers.setEditable(false);
 		capabilities.setToolTipText("Comma-separated plugin capabilities allowed by the selected host agent");
@@ -347,6 +349,10 @@ final class WorkerControlFrame extends JFrame {
 			TOKEN_RANDOM.nextBytes(random);
 			token.setText(Base64.getUrlEncoder().withoutPadding().encodeToString(random));
 		}
+	}
+
+	static void usePlainIntegerFormat(JSpinner spinner) {
+		spinner.setEditor(new JSpinner.NumberEditor(spinner, "0"));
 	}
 	@FunctionalInterface
 	private interface Operation {
