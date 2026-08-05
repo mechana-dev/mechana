@@ -28,7 +28,7 @@ import java.util.Properties;
 
 final class SettingsStore {
 	record Settings(List<String> hosts, String lastHost, int port, String token, int count,
-			AgentClient.LaunchMode launchMode, String capabilities, String sshUser, String identityFile,
+			AgentClient.LaunchMode launchMode, String capabilities, String sshUser, int sshPort, String identityFile,
 			boolean acceptNewHostKey, String coordinator, String remoteDirectory, String agentJar, String workerJar,
 			String sandboxRoot) {
 	}
@@ -58,8 +58,9 @@ final class SettingsStore {
 				Integer.parseInt(p.getProperty("port", "8790")), p.getProperty("token", ""),
 				Integer.parseInt(p.getProperty("count", "1")),
 				AgentClient.LaunchMode.valueOf(p.getProperty("launch-mode", "SANDBOXED")),
-				p.getProperty("capabilities", "fractal-render"),
-				p.getProperty("ssh-user", System.getProperty("user.name")), p.getProperty("identity-file", ""),
+				p.getProperty("capabilities", "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render"),
+				p.getProperty("ssh-user", System.getProperty("user.name")),
+				Integer.parseInt(p.getProperty("ssh-port", "22")), p.getProperty("identity-file", ""),
 				Boolean.parseBoolean(p.getProperty("accept-new-host-key", "false")),
 				p.getProperty("coordinator", "http://127.0.0.1:8787"),
 				p.getProperty("remote-directory", ".mechana/host-agent"),
@@ -80,6 +81,7 @@ final class SettingsStore {
 		p.setProperty("launch-mode", settings.launchMode().name());
 		p.setProperty("capabilities", settings.capabilities());
 		p.setProperty("ssh-user", settings.sshUser());
+		p.setProperty("ssh-port", Integer.toString(settings.sshPort()));
 		p.setProperty("identity-file", settings.identityFile());
 		p.setProperty("accept-new-host-key", Boolean.toString(settings.acceptNewHostKey()));
 		p.setProperty("coordinator", settings.coordinator());

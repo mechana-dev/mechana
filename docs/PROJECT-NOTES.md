@@ -1,5 +1,12 @@
 # Project notes
 
+## 2026-08-05 04:25:00 EDT — Support custom remote SSH ports
+
+- Added a persisted SSH port field to Worker Control, separate from the host-agent
+  HTTP port.
+- Applied the selected port with the correct OpenSSH syntax for both `ssh -p` and
+  `scp -P`, with regression coverage for custom-port deployment commands.
+
 ## 2026-08-05 03:50:00 EDT — Stabilize agent restart and desired worker count
 
 - Kept the desired worker spinner independent from the agent's current requested
@@ -778,3 +785,21 @@ Append-only record of material Mechana project changes and accepted decisions.
   fails closed and reports filesystem/network enforcement only after a live probe.
   MBA Codex containment rejects nested profiles, so adversarial tests skip here.
 - Split concrete plugin migration into sequential PR B, starting with sleep.
+
+## 2026-08-05 12:00:00 EDT — Migrate concrete plugins to the macOS sandbox runtime
+
+- Routed sleep, FFmpeg video, fractal rendering, Tesseract OCR, and Blender
+  rendering through the separate plugin host when a worker is launched in
+  explicit sandboxed mode; legacy mode remains available and is clearly labeled.
+- Moved video chunks, OCR pages, and Blender scenes into worker-owned input
+  staging before sandbox launch so plugin execution retains network denial.
+- Required absolute operator-declared FFmpeg, FFprobe, Tesseract, and Blender
+  executable paths. Sandboxed workers receive only the declared runtime grants;
+  missing or non-executable paths fail closed before plugin launch.
+- Preserved the existing task parameters and legacy download behavior for
+  non-sandboxed workers while adding workspace-local input parameters for the
+  sandbox host.
+- Kept the macOS guarantee matrix honest: home reads, plugin network access, and
+  writes outside work/output/logs are denied after a successful live probe;
+  workspace-only system reads and hard CPU, memory, scratch, process-count, and
+  descendant-tree guarantees remain unavailable.

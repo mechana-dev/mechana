@@ -60,6 +60,10 @@ class SshProvisionerTest {
 		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("sandbox-root=/private/tmp/mechana")));
 		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("dev.mechana.worker-host-agent")));
 		assertTrue(commands.stream().flatMap(List::stream).anyMatch(value -> value.equals("BatchMode=yes")));
+		assertTrue(commands.stream().filter(command -> command.getFirst().equals("ssh"))
+				.anyMatch(command -> hasOption(command, "-p", "2222")));
+		assertTrue(commands.stream().filter(command -> command.getFirst().equals("scp"))
+				.anyMatch(command -> hasOption(command, "-P", "2222")));
 		assertTrue(commands.stream().filter(command -> command.getFirst().equals("scp")).map(List::getLast)
 				.anyMatch(value -> value.equals(
 						"mark@mba.example:/Users/remote/Library/LaunchAgents/dev.mechana.worker-host-agent.plist")));
@@ -103,8 +107,13 @@ class SshProvisionerTest {
 	}
 
 	private SshProvisioner.Request request(Path agent, Path worker) {
-		return new SshProvisioner.Request("mba.example", "mark", null, false, agent, worker, ".mechana/host-agent",
-				"http://coordinator:8787", 8790, "secret", "sleep,fractal-render", "fractal-render",
-				"/private/tmp/mechana");
+		return new SshProvisioner.Request("mba.example", "mark", 2222, null, false, agent, worker,
+				".mechana/host-agent", "http://coordinator:8787", 8790, "secret", "sleep,fractal-render",
+				"fractal-render", "/private/tmp/mechana");
+	}
+
+	private static boolean hasOption(List<String> command, String option, String value) {
+		int index = command.indexOf(option);
+		return index >= 0 && index + 1 < command.size() && command.get(index + 1).equals(value);
 	}
 }

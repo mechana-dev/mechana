@@ -30,7 +30,7 @@ final class SshProvisioner {
 	enum RemoteOs {
 		MACOS, LINUX
 	}
-	record Request(String host, String sshUser, Path identityFile, boolean acceptNewHostKey, Path agentJar,
+	record Request(String host, String sshUser, int sshPort, Path identityFile, boolean acceptNewHostKey, Path agentJar,
 			Path workerJar, String remoteDirectory, String coordinator, int agentPort, String token,
 			String legacyCapabilities, String sandboxedCapabilities, String sandboxRoot) {
 	}
@@ -153,7 +153,7 @@ final class SshProvisioner {
 			throws IOException, InterruptedException {
 		List<String> command = new ArrayList<>();
 		command.add("scp");
-		command.addAll(options(request));
+		command.addAll(options(request, true));
 		command.add(local.toAbsolutePath().normalize().toString());
 		command.add(target + ":" + remote);
 		commands.run(command, Duration.ofMinutes(2));
@@ -162,12 +162,14 @@ final class SshProvisioner {
 	private static List<String> sshBase(Request request) {
 		List<String> command = new ArrayList<>();
 		command.add("ssh");
-		command.addAll(options(request));
+		command.addAll(options(request, false));
 		return command;
 	}
 
-	private static List<String> options(Request request) {
+	private static List<String> options(Request request, boolean scp) {
 		List<String> options = new ArrayList<>();
+		options.add(scp ? "-P" : "-p");
+		options.add(Integer.toString(request.sshPort()));
 		options.add("-o");
 		options.add("BatchMode=yes");
 		options.add("-o");
@@ -242,6 +244,8 @@ final class SshProvisioner {
 	private static void validateConnection(Request request) throws IOException {
 		if (request.host().isBlank() || request.sshUser().isBlank())
 			throw new IllegalArgumentException("Host and SSH user are required");
+		if (request.sshPort() < 1 || request.sshPort() > 65535)
+			throw new IllegalArgumentException("SSH port must be between 1 and 65535");
 		if (request.identityFile() != null && !Files.isRegularFile(request.identityFile()))
 			throw new IOException("SSH identity file not found: " + request.identityFile());
 	}
