@@ -48,7 +48,7 @@ public final class DistributedVideoSegmentPlugin implements TaskPlugin {
 			directory = Files.createTempDirectory("mechana-video-segment-");
 			Path input = directory.resolve("input.mp4");
 			Path output = directory.resolve("segment.mkv");
-			download(parameters.get("inputUrl"), input, context);
+			stageInput(parameters, input, context);
 			double duration = Double.parseDouble(parameters.get("durationSeconds"));
 			long bitrate = Long.parseLong(parameters.get("videoBitrate"));
 			VideoTypes.Options options = new VideoTypes.Options(VideoTypes.Container.MKV,
@@ -57,7 +57,9 @@ public final class DistributedVideoSegmentPlugin implements TaskPlugin {
 			VideoTypes.Segment segment = new VideoTypes.Segment(Integer.parseInt(parameters.get("segmentIndex")), 0,
 					duration, output);
 			new ExternalProcessRunner().run(
-					new FfmpegCommands("ffmpeg", "ffprobe").bitrateSegment(input, segment, options, bitrate),
+					new FfmpegCommands(parameters.getOrDefault("ffmpegCommand", "ffmpeg"),
+							parameters.getOrDefault("ffprobeCommand", "ffprobe"))
+							.bitrateSegment(input, segment, options, bitrate),
 					options.processTimeout(), () -> context.isCancellationRequested(),
 					line -> reportProgress(line, duration, context));
 			context.reportProgress(99);
@@ -70,6 +72,16 @@ public final class DistributedVideoSegmentPlugin implements TaskPlugin {
 		} finally {
 			delete(directory);
 		}
+	}
+
+	private static void stageInput(Map<String, String> parameters, Path destination, TaskContext context)
+			throws IOException, InterruptedException {
+		String local = parameters.get("inputPath");
+		if (local != null) {
+			Files.copy(Path.of(local), destination);
+			return;
+		}
+		download(parameters.get("inputUrl"), destination, context);
 	}
 
 	private static void download(String url, Path destination, TaskContext context)

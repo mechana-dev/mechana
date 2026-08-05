@@ -64,7 +64,7 @@ public final class TesseractOcrPlugin implements TaskPlugin {
 					throw new PluginExecutionException("OCR batch was cancelled", null);
 				int page = startPage + offset;
 				Path image = scratch.resolve("page-%06d.png".formatted(page));
-				download(parameters.get("pageUrl." + offset), image);
+				stageInput(parameters, offset, image);
 				Path outputBase = scratch.resolve("page-%06d".formatted(page));
 				runTesseract(tesseract, image, outputBase, language, context);
 				Path text = Path.of(outputBase + ".txt");
@@ -85,6 +85,16 @@ public final class TesseractOcrPlugin implements TaskPlugin {
 		} finally {
 			deleteTree(scratch);
 		}
+	}
+
+	private static void stageInput(Map<String, String> parameters, int offset, Path destination)
+			throws IOException, InterruptedException {
+		String local = parameters.get("pagePath." + offset);
+		if (local != null) {
+			Files.copy(Path.of(local), destination);
+			return;
+		}
+		download(parameters.get("pageUrl." + offset), destination);
 	}
 
 	static List<String> command(String executable, Path image, Path outputBase, String language) {

@@ -54,6 +54,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.HexFormat;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Enumeration;
 import java.util.Objects;
 import java.util.Set;
@@ -148,7 +150,7 @@ public final class WorkerAgent {
 		Path pluginFile = null;
 		try {
 			pluginFile = downloadPlugin(lease);
-			if ("fractal-render".equals(lease.pluginId())) {
+			if (sandboxedExecution()) {
 				executeSandboxed(lease, pluginFile, cancelled);
 			} else
 				try (URLClassLoader loader = new URLClassLoader(new java.net.URL[]{pluginFile.toUri().toURL()},
@@ -194,8 +196,9 @@ public final class WorkerAgent {
 			AtomicBoolean completed = new AtomicBoolean();
 			Path plugin = workspace.input().resolve("plugin.jar");
 			Files.copy(downloadedPlugin, plugin);
+			Map<String, String> parameters = prepareSandboxParameters(lease, workspace);
 			HostRequest hostRequest = new HostRequest(plugin.toString(), lease.pluginEntrypoint(), lease.pluginId(),
-					lease.pluginVersion(), lease.durationMillis(), lease.parameters(), workspace.output().toString());
+					lease.pluginVersion(), lease.durationMillis(), parameters, workspace.output().toString());
 			Path requestFrame = workspace.input().resolve("request.ndjson");
 			Files.writeString(requestFrame, json.writeValueAsString(hostRequest) + System.lineSeparator());
 			String hostClasspath = stageHostClasspath(workspace.input().resolve("runtime"));
@@ -211,7 +214,7 @@ public final class WorkerAgent {
 					line -> handleHostEvent(line, context, completed, protocolFailure));
 			MacOsSandbox macOs = new MacOsSandbox();
 			if (!macOs.supportsCurrentHost())
-				throw new IOException("SANDBOXED fractal execution currently requires the macOS backend");
+				throw new IOException("SANDBOXED plugin execution currently requires the macOS backend");
 			System.out.printf("Worker %s running task %s in %s%n", workerId, lease.taskId(),
 					macOs.capabilities(policy).backend());
 			SandboxResult result = new PluginRuntimeManager(new ProcessSandbox(), macOs).execute(request, cancelled);
@@ -230,6 +233,60 @@ public final class WorkerAgent {
 			requireStatus(completion, 204);
 			System.out.printf("Worker %s finished sandboxed task %s successfully%n", workerId, lease.taskId());
 		}
+	}
+
+	private Map<String, String> prepareSandboxParameters(TaskLease lease, AttemptWorkspace workspace)
+			throws IOException, InterruptedException {
+		Map<String, String> parameters = new HashMap<>(lease.parameters());
+		switch (lease.pluginId()) {
+			case "video-ffmpeg" -> {
+				parameters.put("inputPath",
+						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "input.mp4"));
+				parameters.put("ffmpegCommand", requiredRuntime("ffmpeg"));
+				parameters.put("ffprobeCommand", requiredRuntime("ffprobe"));
+			}
+			case "ocr-tesseract" -> {
+				int pageCount = Integer.parseInt(parameters.get("pageCount"));
+				for (int index = 0; index < pageCount; index++)
+					parameters.put("pagePath." + index, stageRemoteInput(parameters.remove("pageUrl." + index),
+							workspace.input(), "page-%06d.png".formatted(index)));
+				parameters.put("tesseractCommand", requiredRuntime("tesseract"));
+			}
+			case "blender-render" -> {
+				parameters.put("inputPath",
+						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "scene.blend"));
+				parameters.put("blenderCommand", requiredRuntime("blender"));
+			}
+			case "sleep", "fractal-render" -> {
+				// Pure-Java plugins need no staged input or native runtime grant.
+			}
+			default -> throw new IOException("Plugin is not approved for sandboxed execution: " + lease.pluginId());
+		}
+		return Map.copyOf(parameters);
+	}
+
+	private String stageRemoteInput(String url, Path input, String fileName) throws IOException, InterruptedException {
+		if (url == null || url.isBlank())
+			throw new IOException("Sandbox input URL is missing");
+		HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(20)).GET().build();
+		HttpResponse<Path> response = http.send(request, HttpResponse.BodyHandlers.ofFile(input.resolve(fileName)));
+		if (response.statusCode() != 200)
+			throw new IOException("Sandbox input download returned HTTP " + response.statusCode());
+		return response.body().toAbsolutePath().normalize().toString();
+	}
+
+	private static String requiredRuntime(String name) throws IOException {
+		String configured = System.getProperty("mechana.runtime." + name, "").strip();
+		if (configured.isEmpty())
+			throw new IOException("Sandboxed " + name + " requires -Dmechana.runtime." + name + "=/absolute/path");
+		Path executable = Path.of(configured).toAbsolutePath().normalize();
+		if (!Files.isExecutable(executable))
+			throw new IOException("Configured sandbox runtime is not executable: " + executable);
+		return executable.toString();
+	}
+
+	private static boolean sandboxedExecution() {
+		return "sandboxed".equalsIgnoreCase(System.getProperty("mechana.execution.mode", "legacy"));
 	}
 
 	private static String stageHostClasspath(Path runtimeDirectory) throws IOException {

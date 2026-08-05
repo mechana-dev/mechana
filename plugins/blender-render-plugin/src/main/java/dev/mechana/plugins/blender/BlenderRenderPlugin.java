@@ -56,7 +56,7 @@ public final class BlenderRenderPlugin implements TaskPlugin {
 		try {
 			scratch = Files.createTempDirectory("mechana-blender-");
 			Path scene = scratch.resolve("scene.blend");
-			download(required(p, "inputUrl"), scene);
+			stageInput(p, scene);
 			Path frames = Files.createDirectories(scratch.resolve("frames"));
 			String executable = p.getOrDefault("blenderCommand",
 					System.getenv().getOrDefault("MECHANA_BLENDER", "blender"));
@@ -77,6 +77,16 @@ public final class BlenderRenderPlugin implements TaskPlugin {
 		} finally {
 			deleteTree(scratch);
 		}
+	}
+
+	private static void stageInput(Map<String, String> parameters, Path destination)
+			throws IOException, InterruptedException {
+		String local = parameters.get("inputPath");
+		if (local != null) {
+			Files.copy(Path.of(local), destination);
+			return;
+		}
+		download(required(parameters, "inputUrl"), destination);
 	}
 
 	private static void run(List<String> command, int first, int last, TaskContext context)

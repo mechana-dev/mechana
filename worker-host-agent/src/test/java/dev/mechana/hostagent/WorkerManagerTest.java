@@ -78,18 +78,19 @@ class WorkerManagerTest {
 			WorkerManager.Status status = manager.start(request);
 			assertEquals(WorkerLaunchMode.SANDBOXED, status.launchMode());
 			assertTrue(launched.stream().anyMatch(value -> value.startsWith("-Dmechana.sandbox.root=")));
+			assertTrue(launched.contains("-Dmechana.execution.mode=sandboxed"));
 			assertTrue(launched.contains("fractal-render"));
 		} else {
 			assertThrows(IllegalArgumentException.class, () -> manager.start(request));
 		}
 		assertThrows(IllegalArgumentException.class,
-				() -> manager.start(new WorkerManager.LaunchRequest(1, WorkerLaunchMode.SANDBOXED, "sleep")));
+				() -> manager.start(new WorkerManager.LaunchRequest(1, WorkerLaunchMode.SANDBOXED, "unknown")));
 	}
 
 	private AgentConfig config(int max) {
 		return new AgentConfig("127.0.0.1", 0, "", URI.create("http://coordinator:8787"), Path.of("java"),
 				Path.of("worker.jar"), temporary, max, "sleep", Duration.ofMillis(5), "test-host", false,
-				temporary.resolve("sandbox"), "fractal-render");
+				temporary.resolve("sandbox"), "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render");
 	}
 
 	private static final class FakeProcess implements ManagedProcess {

@@ -30,7 +30,8 @@ import java.util.Set;
 import java.util.UUID;
 
 final class WorkerManager {
-	private static final Set<String> IMPLEMENTED_SANDBOX_PLUGINS = Set.of("fractal-render");
+	private static final Set<String> IMPLEMENTED_SANDBOX_PLUGINS = Set.of("sleep", "video-ffmpeg", "fractal-render",
+			"ocr-tesseract", "blender-render");
 	record WorkerStatus(String id, long pid, Instant startedAt, boolean alive) {
 	}
 	record LaunchRequest(int count, WorkerLaunchMode mode, String capabilities) {
@@ -113,14 +114,26 @@ final class WorkerManager {
 	private List<String> command(WorkerLaunchMode mode, String capabilities, String id) {
 		List<String> command = new ArrayList<>();
 		command.add(config.javaExecutable().toString());
-		if (mode == WorkerLaunchMode.SANDBOXED)
+		if (mode == WorkerLaunchMode.SANDBOXED) {
 			command.add("-Dmechana.sandbox.root=" + config.sandboxRoot().toAbsolutePath().normalize());
+			command.add("-Dmechana.execution.mode=sandboxed");
+			copyRuntimeProperty(command, "ffmpeg");
+			copyRuntimeProperty(command, "ffprobe");
+			copyRuntimeProperty(command, "tesseract");
+			copyRuntimeProperty(command, "blender");
+		}
 		command.add("-jar");
 		command.add(config.workerJar().toAbsolutePath().normalize().toString());
 		command.add(config.coordinator().toString());
 		command.add(capabilities);
 		command.add(id);
 		return List.copyOf(command);
+	}
+
+	private static void copyRuntimeProperty(List<String> command, String name) {
+		String value = System.getProperty("mechana.runtime." + name, "").strip();
+		if (!value.isEmpty())
+			command.add("-Dmechana.runtime." + name + "=" + Path.of(value).toAbsolutePath().normalize());
 	}
 
 	private String validatedCapabilities(WorkerLaunchMode mode, String requested) {

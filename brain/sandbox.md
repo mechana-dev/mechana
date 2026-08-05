@@ -248,9 +248,11 @@ plugin marketplace are **Deferred**.
 - **Deferred:** production sandbox implementation, general host-path access,
   runtime distribution/signing, certification infrastructure, and marketplace.
 
-The first implementation foundation defines common contracts, managed child
-process lifecycle, a fixed attempt workspace, fail-closed capability selection,
-and a one-request plugin host. The macOS backend is experimental because
+The implementation defines common contracts, managed child-process lifecycle, a
+fixed attempt workspace, fail-closed capability selection, and a one-request
+plugin host. All current concrete plugins can cross this boundary on sandboxed
+macOS workers; network inputs are staged by the worker and native executables are
+granted only through explicit absolute runtime properties. The macOS backend is experimental because
 `sandbox-exec` is explicitly deprecated by Apple. Tahoe requires broad runtime
 reads even for basic system tools, so the backend claims workspace write
 restriction and user-home read denial but not workspace-only read isolation.

@@ -18,7 +18,8 @@ This file reports repository evidence, not desired future status.
 - The host-agent API and Swing controller can start a worker group in explicit
   `SANDBOXED` or `LEGACY` mode with a selected plugin capability set. Sandboxed
   launch is currently macOS-only, uses an agent-configured root outside the user
-  home, and is allowlisted to the migrated `fractal-render` plugin by default.
+  home, and is allowlisted to the current sleep, FFmpeg video, fractal, Tesseract
+  OCR, and Blender plugins.
   Status reports the effective mode, plugins, and sandbox root; a running group
   must be stopped before changing its mode or capabilities.
 - The desktop controller can provision the host-agent and worker JARs over
@@ -43,9 +44,10 @@ This file reports repository evidence, not desired future status.
   lifecycle events. The experimental macOS adapter reports workspace write
   restriction, user-home read denial, and network denial after a live
   `sandbox-exec` probe, but does not claim workspace-only read isolation.
-- The distributed worker routes `fractal-render` assignments through that runtime
-  manager and separate plugin host on macOS. It stages the host runtime and plugin
-  JAR under attempt `input/`, streams NDJSON progress and artifact events, uploads
+- Sandboxed distributed workers route all current concrete plugins through that
+  runtime manager and separate plugin host on macOS. The worker stages the host
+  runtime, plugin JAR, and remote task inputs under attempt `input/`, streams NDJSON
+  progress and artifact events, uploads
   staged outputs with the existing lease fencing, enforces timeout/cancellation at
   the child-process boundary, and cleans the attempt workspace. Attempt ownership
   metadata and OS locks protect active workspaces; graceful worker shutdown waits
@@ -152,13 +154,12 @@ This file reports repository evidence, not desired future status.
 - Durable active scheduler state, authentication, or production isolation.
 - Durable worker presence across restarts, richer fleet telemetry, authentication,
   or remote dashboard access.
-- Migration of sleep, video, OCR, and Blender plugins, a runtime manifest,
-  bounded log sizes, guaranteed descendant cleanup after abrupt worker death,
+- A runtime manifest, bounded log sizes, guaranteed descendant cleanup after abrupt worker death,
   periodic stale-attempt scavenging, hard CPU/RAM/
   scratch/process limits, dedicated identities, production sandboxing, or
   certification. `sandbox-exec` is deprecated and unavailable beneath the MBA's
-  current Codex containment. The fractal path was verified directly on the MBA;
-  the remaining distributed plugin paths are not sandboxed.
+  current Codex containment. Native FFmpeg/FFprobe, Tesseract, and Blender
+  executables require explicit absolute system properties before sandbox launch.
 - Durable host-agent child-process adoption after an agent restart, TLS, token
   rotation, role-based access, Windows/system-wide service installers, Java
   runtime deployment, or firewall/SSH bootstrap automation.

@@ -61,15 +61,20 @@ java -jar mechana-worker/target/mechana-worker.jar http://localhost:8787 \
   sleep,video-ffmpeg,fractal-render,ocr-tesseract worker-1
 ```
 
-On macOS, `fractal-render` now runs in the separate plugin host through the
+On macOS, sandboxed workers run every current concrete plugin in the separate plugin host through the
 experimental sandbox backend. The default attempt root is
 `/private/tmp/mechana-sandbox`; override it only with another location outside
 your home directory:
 
 ```shell
-java -Dmechana.sandbox.root=/private/tmp/mechana-sandbox-test \
+java -Dmechana.execution.mode=sandboxed \
+  -Dmechana.sandbox.root=/private/tmp/mechana-sandbox-test \
+  -Dmechana.runtime.ffmpeg=/opt/homebrew/bin/ffmpeg \
+  -Dmechana.runtime.ffprobe=/opt/homebrew/bin/ffprobe \
+  -Dmechana.runtime.tesseract=/opt/homebrew/bin/tesseract \
+  -Dmechana.runtime.blender=/Applications/Blender.app/Contents/MacOS/Blender \
   -jar mechana-worker/target/mechana-worker.jar http://localhost:8787 \
-  fractal-render sandbox-worker-1
+  sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render sandbox-worker-1
 ```
 
 Start that command in four terminals with unique worker IDs, then submit a job
