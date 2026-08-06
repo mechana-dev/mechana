@@ -86,12 +86,13 @@ public final class MacOsSandbox extends ProcessSandbox implements PlatformLaunch
 				.startsWith(Path.of(System.getProperty("user.home")).toAbsolutePath().normalize()))
 			throw new IllegalArgumentException("macOS sandbox workspaces must be outside the user's home directory");
 		StringBuilder profile = new StringBuilder("(version 1)\n(deny default)\n")
-				.append("(allow process*)\n(allow sysctl-read)\n(allow mach-lookup)\n").append("(allow file-read*)\n")
-				.append("(deny file-read* (subpath \"").append(userHome).append("\"))\n")
-				.append("(allow file-read* (subpath \"").append(root).append("/input\"))\n")
-				.append("(allow file-read* file-write* (subpath \"").append(root).append("/work\"))\n")
-				.append("(allow file-read* file-write* (subpath \"").append(root).append("/output\"))\n")
-				.append("(allow file-read* file-write* (subpath \"").append(root).append("/logs\"))\n");
+				.append("(allow process*)\n(allow sysctl-read)\n(allow mach-lookup)\n(allow iokit-open)\n")
+				.append("(allow ipc*)\n").append("(allow file-read*)\n").append("(deny file-read* (subpath \"")
+				.append(userHome).append("\"))\n").append("(allow file-read* (subpath \"").append(root)
+				.append("/input\"))\n").append("(allow file-read* file-write* (subpath \"").append(root)
+				.append("/work\"))\n").append("(allow file-read* file-write* (subpath \"").append(root)
+				.append("/output\"))\n").append("(allow file-read* file-write* (subpath \"").append(root)
+				.append("/logs\"))\n");
 		if (request.policy().networkAllowed())
 			profile.append("(allow network*)\n");
 		return profile.toString();

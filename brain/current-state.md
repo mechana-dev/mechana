@@ -18,8 +18,11 @@ This file reports repository evidence, not desired future status.
 - The host-agent API and Swing controller can start a worker group in explicit
   `SANDBOXED` or `LEGACY` mode with a selected plugin capability set. Sandboxed
   launch is currently macOS-only, uses an agent-configured root outside the user
-  home, and is allowlisted to the current sleep, FFmpeg video, fractal, Tesseract
-  OCR, and Blender plugins.
+  home, and is allowlisted to the sleep, FFmpeg video, fractal, Tesseract OCR, and
+  Blender plugins. Blender's macOS profile grants I/O Kit device enumeration,
+  which is required during Metal backend discovery even for CPU Cycles, and points
+  Blender's temporary directories into attempt scratch. A live one-frame CPU
+  Cycles render verified this profile on the MBA.
   Status reports the effective mode, plugins, and sandbox root; a running group
   must be stopped before changing its mode or capabilities.
 - The desktop controller can provision the host-agent and worker JARs over
@@ -60,7 +63,10 @@ This file reports repository evidence, not desired future status.
   unlocked attempts abandoned by a crash. Legacy workers retain the existing
   in-process execution paths for compatibility.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
-  expired-work requeueing, and stale-completion rejection.
+  expired-work requeueing, stale-completion rejection, and a three-attempt ceiling
+  for worker-reported failures and expired leases. Exhaustion fails the job and
+  fences all unfinished work rather than creating an unbounded native-process
+  crash loop.
 - Worker presence and task ownership use independent heartbeats. Workers emit a
   three-second presence heartbeat while idle or busy; the server uses a
   fifteen-second offline threshold. A separate lease-token heartbeat renews a

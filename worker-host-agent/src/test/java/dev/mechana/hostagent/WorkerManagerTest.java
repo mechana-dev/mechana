@@ -87,6 +87,17 @@ class WorkerManagerTest {
 				() -> manager.start(new WorkerManager.LaunchRequest(1, WorkerLaunchMode.SANDBOXED, "unknown")));
 	}
 
+	@Test
+	void allowsBlenderInVerifiedMacOsSandboxProfile() throws Exception {
+		WorkerManager manager = new WorkerManager(config(1), (command, directory, log) -> new FakeProcess(7));
+		WorkerManager.LaunchRequest request = new WorkerManager.LaunchRequest(1, WorkerLaunchMode.SANDBOXED,
+				"blender-render");
+		if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac"))
+			assertEquals("blender-render", manager.start(request).capabilities());
+		else
+			assertThrows(IllegalArgumentException.class, () -> manager.start(request));
+	}
+
 	private AgentConfig config(int max) {
 		return new AgentConfig("127.0.0.1", 0, "", URI.create("http://coordinator:8787"), Path.of("java"),
 				Path.of("worker.jar"), temporary, max, "sleep", Duration.ofMillis(5), "test-host", false,

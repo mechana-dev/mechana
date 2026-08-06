@@ -54,4 +54,16 @@ class BlenderCommandsTest {
 		assertTrue(command.contains("11"));
 		assertTrue(command.contains("20"));
 	}
+
+	@Test
+	void confinesBlenderTemporaryFilesToAttemptScratch() {
+		ProcessBuilder builder = new ProcessBuilder("blender");
+
+		BlenderRenderPlugin.configureTemporaryDirectory(builder, temporary);
+
+		String expected = temporary.toAbsolutePath().normalize().toString();
+		assertEquals(expected, builder.environment().get("TMPDIR"));
+		assertEquals(expected, builder.environment().get("TMP"));
+		assertEquals(expected, builder.environment().get("TEMP"));
+	}
 }

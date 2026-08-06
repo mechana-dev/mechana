@@ -855,3 +855,56 @@ Append-only record of material Mechana project changes and accepted decisions.
   settings; plugin-specific paths no longer leak into the process command line.
 - Retained optional `mechana.plugin.<id>.jar` JVM properties for packaged layouts
   whose plugin artifacts do not use repository build-output locations.
+
+## 2026-08-05 06:45:00 EDT — Bound native-plugin retries and disable sandboxed Blender
+
+- Diagnosed a distributed Blender job whose Blender 4.5.3 processes repeatedly
+  exited with status 139 under the experimental macOS `sandbox-exec` backend.
+- Added a platform-owned three-attempt ceiling for worker failures and expired
+  leases. Exhaustion now fails the job and fences all unfinished work units instead
+  of indefinitely respawning a crashing native runtime.
+- Removed `blender-render` from the macOS sandbox worker allowlist and added an
+  explicit operator error directing Blender workloads to legacy workers. Blender
+  still executes as a separate cancellable native child there, but no OS sandbox
+  guarantee is claimed.
+- Added coordinator and host-agent regression coverage for retry exhaustion and
+  sandboxed-Blender rejection.
+
+## 2026-08-05 13:20:00 EDT — Restore Blender in the verified MBA sandbox profile
+
+- Traced Blender's sandbox-only status-139 crash to Metal device discovery in
+  `MTLDevice`; Blender performs this startup path even for explicit CPU Cycles.
+- Added the narrow sandbox `iokit-open` operation required for device enumeration
+  and redirected Blender `TMPDIR`, `TMP`, and `TEMP` into attempt scratch.
+- Proved actual sandbox execution with a one-frame CPU Cycles render at 160×90,
+  then restored `blender-render` to the host-agent sandbox allowlist.
+- Retained the three-attempt scheduler ceiling so a future native regression fails
+  the job without creating an unbounded crash loop.
+
+## 2026-08-06 02:15:00 EDT — Support sandboxed Blender on Intel macOS 12
+
+- Verified the corrected sandbox profile across eight workers: twelve frame batches
+  completed on the Apple-silicon MBA while Blender 4.5.12 exited with status 139 on
+  the Intel Mac Mini running macOS 12.7.6.
+- Reproduced the Mini failure with a standalone restricted `sandbox-exec` probe and
+  proved that adding only local IPC access allows headless Blender startup.
+- Added `(allow ipc*)` to the macOS profile. This permits local synchronization and
+  shared-memory IPC but does not grant network or filesystem access.
+
+## 2026-08-06 02:35:00 EDT — Harden remote plugin and staged-input downloads
+
+- Reproduced an eight-page OCR smoke test where all MBA pages completed but all
+  Rocinante attempts failed with `ConnectException` before Tesseract execution.
+- Added four bounded download attempts with exponential backoff for plugin JARs and
+  worker-staged native inputs. Retryable HTTP 408, 429, and 5xx responses use the same
+  path; permanent 4xx responses still fail immediately.
+- Download failures now identify whether plugin or sandbox-input transfer failed,
+  include the attempt ceiling and coordinator authority, and retain the original
+  exception as the cause without logging opaque input tokens.
+- Added a worker regression test proving recovery after two transient server failures.
+- Improved diagnostics then exposed the persistent cause: a coordinator restarted
+  without its public-URL argument advertised plugin downloads at `localhost`, even
+  though remote workers registered through the configured coordinator hostname.
+- Workers now rebase only coordinator-issued loopback download URLs onto their
+  configured coordinator origin. Non-loopback and external URLs remain unchanged;
+  the behavior covers plugin JARs and staged OCR, video, and Blender inputs.

@@ -16,10 +16,19 @@
 
 package dev.mechana.worker;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.sun.net.httpserver.HttpServer;
 import dev.mechana.api.JobId;
 import dev.mechana.protocol.ExecutionRequest;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class WorkerTest {
@@ -29,5 +38,37 @@ class WorkerTest {
 		Worker worker = new Worker("example");
 
 		assertTrue(worker.supports(new ExecutionRequest(JobId.random(), "example", new byte[0])));
+	}
+
+	@Test
+	void retriesTransientDownloadFailures() throws Exception {
+		AtomicInteger requests = new AtomicInteger();
+		HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+		server.createContext("/input", exchange -> {
+			int request = requests.incrementAndGet();
+			byte[] body = request < 3 ? new byte[0] : "page".getBytes(StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(request < 3 ? 503 : 200, body.length);
+			try (var output = exchange.getResponseBody()) {
+				output.write(body);
+			}
+		});
+		server.start();
+		try {
+			URI input = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/input");
+			assertArrayEquals("page".getBytes(StandardCharsets.UTF_8), WorkerAgent
+					.downloadBytes(HttpClient.newHttpClient(), input, Duration.ofSeconds(5), "Test download"));
+			assertEquals(3, requests.get());
+		} finally {
+			server.stop(0);
+		}
+	}
+
+	@Test
+	void rebasesCoordinatorLoopbackDownloadsForRemoteWorkers() {
+		URI coordinator = URI.create("http://coordinator.example:8787");
+		assertEquals(URI.create("http://coordinator.example:8787/api/plugins/ocr/1.0?token=abc"),
+				WorkerAgent.resolveCoordinatorUri(coordinator, "http://localhost:8787/api/plugins/ocr/1.0?token=abc"));
+		assertEquals(URI.create("https://cdn.example/plugin.jar"),
+				WorkerAgent.resolveCoordinatorUri(coordinator, "https://cdn.example/plugin.jar"));
 	}
 }

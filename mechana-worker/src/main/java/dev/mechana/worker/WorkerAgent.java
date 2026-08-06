@@ -66,6 +66,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Pull-based worker that downloads each assigned plugin into ephemeral storage.
  */
 public final class WorkerAgent {
+	private static final int DOWNLOAD_ATTEMPTS = 4;
 
 	private final ObjectMapper json = new ObjectMapper();
 	private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
@@ -268,11 +269,43 @@ public final class WorkerAgent {
 	private String stageRemoteInput(String url, Path input, String fileName) throws IOException, InterruptedException {
 		if (url == null || url.isBlank())
 			throw new IOException("Sandbox input URL is missing");
-		HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(20)).GET().build();
-		HttpResponse<Path> response = http.send(request, HttpResponse.BodyHandlers.ofFile(input.resolve(fileName)));
-		if (response.statusCode() != 200)
-			throw new IOException("Sandbox input download returned HTTP " + response.statusCode());
-		return response.body().toAbsolutePath().normalize().toString();
+		Path destination = input.resolve(fileName);
+		Files.write(destination, downloadBytes(http, resolveCoordinatorUri(server, url), Duration.ofMinutes(20),
+				"Sandbox input download"));
+		return destination.toAbsolutePath().normalize().toString();
+	}
+
+	static byte[] downloadBytes(HttpClient client, URI uri, Duration timeout, String description)
+			throws IOException, InterruptedException {
+		IOException lastFailure = null;
+		for (int attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
+			try {
+				HttpRequest request = HttpRequest.newBuilder(uri).timeout(timeout).GET().build();
+				HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+				if (response.statusCode() == 200)
+					return response.body();
+				if (response.statusCode() < 500 && response.statusCode() != 408 && response.statusCode() != 429)
+					throw new IOException(description + " returned HTTP " + response.statusCode());
+				lastFailure = new IOException(description + " returned HTTP " + response.statusCode());
+			} catch (IOException failure) {
+				lastFailure = failure;
+			}
+			if (attempt < DOWNLOAD_ATTEMPTS)
+				Thread.sleep(250L << (attempt - 1));
+		}
+		throw new IOException(description + " failed after " + DOWNLOAD_ATTEMPTS + " attempts against "
+				+ uri.getScheme() + "://" + uri.getAuthority() + ": " + safeMessage(lastFailure), lastFailure);
+	}
+
+	static URI resolveCoordinatorUri(URI coordinator, String supplied) {
+		URI candidate = URI.create(supplied);
+		String host = candidate.getHost();
+		if (host == null || !(host.equalsIgnoreCase("localhost") || host.equals("127.0.0.1") || host.equals("::1")))
+			return candidate;
+		String path = candidate.getRawPath();
+		if (candidate.getRawQuery() != null)
+			path += "?" + candidate.getRawQuery();
+		return coordinator.resolve(path);
 	}
 
 	private static String requiredRuntime(String name) throws IOException {
@@ -405,18 +438,14 @@ public final class WorkerAgent {
 	}
 
 	private Path downloadPlugin(TaskLease lease) throws IOException, InterruptedException {
-		HttpRequest request = HttpRequest.newBuilder(URI.create(lease.pluginUrl())).timeout(Duration.ofSeconds(30))
-				.GET().build();
-		HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
-		if (response.statusCode() != 200) {
-			throw new IOException("Plugin download returned HTTP " + response.statusCode());
-		}
-		String actualChecksum = sha256(response.body());
+		byte[] plugin = downloadBytes(http, resolveCoordinatorUri(server, lease.pluginUrl()), Duration.ofSeconds(30),
+				"Plugin download");
+		String actualChecksum = sha256(plugin);
 		if (!actualChecksum.equalsIgnoreCase(lease.pluginSha256())) {
 			throw new IOException("Plugin checksum did not match assignment");
 		}
 		Path temporaryJar = Files.createTempFile("mechana-plugin-", ".jar");
-		Files.write(temporaryJar, response.body());
+		Files.write(temporaryJar, plugin);
 		return temporaryJar;
 	}
 
