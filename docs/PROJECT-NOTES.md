@@ -805,3 +805,16 @@ Append-only record of material Mechana project changes and accepted decisions.
   fails closed and reports filesystem/network enforcement only after a live probe.
   MBA Codex containment rejects nested profiles, so adversarial tests skip here.
 - Split concrete plugin migration into sequential PR B, starting with sleep.
+
+## 2026-08-06 07:12:24 EDT — Update the public homepage
+
+- Reworked the GitHub Pages homepage around the current description of Mechana as
+  a plugin-driven distributed computation platform rather than a Java-specific
+  execution system.
+- Added concise sections for the execution model, platform services, controlled
+  worker environments, storage abstraction, planned AI-assisted plugin authoring,
+  and representative workloads.
+- Applied the canonical Mechana mark and wordmark from `assets/brand`, retained
+  the dark brand treatment, and updated responsive navigation and project links.
+- Kept planned capabilities explicitly labeled and avoided changing runtime code
+  or architectural contracts.

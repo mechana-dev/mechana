@@ -13,588 +13,217 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 -->
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <title>Mechana™ — Plugin-Driven Distributed Computation</title>
-
-    <meta
-        name="description"
-        content="Mechana is an open-source, plugin-driven platform for coordinating distributed computations across workers."
-    >
-
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="Mechana">
-    <meta
-        property="og:description"
-        content="An open-source, plugin-driven platform for distributed computation."
-    >
-    <meta property="og:url" content="https://mechana.io">
-
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="Mechana">
-    <meta
-        name="twitter:description"
-        content="An open-source, plugin-driven platform for distributed computation."
-    >
-
-    <link
-        rel="icon"
-        type="image/svg+xml"
-        href="/assets/brand/favicon.svg"
-    >
-
-    <link
-        rel="shortcut icon"
-        href="/assets/brand/favicon.svg"
-    >
-
-    <style>
-        :root {
-            color-scheme: dark;
-
-            --background: #0d1117;
-            --surface: #141b24;
-            --surface-hover: #1a2430;
-            --surface-soft: rgba(20, 27, 36, 0.72);
-
-            --text: #f7f8fa;
-            --muted: #9aa5b1;
-
-            --border: #2b3644;
-
-            --accent: #ff6b6f;
-            --accent-hover: #ff7f82;
-            --accent-text: #180e10;
-
-            --max-width: 1160px;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        html {
-            scroll-behavior: smooth;
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-
-            font-family:
-                Inter,
-                ui-sans-serif,
-                system-ui,
-                -apple-system,
-                BlinkMacSystemFont,
-                "Segoe UI",
-                sans-serif;
-
-            color: var(--text);
-            background:
-                radial-gradient(
-                    circle at 18% 8%,
-                    rgba(255, 107, 111, 0.12),
-                    transparent 34rem
-                ),
-                var(--background);
-
-            line-height: 1.6;
-        }
-
-        img {
-            max-width: 100%;
-        }
-
-        a {
-            color: inherit;
-        }
-
-        .container {
-            width: min(calc(100% - 2rem), var(--max-width));
-            margin-inline: auto;
-        }
-
-        .site-header {
-            position: sticky;
-            top: 0;
-            z-index: 10;
-
-            border-bottom: 1px solid var(--border);
-
-            background: rgba(13, 17, 23, 0.88);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-        }
-
-        .navigation {
-            min-height: 72px;
-
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-
-            gap: 2rem;
-        }
-
-        .brand {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.75rem;
-
-            text-decoration: none;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-        }
-
-        .brand-mark {
-            width: 38px;
-            height: 38px;
-            display: block;
-        }
-
-        .brand-name {
-            font-size: 1.1rem;
-        }
-
-        .nav-links {
-            display: flex;
-            align-items: center;
-            gap: 1.35rem;
-        }
-
-        .nav-links a {
-            color: var(--muted);
-            text-decoration: none;
-            font-size: 0.95rem;
-            font-weight: 600;
-        }
-
-        .nav-links a:hover,
-        .nav-links a:focus-visible {
-            color: var(--text);
-        }
-
-        main {
-            padding: 5.5rem 0 4rem;
-        }
-
-        .hero {
-            max-width: 980px;
-        }
-
-        .status {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.55rem;
-
-            margin-bottom: 2rem;
-            padding: 0.42rem 0.78rem;
-
-            border: 1px solid var(--border);
-            border-radius: 999px;
-
-            color: var(--muted);
-            background: var(--surface-soft);
-
-            font-size: 0.86rem;
-            font-weight: 600;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-
-            border-radius: 50%;
-
-            background: var(--accent);
-            box-shadow: 0 0 14px rgba(255, 107, 111, 0.65);
-        }
-
-        .hero-logo {
-            display: block;
-
-            width: min(100%, 920px);
-            height: auto;
-
-            margin: 0;
-        }
-
-        .hero-copy {
-            max-width: 800px;
-
-            margin: 2rem 0 0;
-
-            color: var(--muted);
-            font-size: clamp(1.1rem, 2.2vw, 1.45rem);
-        }
-
-        .actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.9rem;
-
-            margin-top: 2.4rem;
-        }
-
-        .button {
-            min-height: 48px;
-
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-
-            padding: 0.75rem 1.15rem;
-
-            border: 1px solid var(--border);
-            border-radius: 9px;
-
-            text-decoration: none;
-            font-weight: 750;
-
-            transition:
-                transform 140ms ease,
-                background 140ms ease,
-                border-color 140ms ease;
-        }
-
-        .button:hover {
-            transform: translateY(-1px);
-        }
-
-        .button-primary {
-            color: var(--accent-text);
-            background: var(--accent);
-            border-color: var(--accent);
-        }
-
-        .button-primary:hover {
-            background: var(--accent-hover);
-            border-color: var(--accent-hover);
-        }
-
-        .button-secondary {
-            color: var(--text);
-            background: var(--surface);
-        }
-
-        .button-secondary:hover {
-            background: var(--surface-hover);
-            border-color: #3c4b5e;
-        }
-
-        .features {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-
-            margin-top: 6rem;
-        }
-
-        .feature {
-            padding: 1.45rem;
-
-            border: 1px solid var(--border);
-            border-radius: 13px;
-
-            background: var(--surface-soft);
-        }
-
-        .feature-number {
-            display: inline-block;
-
-            margin-bottom: 0.9rem;
-
-            color: var(--accent);
-
-            font-family:
-                ui-monospace,
-                SFMono-Regular,
-                Menlo,
-                Monaco,
-                Consolas,
-                monospace;
-
-            font-size: 0.82rem;
-            font-weight: 800;
-        }
-
-        .feature h2 {
-            margin: 0 0 0.65rem;
-            font-size: 1.05rem;
-        }
-
-        .feature p {
-            margin: 0;
-            color: var(--muted);
-            font-size: 0.95rem;
-        }
-
-        .architecture {
-            margin-top: 5rem;
-            padding: 2rem;
-
-            border: 1px solid var(--border);
-            border-radius: 14px;
-
-            background: var(--surface);
-        }
-
-        .architecture h2 {
-            margin: 0 0 0.5rem;
-            font-size: 1.35rem;
-        }
-
-        .architecture-copy {
-            margin: 0 0 1.6rem;
-            color: var(--muted);
-        }
-
-        .flow {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 0.7rem;
-
-            font-family:
-                ui-monospace,
-                SFMono-Regular,
-                Menlo,
-                Monaco,
-                Consolas,
-                monospace;
-        }
-
-        .node {
-            padding: 0.62rem 0.85rem;
-
-            border: 1px solid var(--border);
-            border-radius: 8px;
-
-            color: var(--text);
-            background: var(--background);
-        }
-
-        .arrow {
-            color: var(--accent);
-            font-weight: 800;
-        }
-
-        footer {
-            margin-top: 6rem;
-            padding: 2rem 0;
-
-            border-top: 1px solid var(--border);
-
-            color: var(--muted);
-            font-size: 0.9rem;
-        }
-
-        .footer-content {
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-
-        .footer-content a {
-            color: var(--muted);
-            text-decoration: none;
-        }
-
-        .footer-content a:hover {
-            color: var(--text);
-        }
-
-        @media (max-width: 780px) {
-            main {
-                padding-top: 4rem;
-            }
-
-            .brand-name {
-                display: none;
-            }
-
-            .nav-links {
-                gap: 0.9rem;
-            }
-
-            .nav-optional {
-                display: none;
-            }
-
-            .features {
-                grid-template-columns: 1fr;
-                margin-top: 4rem;
-            }
-
-            .architecture {
-                margin-top: 3.5rem;
-                padding: 1.35rem;
-            }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            html {
-                scroll-behavior: auto;
-            }
-
-            .button {
-                transition: none;
-            }
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Mechana is a plugin-driven distributed computation platform.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Mechana — Distributed Computation">
+  <meta property="og:description" content="A plugin-driven platform for coordinating distributed computations across workers.">
+  <meta property="og:url" content="https://mechana.io">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Mechana — Distributed Computation">
+  <meta name="twitter:description" content="A plugin-driven platform for coordinating distributed computations across workers.">
+  <link rel="icon" type="image/svg+xml" href="assets/brand/favicon.svg">
+  <title>Mechana — Distributed Computation</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f4f4f0;
+      --muted: #a3a39d;
+      --dim: #74746f;
+      --bg: #080908;
+      --panel: #101110;
+      --panel-2: #151615;
+      --line: #2b2d2b;
+      --soft-line: #1d1f1d;
+      --accent: #ff6b6f;
+      --accent-ink: #0d1117;
+      --max: 1180px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #0d1117;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+    .shell { width: min(calc(100% - 40px), var(--max)); margin: 0 auto; }
+    .eyebrow { color: var(--accent); font: 700 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .2em; text-transform: uppercase; }
+    nav {
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(8,9,8,.82); border-bottom: 1px solid var(--soft-line);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    }
+    .nav-inner { height: 72px; display: flex; align-items: center; justify-content: space-between; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; }
+    .mini-mark { width: 30px; height: 30px; display: block; }
+    .nav-wordmark { width: 122px; height: auto; display: block; }
+    .nav-links { display: flex; align-items: center; gap: 28px; color: var(--muted); font-size: 14px; }
+    .nav-links a:hover { color: var(--ink); }
+    .nav-cta { border: 1px solid var(--line); padding: 9px 14px; color: var(--ink); }
+    .hero { min-height: 560px; display: flex; align-items: center; padding: 92px 0 80px; }
+    .hero > div { max-width: 800px; }
+    .hero-lockup { display: flex; align-items: center; gap: 24px; margin-bottom: 48px; }
+    .hero-lockup-mark { width: clamp(72px, 9vw, 108px); height: auto; flex: 0 0 auto; }
+    .hero-lockup-wordmark { width: min(430px, 65vw); height: auto; display: block; }
+    h1 { margin: 0 0 20px; max-width: 720px; font-size: clamp(38px, 5.2vw, 66px); line-height: 1.05; letter-spacing: -.045em; font-weight: 650; }
+    .hero-copy { max-width: 660px; color: #aeb5bf; font-size: clamp(17px, 1.7vw, 20px); }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
+    .button { display: inline-flex; align-items: center; gap: 12px; padding: 13px 17px; border: 1px solid var(--line); font-weight: 700; font-size: 14px; }
+    .button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+    .button:hover { transform: translateY(-1px); }
+    section { padding: 112px 0; border-top: 1px solid var(--soft-line); }
+    .section-head { display: grid; grid-template-columns: .7fr 1.3fr; gap: 60px; margin-bottom: 56px; }
+    h2 { margin: 0; font-size: clamp(34px, 5vw, 58px); line-height: 1.02; letter-spacing: -.045em; }
+    .section-lede { margin: 22px 0 0; max-width: 660px; color: var(--muted); font-size: 18px; }
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); background: var(--panel); }
+    .flow-item { min-height: 240px; padding: 26px; border-right: 1px solid var(--line); position: relative; }
+    .flow-item:last-child { border-right: 0; }
+    .number { color: var(--dim); font: 12px ui-monospace, monospace; }
+    .flow h3 { margin: 68px 0 10px; font-size: 20px; }
+    .flow p { margin: 0; color: var(--muted); font-size: 14px; }
+    .flow-item:not(:last-child)::after { content: "→"; position: absolute; z-index: 1; right: -13px; top: 50%; width: 25px; height: 25px; display: grid; place-items: center; background: var(--bg); color: var(--accent); }
+    .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .feature { min-height: 300px; padding: 28px; background: linear-gradient(145deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); }
+    .feature-icon { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid #474a45; color: var(--accent); font: 18px ui-monospace, monospace; }
+    .feature h3 { margin: 68px 0 12px; font-size: 22px; }
+    .feature p { margin: 0; color: var(--muted); }
+    .trust { display: grid; grid-template-columns: 1fr 1fr; background: #121821; color: var(--ink); border: 1px solid var(--line); }
+    .trust-copy { padding: clamp(36px, 7vw, 82px); }
+    .trust h2 { margin: 22px 0; }
+    .trust-copy > p { max-width: 600px; font-size: 18px; }
+    .trust-list { padding: clamp(36px, 7vw, 82px); background: #0f141b; color: var(--ink); display: grid; align-content: center; border-left: 1px solid var(--line); }
+    .trust-row { display: flex; gap: 18px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+    .trust-row:last-child { border-bottom: 0; }
+    .check { color: var(--accent); }
+    .trust-row p { margin: 3px 0 0; color: var(--muted); font-size: 14px; }
+    .apps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .app { padding: 28px; min-height: 215px; border: 1px solid var(--line); background: rgba(16,17,16,.72); }
+    .app-top { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .tag { padding: 5px 8px; border: 1px solid var(--line); color: var(--dim); font: 10px ui-monospace, monospace; letter-spacing: .1em; }
+    .app h3 { margin: 40px 0 10px; font-size: 21px; }
+    .app p { margin: 0; color: var(--muted); }
+    .pipeline { margin-top: 18px; color: #c9cac4; font: 12px ui-monospace, monospace; }
+    .cta { padding: 104px 0; text-align: center; }
+    .cta h2 { max-width: 900px; margin: 20px auto 24px; font-size: clamp(42px, 7vw, 80px); }
+    .cta p { max-width: 670px; margin: auto; color: var(--muted); font-size: 18px; }
+    .cta .hero-actions { justify-content: center; }
+    footer { padding: 28px 0; border-top: 1px solid var(--line); color: var(--dim); font-size: 13px; }
+    .footer-inner { display: flex; justify-content: space-between; gap: 20px; }
+    @media (max-width: 850px) {
+      .nav-links a:not(.nav-cta) { display: none; }
+      .hero { padding-top: 70px; }
+      .section-head, .trust { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr 1fr; }
+      .flow-item:nth-child(2) { border-right: 0; }
+      .flow-item { border-bottom: 1px solid var(--line); }
+      .flow-item::after { display: none !important; }
+      .feature-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .shell { width: min(calc(100% - 24px), var(--max)); }
+      .hero { min-height: auto; }
+      .hero-lockup { gap: 16px; margin-bottom: 38px; }
+      .hero-lockup-mark { width: 64px; }
+      .hero-lockup-wordmark { width: min(250px, 65vw); }
+      h1 { font-size: clamp(36px, 11vw, 52px); }
+      section { padding: 78px 0; }
+      .flow, .apps { grid-template-columns: 1fr; }
+      .flow-item { border-right: 0; }
+      .footer-inner { flex-direction: column; }
+    }
+  </style>
 </head>
-
 <body>
-<header class="site-header">
-    <nav class="navigation container" aria-label="Primary navigation">
-        <a class="brand" href="/" aria-label="Mechana home">
-            <img
-                class="brand-mark"
-                src="/assets/brand/mechana-mark-color-dark.svg"
-                alt=""
-                width="38"
-                height="38"
-            >
-
-            <span class="brand-name">Mechana</span>
-        </a>
-
-        <div class="nav-links">
-            <a
-                class="nav-optional"
-                href="https://github.com/mechana-dev/mechana#readme"
-            >
-                Overview
-            </a>
-
-            <a
-                class="nav-optional"
-                href="https://github.com/mechana-dev/mechana/tree/main/docs"
-            >
-                Documentation
-            </a>
-
-            <a href="https://github.com/mechana-dev/mechana">
-                GitHub
-            </a>
-        </div>
-    </nav>
-</header>
-
-<main class="container">
-    <section class="hero">
-        <div class="status">
-            <span class="status-dot" aria-hidden="true"></span>
-            Early development
-        </div>
-
-        <img
-            class="hero-logo"
-            src="/assets/brand/mechana-lockup-horizontal-transparent-dark.svg"
-            alt="Mechana — Plugin-driven distributed computation"
-        >
-
-        <p class="hero-copy">
-            Mechana is an open-source, plugin-driven distributed computation
-            platform. Plugins describe complete computations; Mechana
-            coordinates workers, scheduling, retries, progress, resources, and
-            artifact movement without taking on domain-specific behavior.
-        </p>
-
-        <div class="actions">
-            <a
-                class="button button-primary"
-                href="https://github.com/mechana-dev/mechana"
-            >
-                View on GitHub
-            </a>
-
-            <a
-                class="button button-secondary"
-                href="https://github.com/mechana-dev/mechana#readme"
-            >
-                Read the overview
-            </a>
-        </div>
-    </section>
-
-    <section class="features" aria-label="Project characteristics">
-        <article class="feature">
-            <span class="feature-number">01</span>
-
-            <h2>Plugin driven</h2>
-
-            <p>
-                Workloads implement a stable plugin API. Mechana remains
-                independent of their domain, implementation, and purpose.
-            </p>
-        </article>
-
-        <article class="feature">
-            <span class="feature-number">02</span>
-
-            <h2>Distributed by design</h2>
-
-            <p>
-                Coordinator and worker responsibilities are separated around
-                explicit execution state, attempts, progress, and results.
-            </p>
-        </article>
-
-        <article class="feature">
-            <span class="feature-number">03</span>
-
-            <h2>Built for clarity</h2>
-
-            <p>
-                The project emphasizes predictable transitions, structured
-                contracts, observability, and components that are easy to test.
-            </p>
-        </article>
-    </section>
-
-    <section class="architecture">
-        <h2>Conceptual execution flow</h2>
-
-        <p class="architecture-copy">
-            Infrastructure orchestrates execution while plugins define the
-            actual work.
-        </p>
-
-        <div class="flow" aria-label="Conceptual execution flow">
-            <span class="node">Client</span>
-            <span class="arrow" aria-hidden="true">→</span>
-            <span class="node">Coordinator</span>
-            <span class="arrow" aria-hidden="true">→</span>
-            <span class="node">Worker</span>
-            <span class="arrow" aria-hidden="true">→</span>
-            <span class="node">Plugin</span>
-            <span class="arrow" aria-hidden="true">→</span>
-            <span class="node">Result</span>
-        </div>
-    </section>
-</main>
-
-<footer>
-    <div class="footer-content container">
-        <span>
-            Copyright © 2026 Mark Vita. Mechana and the Mechana logo are
-            trademarks of Mark Vita. The software is licensed under
-            <a href="https://github.com/mechana-dev/mechana/blob/main/LICENSE">Apache 2.0</a>;
-            that license does not grant trademark rights beyond applicable law.
-        </span>
-
-        <a href="https://github.com/mechana-dev/mechana">
-            github.com/mechana-dev/mechana
-        </a>
+  <nav aria-label="Primary navigation">
+    <div class="shell nav-inner">
+      <a class="brand" href="#top" aria-label="Mechana home"><img class="mini-mark" src="assets/brand/mechana-mark-color-dark.svg" alt=""><img class="nav-wordmark" src="assets/brand/mechana-wordmark-dark.svg" alt="Mechana"></a>
+      <div class="nav-links">
+        <a href="#how">How it works</a><a href="#platform">Platform</a><a href="#examples">Examples</a>
+        <a class="nav-cta" href="#join">Project links</a>
+      </div>
     </div>
-</footer>
+  </nav>
+  <main id="top">
+    <header class="shell hero">
+      <div>
+        <div class="hero-lockup" aria-label="Mechana">
+          <img class="hero-lockup-mark" src="assets/brand/mechana-mark-color-dark.svg" alt="">
+          <img class="hero-lockup-wordmark" src="assets/brand/mechana-wordmark-dark.svg" alt="Mechana">
+        </div>
+        <div class="eyebrow">Distributed computation platform</div>
+        <h1>A plugin-driven distributed computation platform.</h1>
+        <p class="hero-copy">Mechana coordinates computational work across a network of workers. Plugins define inputs, work units, execution, output assembly, and validation.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#how">Architecture overview <span>↓</span></a>
+          <a class="button" href="#examples">Example workloads</a>
+        </div>
+      </div>
+    </header>
+    <section id="how">
+      <div class="shell">
+        <div class="section-head">
+          <div class="eyebrow">01 / The model</div>
+          <div><h2>Execution model</h2><p class="section-lede">Plugins describe the work. The platform plans, distributes, monitors, and assembles it across available workers.</p></div>
+        </div>
+        <div class="flow">
+          <article class="flow-item"><span class="number">01</span><h3>Define</h3><p>A plugin specifies inputs, work units, processing, and validation.</p></article>
+          <article class="flow-item"><span class="number">02</span><h3>Plan</h3><p>Mechana divides work and matches it to available resources.</p></article>
+          <article class="flow-item"><span class="number">03</span><h3>Execute</h3><p>Workers process tasks inside controlled, isolated environments.</p></article>
+          <article class="flow-item"><span class="number">04</span><h3>Assemble</h3><p>Outputs are checked, collected, and returned to user-controlled storage.</p></article>
+        </div>
+      </div>
+    </section>
+    <section id="platform">
+      <div class="shell">
+        <div class="section-head">
+          <div class="eyebrow">02 / The platform</div>
+          <div><h2>Platform components</h2><p class="section-lede">The platform provides common scheduling, execution, storage, and lifecycle services to plugins.</p></div>
+        </div>
+        <div class="feature-grid">
+          <article class="feature"><div class="feature-icon">{ }</div><h3>Plugin-driven</h3><p>Define inputs, outputs, computation, and parallelization strategies through an extensible plugin model.</p></article>
+          <article class="feature"><div class="feature-icon">◇</div><h3>Storage-flexible</h3><p>Coordinate artifacts across local, network, cloud, and future storage providers without forcing all data into one central store.</p></article>
+          <article class="feature"><div class="feature-icon">✦</div><h3>AI-assisted authoring</h3><p>Planned tooling will generate plugin templates, implementation code, tests, and validation workflows from a workload description.</p></article>
+        </div>
+      </div>
+    </section>
+    <section aria-label="Worker security">
+      <div class="shell trust">
+        <div class="trust-copy"><div class="eyebrow">Worker execution</div><h2>Controlled plugin environments</h2><p>Mechana is designed to execute plugins inside controlled environments that limit access to explicitly allocated resources and separate workloads from worker systems.</p></div>
+        <div class="trust-list">
+          <div class="trust-row"><span class="check">✓</span><div><strong>Isolated workspaces</strong><p>Workload files remain inside managed execution boundaries.</p></div></div>
+          <div class="trust-row"><span class="check">✓</span><div><strong>Defined resource limits</strong><p>Workers retain control over the compute they make available.</p></div></div>
+          <div class="trust-row"><span class="check">✓</span><div><strong>Controlled permissions</strong><p>Filesystem and network access can be constrained by policy.</p></div></div>
+          <div class="trust-row"><span class="check">✓</span><div><strong>Monitored lifecycle</strong><p>Execution, cancellation, timeouts, and cleanup are coordinated by the platform.</p></div></div>
+        </div>
+      </div>
+    </section>
+    <section id="examples">
+      <div class="shell">
+        <div class="section-head">
+          <div class="eyebrow">03 / Prototype applications</div>
+          <div><h2>Example workloads</h2><p class="section-lede">The following prototypes and examples exercise different parts of the plugin and execution model.</p></div>
+        </div>
+        <div class="apps">
+          <article class="app"><div class="app-top"><span class="eyebrow">Media</span><span class="tag">PROTOTYPE</span></div><h3>Distributed video processing</h3><p>Parallel transcoding with large artifact handling and result assembly.</p><div class="pipeline">H.264 → WORKERS → H.265</div></article>
+          <article class="app"><div class="app-top"><span class="eyebrow">Documents</span><span class="tag">PROTOTYPE</span></div><h3>OCR and document analysis</h3><p>Partition documents for page-level processing and structured output.</p><div class="pipeline">PDF → PARALLEL OCR → SEARCHABLE OUTPUT</div></article>
+          <article class="app"><div class="app-top"><span class="eyebrow">Images</span><span class="tag">EXAMPLE</span></div><h3>Batch image workflows</h3><p>Apply independent transformations across large image collections.</p><div class="pipeline">LIBRARY → TRANSFORM → RESULTS</div></article>
+          <article class="app"><div class="app-top"><span class="eyebrow">Science</span><span class="tag">EXAMPLE</span></div><h3>Numerical computation</h3><p>Distribute simulations, Monte Carlo workloads, and independent calculations.</p><div class="pipeline">MODEL → COMPUTE NETWORK → AGGREGATE</div></article>
+        </div>
+      </div>
+    </section>
+    <section class="cta" id="join">
+      <div class="shell"><div class="eyebrow">Open source</div><h2>Project resources</h2><p>Source code, architecture documentation, and plugin development material are available through the project repository.</p><div class="hero-actions"><a class="button primary" href="https://github.com/mechana-dev/mechana">GitHub ↗</a><a class="button" href="https://github.com/mechana-dev/mechana#readme">Documentation ↗</a></div></div>
+    </section>
+  </main>
+  <footer><div class="shell footer-inner"><span>© 2026 Mark Vita · Mechana™</span><span>Open source · Apache License 2.0</span></div></footer>
 </body>
 </html>
