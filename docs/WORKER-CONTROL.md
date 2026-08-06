@@ -78,8 +78,8 @@ detected with controls locked; an endpoint that does not answer is unavailable.
 Select a count, execution mode, and comma-separated plugin list, then press **Start**
 to add the deficit up to that count.
 
-On the MBA, choose **SANDBOXED** and one or more listed plugins. The agent verifies that the
-host is macOS, the requested plugin is listed in `sandboxed-capabilities`, and the
+Choose **SANDBOXED** and one or more listed plugins. The agent verifies that the
+host is macOS or Linux, the requested plugin is listed in `sandboxed-capabilities`, and the
 sandbox root is outside the user's home directory. It launches each child with the
 configured `mechana.sandbox.root` system property. Native plugins also require the
 agent JVM to be started with explicit absolute `mechana.runtime.ffmpeg`,
@@ -176,7 +176,7 @@ token rotation, OS keychain storage, roles, audit logging, or host identity proo
 It does not find or kill arbitrary Java processes or adopt children after an agent
 restart. SSH provisioning installs a per-user launchd or systemd unit, but not a
 Windows service or a system-wide/root service.
-Sandbox mode is currently macOS-only and `fractal-render` is the only migrated
-concrete plugin. The agent's implementation allowlist cannot be expanded through
-configuration alone; a later plugin migration must update code and tests before
-that plugin can be launched as sandboxed.
+Sandbox mode supports macOS Seatbelt and Linux bubblewrap. All five concrete
+plugins are migrated to the external plugin host. Linux requires a working
+`bwrap` installation and supported kernel namespaces; see
+[Linux worker setup](linux-worker.md) for enforced controls and limitations.

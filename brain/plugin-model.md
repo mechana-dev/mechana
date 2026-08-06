@@ -82,4 +82,6 @@ plugin paths—sleep, FFmpeg video, fractal rendering, Tesseract OCR, and Blende
 rendering—can run in the host when a worker is launched in explicit sandboxed
 mode. The worker stages remote inputs before launch, while native plugins require
 operator-declared absolute executable paths. Legacy execution remains available.
+On Linux the existing host contract is executed through the bubblewrap backend;
+plugin implementations remain platform-neutral and contain only computation logic.
 Cooperative protocol cancellation remains pending.

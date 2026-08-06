@@ -122,7 +122,7 @@ from current plugin loading.
 The implementation foundation lives in `mechana-plugin-runtime` and `plugin-host`.
 It uses one-request NDJSON over standard input/output because the current work-unit
 contract is request/response-shaped and does not need a network listener inside
-the attempt. Explicitly sandboxed macOS workers route every current concrete
-plugin through this boundary, stage network inputs before launch, and require
-absolute operator-declared native executable paths where applicable. Linux and
-Windows enforcement backends remain directional.
+the attempt. Explicitly sandboxed macOS and Linux workers route every current
+concrete plugin through this boundary, stage network inputs before launch, and
+require absolute operator-declared native executable paths where applicable.
+Windows enforcement remains directional.

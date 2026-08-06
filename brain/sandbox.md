@@ -75,8 +75,10 @@ hang, leak, or forced termination must not require restarting the worker.
 Mechana promises a common policy and launch API, not identical operating-system
 implementations or identical guarantees.
 
-- **Linux:** likely namespaces, cgroups, seccomp, dedicated identities, restricted
-  mounts, capabilities, and an appropriate mandatory-access-control layer.
+- **Linux:** initially implemented with Bubblewrap-managed user, mount, PID, IPC,
+  UTS, and network namespaces plus restricted mounts. Cgroups, seccomp filtering,
+  dedicated identities, and mandatory-access-control integration remain
+  directional and are not advertised.
 - **Windows:** likely Job Objects, restricted tokens or AppContainer where
   suitable, ACLs, and Windows network policy.
 - **macOS:** the strongest maintainable combination of process identity,
@@ -263,3 +265,13 @@ restriction and user-home read denial but not workspace-only read isolation.
 It reports network denial only after a live probe; CPU, memory, scratch-size, process-count,
 dedicated identity, bounded-log-size, and guaranteed descendant-tree controls
 remain unimplemented. See the [macOS guide](../docs/macos-sandbox.md).
+
+The Linux backend discovers `bwrap` through `PATH`, performs a live namespace
+probe, and fails closed when the executable or required kernel policy is
+unavailable. It exposes read-only system/runtime trees, read-only attempt input,
+writable work/output/logs, isolated `/tmp`, minimal `/dev`, a new `/proc`, and a
+new network namespace for network-denied policy. It reports filesystem and write
+restriction, home denial, network denial, timeout, and Bubblewrap parent-death
+enforcement. CPU, RAM, scratch-byte, process-count, cgroup, seccomp, log-size, and
+dedicated-identity controls remain unimplemented. See the
+[Linux guide](../docs/linux-worker.md).

@@ -30,13 +30,16 @@ import dev.mechana.protocol.Messages.TaskHeartbeat;
 import dev.mechana.protocol.Messages.TaskLease;
 import dev.mechana.protocol.Messages.WorkerRegistration;
 import dev.mechana.runtime.plugin.AttemptWorkspace;
+import dev.mechana.runtime.plugin.LinuxSandbox;
 import dev.mechana.runtime.plugin.MacOsSandbox;
 import dev.mechana.runtime.plugin.OwnedAttemptWorkspace;
+import dev.mechana.runtime.plugin.PluginSandbox;
 import dev.mechana.runtime.plugin.PluginRuntimeManager;
 import dev.mechana.runtime.plugin.ProcessSandbox;
 import dev.mechana.runtime.plugin.SandboxPolicy;
 import dev.mechana.runtime.plugin.SandboxRequest;
 import dev.mechana.runtime.plugin.SandboxResult;
+import dev.mechana.runtime.plugin.SandboxControl;
 import dev.mechana.runtime.plugin.TrustMode;
 import java.io.IOException;
 import java.io.File;
@@ -86,7 +89,7 @@ public final class WorkerAgent {
 		this.server = URI.create(stripTrailingSlash(Objects.requireNonNull(server, "server").toString()));
 		this.workerId = Objects.requireNonNull(workerId, "workerId");
 		this.workerAddress = Objects.requireNonNull(workerAddress, "workerAddress");
-		this.supportedPlugins = Set.copyOf(supportedPlugins);
+		this.supportedPlugins = advertisedCapabilities(supportedPlugins);
 		reclaimAbandonedAttempts();
 	}
 
@@ -213,12 +216,11 @@ public final class WorkerAgent {
 							"dev.mechana.pluginhost.PluginHostMain"),
 					java.util.Map.of("PATH", "/usr/bin:/bin"), workspace, policy, requestFrame,
 					line -> handleHostEvent(line, context, completed, protocolFailure));
-			MacOsSandbox macOs = new MacOsSandbox();
-			if (!macOs.supportsCurrentHost())
-				throw new IOException("SANDBOXED plugin execution currently requires the macOS backend");
+			PluginSandbox platformSandbox = platformSandbox();
 			System.out.printf("Worker %s running task %s in %s%n", workerId, lease.taskId(),
-					macOs.capabilities(policy).backend());
-			SandboxResult result = new PluginRuntimeManager(new ProcessSandbox(), macOs).execute(request, cancelled);
+					platformSandbox.capabilities(policy).backend());
+			SandboxResult result = new PluginRuntimeManager(new ProcessSandbox(), platformSandbox).execute(request,
+					cancelled);
 			if (protocolFailure.get() != null)
 				throw new IOException(
 						"Plugin-host protocol failed: " + safeMessage(protocolFailure.get()) + diagnostic(result),
@@ -233,6 +235,33 @@ public final class WorkerAgent {
 			Response completion = post(taskPath(lease, "complete"), new TaskCompletion(lease.leaseToken()));
 			requireStatus(completion, 204);
 			System.out.printf("Worker %s finished sandboxed task %s successfully%n", workerId, lease.taskId());
+		}
+	}
+
+	private static PluginSandbox platformSandbox() throws IOException {
+		MacOsSandbox macOs = new MacOsSandbox();
+		if (macOs.supportsCurrentHost())
+			return macOs;
+		LinuxSandbox linux = new LinuxSandbox();
+		if (linux.supportsCurrentHost())
+			return linux;
+		throw new IOException("No verified OS sandbox backend is available on this host");
+	}
+
+	private static Set<String> advertisedCapabilities(Set<String> plugins) {
+		if (!sandboxedExecution())
+			return Set.copyOf(plugins);
+		try {
+			SandboxPolicy policy = new SandboxPolicy(TrustMode.SANDBOXED, false, 1, 1, 1, Duration.ofSeconds(1), 1);
+			var capabilities = platformSandbox().capabilities(policy);
+			java.util.HashSet<String> advertised = new java.util.HashSet<>(plugins);
+			advertised.add("sandbox.backend." + capabilities.backend());
+			capabilities.enforced().entrySet().stream().filter(Map.Entry::getValue).map(Map.Entry::getKey)
+					.map(SandboxControl::name).map(String::toLowerCase).map(name -> "sandbox.control." + name)
+					.forEach(advertised::add);
+			return Set.copyOf(advertised);
+		} catch (IOException unavailable) {
+			throw new IllegalStateException("Sandboxed worker cannot start without a verified OS backend", unavailable);
 		}
 	}
 
@@ -398,7 +427,10 @@ public final class WorkerAgent {
 	}
 
 	private static Path sandboxRoot() {
-		return Path.of(System.getProperty("mechana.sandbox.root", "/private/tmp/mechana-sandbox"));
+		return Path.of(System.getProperty("mechana.sandbox.root",
+				System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac")
+						? "/private/tmp/mechana-sandbox"
+						: Path.of(System.getProperty("java.io.tmpdir"), "mechana-sandbox").toString()));
 	}
 
 	private Thread startPresenceHeartbeat() {

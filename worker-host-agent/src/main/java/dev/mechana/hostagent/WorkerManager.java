@@ -145,8 +145,9 @@ final class WorkerManager {
 		if (selected.isEmpty() || !allowed.containsAll(selected))
 			throw new IllegalArgumentException("Requested plugins are not allowed for " + mode + ": " + selected);
 		if (mode == WorkerLaunchMode.SANDBOXED) {
-			if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac"))
-				throw new IllegalArgumentException("Sandboxed workers are currently supported only on macOS");
+			String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+			if (!os.contains("mac") && !os.contains("linux"))
+				throw new IllegalArgumentException("Sandboxed workers currently require macOS or Linux");
 			Path home = Path.of(System.getProperty("user.home")).toAbsolutePath().normalize();
 			if (config.sandboxRoot().toAbsolutePath().normalize().startsWith(home))
 				throw new IllegalArgumentException("Sandbox root must be outside the user home directory");

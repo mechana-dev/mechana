@@ -51,7 +51,8 @@ This file reports repository evidence, not desired future status.
   restriction, user-home read denial, and network denial after a live
   `sandbox-exec` probe, but does not claim workspace-only read isolation.
 - Sandboxed distributed workers route all current concrete plugins through that
-  runtime manager and separate plugin host on macOS. The worker stages the host
+  runtime manager and separate plugin host on macOS and Linux. Linux selects a
+  Bubblewrap namespace backend only after a live capability probe succeeds. The worker stages the host
   runtime, plugin JAR, and remote task inputs under attempt `input/`, streams NDJSON
   progress and artifact events, uploads
   staged outputs with the existing lease fencing, enforces timeout/cancellation at
