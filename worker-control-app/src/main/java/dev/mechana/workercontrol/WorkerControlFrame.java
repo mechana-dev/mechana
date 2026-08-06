@@ -31,6 +31,7 @@ import javax.swing.*;
 final class WorkerControlFrame extends JFrame {
 	private static final long serialVersionUID = 1L;
 	private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
+	private static final String SANDBOXED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render";
 	private final transient AgentClient client;
 	private final transient SettingsStore store;
 	private final transient SshProvisioner provisioner;
@@ -324,8 +325,7 @@ final class WorkerControlFrame extends JFrame {
 				identity.isBlank() ? null : Path.of(identity), acceptNewHostKey.isSelected(),
 				Path.of(agentJar.getText().strip()), Path.of(workerJar.getText().strip()),
 				remoteDirectory.getText().strip(), coordinator.getText().strip(), (Integer) port.getValue(),
-				tokenValue(), "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render", "fractal-render",
-				sandboxRoot.getText().strip());
+				tokenValue(), SANDBOXED_PLUGINS, SANDBOXED_PLUGINS, sandboxRoot.getText().strip());
 	}
 
 	private void waitForAgent() throws IOException, InterruptedException {
