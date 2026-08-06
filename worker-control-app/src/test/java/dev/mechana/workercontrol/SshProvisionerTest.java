@@ -119,6 +119,16 @@ class SshProvisionerTest {
 	}
 
 	@Test
+	void staleAgentCleanupIsRestrictedToVerifiedMechanaListeners() throws Exception {
+		String command = SshProvisioner.macOsPortReleaseCommand(21012);
+		assertTrue(command.contains("lsof -nP -tiTCP:21012"));
+		assertTrue(command.contains("ps -p \"$agent_pid\" -o command="));
+		assertTrue(command.contains("*mechana-worker-host-agent.jar*"));
+		assertTrue(command.contains("Port 21012 is occupied by a non-Mechana process"));
+		assertEquals("", SshProvisioner.runCommand(List.of("/bin/sh", "-n", "-c", command), Duration.ofSeconds(5)));
+	}
+
+	@Test
 	void restartsExistingMacOsAgentUsingResolvedHome() throws Exception {
 		Path agent = Files.writeString(temporary.resolve("agent.jar"), "agent");
 		Path worker = Files.writeString(temporary.resolve("worker.jar"), "worker");

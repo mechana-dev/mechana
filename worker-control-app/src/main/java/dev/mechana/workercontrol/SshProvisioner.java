@@ -293,7 +293,6 @@ final class SshProvisioner {
 	private static String systemdEscape(String value) {
 		return value.replace("\\", "\\\\").replace(" ", "\\x20");
 	}
-
 	static String macOsPortReleaseCommand(int port) {
 		return "agent_pid=$(lsof -nP -tiTCP:" + port
 				+ " -sTCP:LISTEN 2>/dev/null | head -n 1); while [ -n \"$agent_pid\" ]; do "

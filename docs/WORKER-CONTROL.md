@@ -36,7 +36,7 @@ working-directory=/absolute/path/to/mechana-agent-data
 max-workers=12
 capabilities=sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render
 sandbox-root=/private/tmp/mechana-sandbox
-sandboxed-capabilities=sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render
+sandboxed-capabilities=fractal-render
 stop-timeout-ms=10000
 ```
 
@@ -91,7 +91,7 @@ the properties explicitly. The status panel reports the
 actual mode, plugins, and sandbox root used by the running group. Stop all workers
 before changing mode or plugin selection.
 
-Choose **LEGACY** only when deliberately running without the macOS sandbox.
+Choose **LEGACY** only for plugins that have not yet migrated to the sandbox host.
 The agent limits those selections to `capabilities`; this label intentionally does
 not imply OS isolation. **Stop all** gracefully stops all tracked children and
 forces remaining processes down after the configured timeout. Known hosts and the
@@ -176,7 +176,7 @@ token rotation, OS keychain storage, roles, audit logging, or host identity proo
 It does not find or kill arbitrary Java processes or adopt children after an agent
 restart. SSH provisioning installs a per-user launchd or systemd unit, but not a
 Windows service or a system-wide/root service.
-Sandbox mode is currently macOS-only. All current concrete plugins are migrated.
-The agent's implementation allowlist cannot be expanded through
+Sandbox mode is currently macOS-only and `fractal-render` is the only migrated
+concrete plugin. The agent's implementation allowlist cannot be expanded through
 configuration alone; a later plugin migration must update code and tests before
 that plugin can be launched as sandboxed.
