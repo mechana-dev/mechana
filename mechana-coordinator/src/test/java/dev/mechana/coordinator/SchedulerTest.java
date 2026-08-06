@@ -73,6 +73,22 @@ class SchedulerTest {
 	}
 
 	@Test
+	void repeatedWorkerFailuresStopAfterThreeAttemptsAndFailTheJob() {
+		Scheduler scheduler = new Scheduler(1_000);
+		String jobId = scheduler.submit(2, 100);
+
+		for (int attempt = 1; attempt <= 3; attempt++) {
+			TaskLease lease = scheduler.lease("worker-" + attempt, Set.of("sleep"), PLUGIN).orElseThrow();
+			assertTrue(scheduler.fail("worker-" + attempt, lease.taskId(), lease.leaseToken()));
+		}
+
+		assertEquals("FAILED", scheduler.status(jobId).state());
+		assertEquals("FAILED", scheduler.dashboard(jobId).stage());
+		assertTrue(scheduler.dashboard(jobId).error().contains("failed after 3 attempts"));
+		assertTrue(scheduler.lease("worker-4", Set.of("sleep"), PLUGIN).isEmpty());
+	}
+
+	@Test
 	void independentHeartbeatRenewsLeaseWithoutChangingProgress() {
 		MutableClock clock = new MutableClock();
 		Scheduler scheduler = new Scheduler(1_000, clock);

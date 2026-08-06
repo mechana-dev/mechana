@@ -61,15 +61,20 @@ java -jar mechana-worker/target/mechana-worker.jar http://localhost:8787 \
   sleep,video-ffmpeg,fractal-render,ocr-tesseract worker-1
 ```
 
-On macOS, `fractal-render` now runs in the separate plugin host through the
+On macOS, sandboxed workers run every current concrete plugin in the separate plugin host through the
 experimental sandbox backend. The default attempt root is
 `/private/tmp/mechana-sandbox`; override it only with another location outside
 your home directory:
 
 ```shell
-java -Dmechana.sandbox.root=/private/tmp/mechana-sandbox-test \
+java -Dmechana.execution.mode=sandboxed \
+  -Dmechana.sandbox.root=/private/tmp/mechana-sandbox-test \
+  -Dmechana.runtime.ffmpeg=/opt/homebrew/bin/ffmpeg \
+  -Dmechana.runtime.ffprobe=/opt/homebrew/bin/ffprobe \
+  -Dmechana.runtime.tesseract=/opt/homebrew/bin/tesseract \
+  -Dmechana.runtime.blender=/Applications/Blender.app/Contents/MacOS/Blender \
   -jar mechana-worker/target/mechana-worker.jar http://localhost:8787 \
-  fractal-render sandbox-worker-1
+  sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render sandbox-worker-1
 ```
 
 Start that command in four terminals with unique worker IDs, then submit a job
@@ -181,12 +186,18 @@ The server is authoritative for plugin code. A worker advertises the plugin IDs 
 assigned plugin JAR into temporary storage, verifies its SHA-256 checksum, loads it for that execution, and deletes
 the temporary artifact afterward.
 
-Server arguments are `[port] [sleep-plugin-jar] [public-server-url] [data-directory] [video-plugin-jar] [fractal-plugin-jar] [ocr-plugin-jar]`.
-The default data directory is `.mechana/server`; it is ignored by Git. When workers connect over a network, set the
-public URL to an address they can reach:
+Server arguments are `[port] [public-server-url] [data-directory]`. All current
+plugin packages are registered automatically from their standard build outputs;
+no plugin JAR arguments are required. The default data directory is
+`.mechana/server`; it is ignored by Git. When workers connect over a network, set
+the public URL to an address they can reach:
 
 ```shell
 java -jar mechana-server/target/mechana-server.jar 8787 \
-  plugins/sleep-plugin/target/mechana-plugin-sleep-0.1.0-SNAPSHOT.jar https://server.example \
-  /var/lib/mechana
+  https://server.example /var/lib/mechana
 ```
+
+Packaged deployments may override an automatically registered artifact with a
+`mechana.plugin.<id>.jar` JVM property, where `<id>` is `sleep`, `video`,
+`fractal`, `ocr`, or `blender`. These are deployment overrides, not normal server
+arguments.

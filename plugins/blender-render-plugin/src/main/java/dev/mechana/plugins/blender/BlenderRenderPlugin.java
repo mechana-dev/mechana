@@ -56,14 +56,14 @@ public final class BlenderRenderPlugin implements TaskPlugin {
 		try {
 			scratch = Files.createTempDirectory("mechana-blender-");
 			Path scene = scratch.resolve("scene.blend");
-			download(required(p, "inputUrl"), scene);
+			stageInput(p, scene);
 			Path frames = Files.createDirectories(scratch.resolve("frames"));
 			String executable = p.getOrDefault("blenderCommand",
 					System.getenv().getOrDefault("MECHANA_BLENDER", "blender"));
 			List<String> command = new BlenderCommands(executable).render(scene, frames.resolve("frame_######"), first,
 					last, integer(p, "width"), integer(p, "height"), integer(p, "samples"),
 					Integer.parseInt(p.getOrDefault("threads", "0")));
-			run(command, first, last, context);
+			run(command, first, last, context, scratch);
 			validateFrames(frames, first, last);
 			Path archive = scratch.resolve("frames-%05d.zip".formatted(batch));
 			zipFrames(frames, archive);
@@ -79,9 +79,20 @@ public final class BlenderRenderPlugin implements TaskPlugin {
 		}
 	}
 
-	private static void run(List<String> command, int first, int last, TaskContext context)
+	static void stageInput(Map<String, String> parameters, Path destination) throws IOException, InterruptedException {
+		String local = parameters.get("inputPath");
+		if (local != null) {
+			Files.copy(Path.of(local), destination);
+			return;
+		}
+		download(required(parameters, "inputUrl"), destination);
+	}
+
+	private static void run(List<String> command, int first, int last, TaskContext context, Path scratch)
 			throws IOException, InterruptedException {
-		Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+		ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true);
+		configureTemporaryDirectory(builder, scratch);
+		Process process = builder.start();
 		Thread output = Thread.ofVirtual().start(() -> {
 			try (var lines = process.inputReader().lines()) {
 				lines.forEach(line -> {
@@ -109,6 +120,13 @@ public final class BlenderRenderPlugin implements TaskPlugin {
 		output.join();
 		if (process.exitValue() != 0)
 			throw new IOException("Blender exited with status " + process.exitValue());
+	}
+
+	static void configureTemporaryDirectory(ProcessBuilder builder, Path scratch) {
+		String value = scratch.toAbsolutePath().normalize().toString();
+		builder.environment().put("TMPDIR", value);
+		builder.environment().put("TMP", value);
+		builder.environment().put("TEMP", value);
 	}
 
 	private static void validateFrames(Path directory, int first, int last) throws IOException {

@@ -248,9 +248,15 @@ plugin marketplace are **Deferred**.
 - **Deferred:** production sandbox implementation, general host-path access,
   runtime distribution/signing, certification infrastructure, and marketplace.
 
-The first implementation foundation defines common contracts, managed child
-process lifecycle, a fixed attempt workspace, fail-closed capability selection,
-and a one-request plugin host. The macOS backend is experimental because
+The implementation defines common contracts, managed child-process lifecycle, a
+fixed attempt workspace, fail-closed capability selection, and a one-request
+plugin host. All current concrete plugins can cross this boundary on sandboxed
+macOS workers; network inputs are staged by the worker and native executables are
+granted only through explicit absolute runtime properties. The profile grants
+I/O Kit device enumeration because Blender performs Metal device discovery even
+for CPU Cycles. It also permits local IPC because Intel Blender 4.5 uses IPC-backed
+synchronization during startup on macOS 12. Neither rule grants network or filesystem
+access or changes the reported home-directory and workspace-write controls. The macOS backend is experimental because
 `sandbox-exec` is explicitly deprecated by Apple. Tahoe requires broad runtime
 reads even for basic system tools, so the backend claims workspace write
 restriction and user-home read denial but not workspace-only read isolation.

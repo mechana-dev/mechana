@@ -54,6 +54,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.HexFormat;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Enumeration;
 import java.util.Objects;
 import java.util.Set;
@@ -64,6 +66,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Pull-based worker that downloads each assigned plugin into ephemeral storage.
  */
 public final class WorkerAgent {
+	private static final int DOWNLOAD_ATTEMPTS = 4;
 
 	private final ObjectMapper json = new ObjectMapper();
 	private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
@@ -148,7 +151,7 @@ public final class WorkerAgent {
 		Path pluginFile = null;
 		try {
 			pluginFile = downloadPlugin(lease);
-			if ("fractal-render".equals(lease.pluginId())) {
+			if (sandboxedExecution()) {
 				executeSandboxed(lease, pluginFile, cancelled);
 			} else
 				try (URLClassLoader loader = new URLClassLoader(new java.net.URL[]{pluginFile.toUri().toURL()},
@@ -194,8 +197,9 @@ public final class WorkerAgent {
 			AtomicBoolean completed = new AtomicBoolean();
 			Path plugin = workspace.input().resolve("plugin.jar");
 			Files.copy(downloadedPlugin, plugin);
+			Map<String, String> parameters = prepareSandboxParameters(lease, workspace);
 			HostRequest hostRequest = new HostRequest(plugin.toString(), lease.pluginEntrypoint(), lease.pluginId(),
-					lease.pluginVersion(), lease.durationMillis(), lease.parameters(), workspace.output().toString());
+					lease.pluginVersion(), lease.durationMillis(), parameters, workspace.output().toString());
 			Path requestFrame = workspace.input().resolve("request.ndjson");
 			Files.writeString(requestFrame, json.writeValueAsString(hostRequest) + System.lineSeparator());
 			String hostClasspath = stageHostClasspath(workspace.input().resolve("runtime"));
@@ -211,7 +215,7 @@ public final class WorkerAgent {
 					line -> handleHostEvent(line, context, completed, protocolFailure));
 			MacOsSandbox macOs = new MacOsSandbox();
 			if (!macOs.supportsCurrentHost())
-				throw new IOException("SANDBOXED fractal execution currently requires the macOS backend");
+				throw new IOException("SANDBOXED plugin execution currently requires the macOS backend");
 			System.out.printf("Worker %s running task %s in %s%n", workerId, lease.taskId(),
 					macOs.capabilities(policy).backend());
 			SandboxResult result = new PluginRuntimeManager(new ProcessSandbox(), macOs).execute(request, cancelled);
@@ -230,6 +234,92 @@ public final class WorkerAgent {
 			requireStatus(completion, 204);
 			System.out.printf("Worker %s finished sandboxed task %s successfully%n", workerId, lease.taskId());
 		}
+	}
+
+	private Map<String, String> prepareSandboxParameters(TaskLease lease, AttemptWorkspace workspace)
+			throws IOException, InterruptedException {
+		Map<String, String> parameters = new HashMap<>(lease.parameters());
+		switch (lease.pluginId()) {
+			case "video-ffmpeg" -> {
+				parameters.put("inputPath",
+						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "input.mp4"));
+				parameters.put("ffmpegCommand", requiredRuntime("ffmpeg"));
+				parameters.put("ffprobeCommand", requiredRuntime("ffprobe"));
+			}
+			case "ocr-tesseract" -> {
+				int pageCount = Integer.parseInt(parameters.get("pageCount"));
+				for (int index = 0; index < pageCount; index++)
+					parameters.put("pagePath." + index, stageRemoteInput(parameters.remove("pageUrl." + index),
+							workspace.input(), "page-%06d.png".formatted(index)));
+				parameters.put("tesseractCommand", requiredRuntime("tesseract"));
+			}
+			case "blender-render" -> {
+				parameters.put("inputPath",
+						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "scene.blend"));
+				parameters.put("blenderCommand", requiredRuntime("blender"));
+			}
+			case "sleep", "fractal-render" -> {
+				// Pure-Java plugins need no staged input or native runtime grant.
+			}
+			default -> throw new IOException("Plugin is not approved for sandboxed execution: " + lease.pluginId());
+		}
+		return Map.copyOf(parameters);
+	}
+
+	private String stageRemoteInput(String url, Path input, String fileName) throws IOException, InterruptedException {
+		if (url == null || url.isBlank())
+			throw new IOException("Sandbox input URL is missing");
+		Path destination = input.resolve(fileName);
+		Files.write(destination, downloadBytes(http, resolveCoordinatorUri(server, url), Duration.ofMinutes(20),
+				"Sandbox input download"));
+		return destination.toAbsolutePath().normalize().toString();
+	}
+
+	static byte[] downloadBytes(HttpClient client, URI uri, Duration timeout, String description)
+			throws IOException, InterruptedException {
+		IOException lastFailure = null;
+		for (int attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
+			try {
+				HttpRequest request = HttpRequest.newBuilder(uri).timeout(timeout).GET().build();
+				HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+				if (response.statusCode() == 200)
+					return response.body();
+				if (response.statusCode() < 500 && response.statusCode() != 408 && response.statusCode() != 429)
+					throw new IOException(description + " returned HTTP " + response.statusCode());
+				lastFailure = new IOException(description + " returned HTTP " + response.statusCode());
+			} catch (IOException failure) {
+				lastFailure = failure;
+			}
+			if (attempt < DOWNLOAD_ATTEMPTS)
+				Thread.sleep(250L << (attempt - 1));
+		}
+		throw new IOException(description + " failed after " + DOWNLOAD_ATTEMPTS + " attempts against "
+				+ uri.getScheme() + "://" + uri.getAuthority() + ": " + safeMessage(lastFailure), lastFailure);
+	}
+
+	static URI resolveCoordinatorUri(URI coordinator, String supplied) {
+		URI candidate = URI.create(supplied);
+		String host = candidate.getHost();
+		if (host == null || !(host.equalsIgnoreCase("localhost") || host.equals("127.0.0.1") || host.equals("::1")))
+			return candidate;
+		String path = candidate.getRawPath();
+		if (candidate.getRawQuery() != null)
+			path += "?" + candidate.getRawQuery();
+		return coordinator.resolve(path);
+	}
+
+	private static String requiredRuntime(String name) throws IOException {
+		String configured = System.getProperty("mechana.runtime." + name, "").strip();
+		if (configured.isEmpty())
+			throw new IOException("Sandboxed " + name + " requires -Dmechana.runtime." + name + "=/absolute/path");
+		Path executable = Path.of(configured).toAbsolutePath().normalize();
+		if (!Files.isExecutable(executable))
+			throw new IOException("Configured sandbox runtime is not executable: " + executable);
+		return executable.toString();
+	}
+
+	private static boolean sandboxedExecution() {
+		return "sandboxed".equalsIgnoreCase(System.getProperty("mechana.execution.mode", "legacy"));
 	}
 
 	private static String stageHostClasspath(Path runtimeDirectory) throws IOException {
@@ -348,18 +438,14 @@ public final class WorkerAgent {
 	}
 
 	private Path downloadPlugin(TaskLease lease) throws IOException, InterruptedException {
-		HttpRequest request = HttpRequest.newBuilder(URI.create(lease.pluginUrl())).timeout(Duration.ofSeconds(30))
-				.GET().build();
-		HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
-		if (response.statusCode() != 200) {
-			throw new IOException("Plugin download returned HTTP " + response.statusCode());
-		}
-		String actualChecksum = sha256(response.body());
+		byte[] plugin = downloadBytes(http, resolveCoordinatorUri(server, lease.pluginUrl()), Duration.ofSeconds(30),
+				"Plugin download");
+		String actualChecksum = sha256(plugin);
 		if (!actualChecksum.equalsIgnoreCase(lease.pluginSha256())) {
 			throw new IOException("Plugin checksum did not match assignment");
 		}
 		Path temporaryJar = Files.createTempFile("mechana-plugin-", ".jar");
-		Files.write(temporaryJar, response.body());
+		Files.write(temporaryJar, plugin);
 		return temporaryJar;
 	}
 

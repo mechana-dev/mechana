@@ -21,8 +21,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -63,6 +65,7 @@ final class SshProvisioner {
 		String java = ssh(request, target, "command -v java").strip();
 		if (java.isBlank())
 			throw new IOException("Java is not available in the remote SSH PATH");
+		Map<String, String> runtimes = discoverRuntimes(request, target, os);
 		ssh(request, target,
 				"mkdir -p " + quote(remote) + " " + quote(remote + "/data") + " " + quote(request.sandboxRoot()));
 
@@ -74,9 +77,9 @@ final class SshProvisioner {
 			copy(request, target, request.workerJar(), remote + "/mechana-worker.jar");
 			copy(request, target, config, remote + "/worker-host-agent.properties");
 			if (os == RemoteOs.MACOS)
-				installMacOs(request, target, temporary, java, remote, home);
+				installMacOs(request, target, temporary, java, remote, home, runtimes);
 			else
-				installLinux(request, target, temporary, java, remote, home);
+				installLinux(request, target, temporary, java, remote, home, runtimes);
 		} finally {
 			deleteTree(temporary);
 		}
@@ -122,10 +125,10 @@ final class SshProvisioner {
 		};
 	}
 
-	private void installMacOs(Request request, String target, Path temporary, String java, String remote, String home)
-			throws IOException, InterruptedException {
+	private void installMacOs(Request request, String target, Path temporary, String java, String remote, String home,
+			Map<String, String> runtimes) throws IOException, InterruptedException {
 		Path plist = temporary.resolve(LABEL + ".plist");
-		Files.writeString(plist, macOsPlist(java, remote), StandardCharsets.UTF_8);
+		Files.writeString(plist, macOsPlist(java, remote, runtimes), StandardCharsets.UTF_8);
 		String launchAgents = home + "/Library/LaunchAgents";
 		ssh(request, target, "mkdir -p " + quote(launchAgents));
 		copy(request, target, plist, launchAgents + "/" + LABEL + ".plist");
@@ -135,10 +138,10 @@ final class SshProvisioner {
 						+ quote(launchAgents + "/" + LABEL + ".plist"));
 	}
 
-	private void installLinux(Request request, String target, Path temporary, String java, String remote, String home)
-			throws IOException, InterruptedException {
+	private void installLinux(Request request, String target, Path temporary, String java, String remote, String home,
+			Map<String, String> runtimes) throws IOException, InterruptedException {
 		Path service = temporary.resolve(LABEL + ".service");
-		Files.writeString(service, linuxService(java, remote), StandardCharsets.UTF_8);
+		Files.writeString(service, linuxService(java, remote, runtimes), StandardCharsets.UTF_8);
 		String serviceDirectory = home + "/.config/systemd/user";
 		ssh(request, target, "mkdir -p " + quote(serviceDirectory));
 		copy(request, target, service, serviceDirectory + "/" + LABEL + ".service");
@@ -206,13 +209,15 @@ final class SshProvisioner {
 		}
 	}
 
-	static String macOsPlist(String java, String remote) {
+	static String macOsPlist(String java, String remote, Map<String, String> runtimes) {
 		var escapedRemote = xml(remote);
+		String runtimeArguments = runtimeArguments(runtimes, "<string>", "</string>", SshProvisioner::xml);
 		return String.join(System.lineSeparator(), "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
 				"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">",
 				"<plist version=\"1.0\"><dict>", "<key>Label</key><string>" + LABEL + "</string>",
-				"<key>ProgramArguments</key><array><string>" + xml(java) + "</string><string>-jar</string><string>"
-						+ escapedRemote + "/mechana-worker-host-agent.jar</string><string>" + escapedRemote
+				"<key>ProgramArguments</key><array><string>" + xml(java) + "</string>" + runtimeArguments
+						+ "<string>-jar</string><string>" + escapedRemote
+						+ "/mechana-worker-host-agent.jar</string><string>" + escapedRemote
 						+ "/worker-host-agent.properties</string></array>",
 				"<key>WorkingDirectory</key><string>" + escapedRemote + "</string>",
 				"<key>RunAtLoad</key><true/><key>KeepAlive</key><true/>",
@@ -221,14 +226,73 @@ final class SshProvisioner {
 				"");
 	}
 
-	static String linuxService(String java, String remote) {
+	static String linuxService(String java, String remote, Map<String, String> runtimes) {
+		String runtimeArguments = runtimeArguments(runtimes, " ", "", SshProvisioner::systemdEscape);
 		return String.join(System.lineSeparator(), "[Unit]", "Description=Mechana Worker Host Agent",
 				"After=network-online.target", "", "[Service]", "Type=simple", "WorkingDirectory=" + remote,
-				"ExecStart=" + java + " -jar " + remote + "/mechana-worker-host-agent.jar " + remote
+				"ExecStart=" + java + runtimeArguments + " -jar " + remote + "/mechana-worker-host-agent.jar " + remote
 						+ "/worker-host-agent.properties",
 				"Restart=on-failure", "RestartSec=2", "", "[Install]", "WantedBy=default.target", "");
 	}
 
+	private Map<String, String> discoverRuntimes(Request request, String target, RemoteOs os)
+			throws IOException, InterruptedException {
+		Map<String, String> runtimes = new LinkedHashMap<>();
+		String capabilities = "," + request.sandboxedCapabilities().toLowerCase(Locale.ROOT) + ",";
+		if (capabilities.contains(",video-ffmpeg,")) {
+			runtimes.put("ffmpeg", requireRuntime(request, target, os, "ffmpeg"));
+			runtimes.put("ffprobe", requireRuntime(request, target, os, "ffprobe"));
+		}
+		if (capabilities.contains(",ocr-tesseract,"))
+			runtimes.put("tesseract", requireRuntime(request, target, os, "tesseract"));
+		if (capabilities.contains(",blender-render,"))
+			runtimes.put("blender", requireRuntime(request, target, os, "blender"));
+		return Map.copyOf(runtimes);
+	}
+
+	private String requireRuntime(Request request, String target, RemoteOs os, String name)
+			throws IOException, InterruptedException {
+		String command = runtimeDiscoveryCommand(os, name);
+		String path = ssh(request, target, command).lines().filter(line -> line.startsWith("/")).findFirst().orElse("");
+		if (path.isBlank())
+			throw new IOException("Sandboxed plugin prerequisite is missing on " + request.host() + ": " + name
+					+ ". Install it, then use Reinstall + start via SSH again.");
+		return path.strip();
+	}
+
+	static String runtimeDiscoveryCommand(RemoteOs os, String name) {
+		List<String> candidates = new ArrayList<>();
+		if (os == RemoteOs.MACOS) {
+			candidates.add("/opt/homebrew/bin/" + name);
+			candidates.add("/usr/local/bin/" + name);
+			if ("blender".equals(name))
+				candidates.add("/Applications/Blender.app/Contents/MacOS/Blender");
+		} else {
+			candidates.add("/usr/bin/" + name);
+			candidates.add("/usr/local/bin/" + name);
+			if ("blender".equals(name))
+				candidates.add("/snap/bin/blender");
+		}
+		StringBuilder command = new StringBuilder("command -v ").append(name).append(" 2>/dev/null || true");
+		for (String candidate : candidates)
+			command.append("; test -x ").append(quote(candidate)).append(" && printf '%s\\n' ").append(quote(candidate))
+					.append(" || true");
+		return command.toString();
+	}
+
+	private static String runtimeArguments(Map<String, String> runtimes, String prefix, String suffix,
+			java.util.function.UnaryOperator<String> escape) {
+		StringBuilder arguments = new StringBuilder();
+		for (var runtime : runtimes.entrySet())
+			arguments.append(prefix)
+					.append(escape.apply("-Dmechana.runtime." + runtime.getKey() + "=" + runtime.getValue()))
+					.append(suffix);
+		return arguments.toString();
+	}
+
+	private static String systemdEscape(String value) {
+		return value.replace("\\", "\\\\").replace(" ", "\\x20");
+	}
 	static String macOsPortReleaseCommand(int port) {
 		return "agent_pid=$(lsof -nP -tiTCP:" + port
 				+ " -sTCP:LISTEN 2>/dev/null | head -n 1); while [ -n \"$agent_pid\" ]; do "

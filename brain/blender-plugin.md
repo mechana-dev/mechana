@@ -36,3 +36,13 @@ scripts, GPU rendering, simulation baking, audio, multiple scenes/cameras, and
 arbitrary passes. It does not yet probe scene metadata server-side or prove Blender
 availability at worker registration. Every batch independently downloads the full
 packed scene; caching and content-addressed distribution remain future work.
+
+Blender 4.5.3 runs in `SANDBOXED` host-agent worker groups on the MBA profile. The
+profile includes the narrow I/O Kit device-enumeration operation required by
+Blender's Metal backend discovery even when CPU Cycles is explicitly selected.
+It permits local IPC required by Intel Blender 4.5 startup on macOS 12, and
+Blender's temporary directories point into the attempt workspace. Without these
+operations Blender exited with status 139 during startup. A one-frame CPU Cycles
+render—not merely `blender --version`—verified the corrected profile while the
+existing network denial, home-directory denial, and workspace write restriction
+remained configured.

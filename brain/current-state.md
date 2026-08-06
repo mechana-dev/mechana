@@ -18,7 +18,11 @@ This file reports repository evidence, not desired future status.
 - The host-agent API and Swing controller can start a worker group in explicit
   `SANDBOXED` or `LEGACY` mode with a selected plugin capability set. Sandboxed
   launch is currently macOS-only, uses an agent-configured root outside the user
-  home, and is allowlisted to the migrated `fractal-render` plugin by default.
+  home, and is allowlisted to the sleep, FFmpeg video, fractal, Tesseract OCR, and
+  Blender plugins. Blender's macOS profile grants I/O Kit device enumeration,
+  which is required during Metal backend discovery even for CPU Cycles, and points
+  Blender's temporary directories into attempt scratch. A live one-frame CPU
+  Cycles render verified this profile on the MBA.
   Status reports the effective mode, plugins, and sandbox root; a running group
   must be stopped before changing its mode or capabilities.
 - The desktop controller can provision the host-agent and worker JARs over
@@ -33,7 +37,10 @@ This file reports repository evidence, not desired future status.
   selected agent responds. It distinguishes an unreachable endpoint from a
   responding agent with rejected credentials. SSH recovery can restart an existing
   service without upload, while reinstall overwrites artifacts/configuration,
-  reloads the service, and starts the requested workers.
+  reloads the service, and starts the requested workers. Reinstall discovers
+  FFmpeg, FFprobe, Tesseract, and Blender through standard macOS/Linux locations,
+  fails before deployment when the configured plugin set lacks a required tool,
+  and persists verified absolute paths in the launchd/systemd definition.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/
@@ -43,17 +50,23 @@ This file reports repository evidence, not desired future status.
   lifecycle events. The experimental macOS adapter reports workspace write
   restriction, user-home read denial, and network denial after a live
   `sandbox-exec` probe, but does not claim workspace-only read isolation.
-- The distributed worker routes `fractal-render` assignments through that runtime
-  manager and separate plugin host on macOS. It stages the host runtime and plugin
-  JAR under attempt `input/`, streams NDJSON progress and artifact events, uploads
+- Sandboxed distributed workers route all current concrete plugins through that
+  runtime manager and separate plugin host on macOS. The worker stages the host
+  runtime, plugin JAR, and remote task inputs under attempt `input/`, streams NDJSON
+  progress and artifact events, uploads
   staged outputs with the existing lease fencing, enforces timeout/cancellation at
-  the child-process boundary, and cleans the attempt workspace. Attempt ownership
+  the child-process boundary, and cleans the attempt workspace. Sleep and fractal
+  require no native runtime; video, OCR, and Blender fail closed unless their
+  required absolute executable paths are configured. Attempt ownership
   metadata and OS locks protect active workspaces; graceful worker shutdown waits
   for active cancellation and cleanup, while worker startup reclaims marked,
-  unlocked attempts abandoned by a crash. The other four
-  concrete plugins retain their existing execution paths pending migration.
+  unlocked attempts abandoned by a crash. Legacy workers retain the existing
+  in-process execution paths for compatibility.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
-  expired-work requeueing, and stale-completion rejection.
+  expired-work requeueing, stale-completion rejection, and a three-attempt ceiling
+  for worker-reported failures and expired leases. Exhaustion fails the job and
+  fences all unfinished work rather than creating an unbounded native-process
+  crash loop.
 - Worker presence and task ownership use independent heartbeats. Workers emit a
   three-second presence heartbeat while idle or busy; the server uses a
   fifteen-second offline threshold. A separate lease-token heartbeat renews a
@@ -63,6 +76,10 @@ This file reports repository evidence, not desired future status.
   `../DEVELOPMENT.md`.
 - Server-authoritative plugin JAR download, SHA-256 verification, per-execution
   loading, and temporary-file cleanup in the distributed slice.
+- Server startup automatically registers all five current plugin artifacts from
+  their standard build outputs. Its positional arguments are limited to port,
+  public URL, and data directory; optional packaged-deployment overrides use JVM
+  properties rather than plugin-specific command-line positions.
 - Spotless and SpotBugs checks bound to Maven `verify`.
 - Apache License 2.0 text in `../LICENSE`.
 - A modular FFmpeg/FFprobe video plugin local slice with H.264 MP4/MKV validation,
@@ -152,13 +169,12 @@ This file reports repository evidence, not desired future status.
 - Durable active scheduler state, authentication, or production isolation.
 - Durable worker presence across restarts, richer fleet telemetry, authentication,
   or remote dashboard access.
-- Migration of sleep, video, OCR, and Blender plugins, a runtime manifest,
-  bounded log sizes, guaranteed descendant cleanup after abrupt worker death,
+- A runtime manifest, bounded log sizes, guaranteed descendant cleanup after abrupt worker death,
   periodic stale-attempt scavenging, hard CPU/RAM/
   scratch/process limits, dedicated identities, production sandboxing, or
   certification. `sandbox-exec` is deprecated and unavailable beneath the MBA's
-  current Codex containment. The fractal path was verified directly on the MBA;
-  the remaining distributed plugin paths are not sandboxed.
+  current Codex containment. Native FFmpeg/FFprobe, Tesseract, and Blender
+  executables require explicit absolute system properties before sandbox launch.
 - Durable host-agent child-process adoption after an agent restart, TLS, token
   rotation, role-based access, Windows/system-wide service installers, Java
   runtime deployment, or firewall/SSH bootstrap automation.
