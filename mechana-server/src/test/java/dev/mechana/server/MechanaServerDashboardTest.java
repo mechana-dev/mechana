@@ -107,6 +107,8 @@ class MechanaServerDashboardTest {
 			assertTrue(page.body().contains("Mechana Server"));
 			assertTrue(page.body().contains("/dashboard/jobs/"));
 			assertTrue(page.body().contains("capabilitySummary"));
+			assertTrue(page.body().contains("capabilityDetails"));
+			assertTrue(page.body().contains("FFmpeg video"));
 			assertTrue(page.body().contains("Linux sandbox"));
 			assertEquals(200, status.statusCode());
 			assertTrue(status.body().contains("\"serverPid\":"));
