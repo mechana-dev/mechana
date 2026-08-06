@@ -62,17 +62,17 @@ final class SshProvisioner {
 		RemoteOs os = detect(request, target);
 		String home = ssh(request, target, "pwd").strip();
 		String remote = resolveRemoteDirectory(home, request.remoteDirectory());
+		String sandboxRoot = resolveRemoteDirectory(home, request.sandboxRoot());
 		String java = ssh(request, target, "command -v java").strip();
 		if (java.isBlank())
 			throw new IOException("Java is not available in the remote SSH PATH");
 		Map<String, String> runtimes = discoverRuntimes(request, target, os);
-		ssh(request, target,
-				"mkdir -p " + quote(remote) + " " + quote(remote + "/data") + " " + quote(request.sandboxRoot()));
+		ssh(request, target, "mkdir -p " + quote(remote) + " " + quote(remote + "/data") + " " + quote(sandboxRoot));
 
 		Path temporary = Files.createTempDirectory("mechana-agent-deploy-");
 		try {
 			Path config = temporary.resolve("worker-host-agent.properties");
-			writeConfig(config, request, java, remote);
+			writeConfig(config, request, java, remote, sandboxRoot);
 			copy(request, target, request.agentJar(), remote + "/mechana-worker-host-agent.jar");
 			copy(request, target, request.workerJar(), remote + "/mechana-worker.jar");
 			copy(request, target, config, remote + "/worker-host-agent.properties");
@@ -189,7 +189,8 @@ final class SshProvisioner {
 		return options;
 	}
 
-	private static void writeConfig(Path file, Request request, String java, String remote) throws IOException {
+	private static void writeConfig(Path file, Request request, String java, String remote, String sandboxRoot)
+			throws IOException {
 		Properties properties = new Properties();
 		properties.setProperty("bind-address", "0.0.0.0");
 		properties.setProperty("port", Integer.toString(request.agentPort()));
@@ -201,7 +202,7 @@ final class SshProvisioner {
 		properties.setProperty("working-directory", remote + "/data");
 		properties.setProperty("max-workers", "32");
 		properties.setProperty("capabilities", request.legacyCapabilities());
-		properties.setProperty("sandbox-root", request.sandboxRoot());
+		properties.setProperty("sandbox-root", sandboxRoot);
 		properties.setProperty("sandboxed-capabilities", request.sandboxedCapabilities());
 		properties.setProperty("stop-timeout-ms", "10000");
 		try (var output = Files.newOutputStream(file)) {
@@ -309,10 +310,10 @@ final class SshProvisioner {
 		if (request.host().isBlank() || request.sshUser().isBlank() || request.token().isBlank()
 				|| request.coordinator().isBlank())
 			throw new IllegalArgumentException("Host, SSH user, token, and coordinator are required");
-		if (!request.remoteDirectory().matches("[A-Za-z0-9._/-]+") || request.remoteDirectory().contains(".."))
+		if (!safeRemotePath(request.remoteDirectory()))
 			throw new IllegalArgumentException("Remote directory must not contain spaces or '..'");
-		if (!request.sandboxRoot().startsWith("/"))
-			throw new IllegalArgumentException("Sandbox root must be an absolute remote path");
+		if (!safeRemotePath(request.sandboxRoot()))
+			throw new IllegalArgumentException("Sandbox root must not contain spaces or '..'");
 		if (!Files.isRegularFile(request.agentJar()) || !Files.isRegularFile(request.workerJar()))
 			throw new IOException("Build the host-agent and worker JARs before deployment");
 		if (request.identityFile() != null && !Files.isRegularFile(request.identityFile()))
@@ -335,7 +336,16 @@ final class SshProvisioner {
 	}
 
 	private static String resolveRemoteDirectory(String home, String configured) {
+		if (configured.equals("~"))
+			return home;
+		if (configured.startsWith("~/"))
+			return home + configured.substring(1);
 		return configured.startsWith("/") ? configured : home + "/" + configured;
+	}
+
+	private static boolean safeRemotePath(String value) {
+		String path = value.startsWith("~/") ? value.substring(2) : value;
+		return !path.isBlank() && path.matches("[A-Za-z0-9._/-]+") && !path.contains("..");
 	}
 
 	private static String quote(String value) {

@@ -95,9 +95,9 @@ final class SettingsStore {
 
 	static HostSettings defaults() {
 		return new HostSettings(8790, "", 1, AgentClient.LaunchMode.SANDBOXED, "fractal-render",
-				System.getProperty("user.name"), 22, "", false, "http://127.0.0.1:8787", ".mechana/host-agent",
+				System.getProperty("user.name"), 22, "", false, "http://127.0.0.1:8787", "~/.mechana/host-agent",
 				"worker-host-agent/target/mechana-worker-host-agent.jar", "mechana-worker/target/mechana-worker.jar",
-				"/private/tmp/mechana-sandbox");
+				"~/.mechana/sandbox");
 	}
 
 	private static HostSettings readProfile(Properties p, String prefix) {

@@ -148,9 +148,6 @@ final class WorkerManager {
 			String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
 			if (!os.contains("mac") && !os.contains("linux"))
 				throw new IllegalArgumentException("Sandboxed workers currently require macOS or Linux");
-			Path home = Path.of(System.getProperty("user.home")).toAbsolutePath().normalize();
-			if (config.sandboxRoot().toAbsolutePath().normalize().startsWith(home))
-				throw new IllegalArgumentException("Sandbox root must be outside the user home directory");
 		}
 		return String.join(",", selected);
 	}

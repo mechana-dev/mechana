@@ -48,10 +48,10 @@ final class WorkerControlFrame extends JFrame {
 	private final JTextField identityFile = new JTextField(18);
 	private final JCheckBox acceptNewHostKey = new JCheckBox("Accept new host key");
 	private final JTextField coordinator = new JTextField("http://127.0.0.1:8787", 20);
-	private final JTextField remoteDirectory = new JTextField(".mechana/host-agent", 18);
+	private final JTextField remoteDirectory = new JTextField("~/.mechana/host-agent", 18);
 	private final JTextField agentJar = new JTextField("worker-host-agent/target/mechana-worker-host-agent.jar", 24);
 	private final JTextField workerJar = new JTextField("mechana-worker/target/mechana-worker.jar", 24);
-	private final JTextField sandboxRoot = new JTextField("/private/tmp/mechana-sandbox", 22);
+	private final JTextField sandboxRoot = new JTextField("~/.mechana/sandbox", 22);
 	private final JLabel state = new JLabel("Not checked");
 	private final JTextArea workers = new JTextArea(9, 52);
 	private final JButton refresh = new JButton("Refresh");

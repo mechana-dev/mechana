@@ -63,7 +63,10 @@ class SshProvisionerTest {
 				.anyMatch(value -> value.contains("lsof -nP -tiTCP:8790")
 						&& value.contains("*mechana-worker-host-agent.jar*")
 						&& value.contains("occupied by a non-Mechana process")));
-		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("sandbox-root=/private/tmp/mechana")));
+		assertTrue(
+				uploadedText.stream().anyMatch(value -> value.contains("sandbox-root=/Users/remote/.mechana/sandbox")));
+		assertTrue(commands.stream().map(List::getLast)
+				.anyMatch(value -> value.contains("'/Users/remote/.mechana/sandbox'")));
 		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("dev.mechana.worker-host-agent")));
 		assertTrue(commands.stream().flatMap(List::stream).anyMatch(value -> value.equals("BatchMode=yes")));
 		assertTrue(commands.stream().filter(command -> command.getFirst().equals("ssh"))
@@ -159,8 +162,8 @@ class SshProvisionerTest {
 
 	private SshProvisioner.Request request(Path agent, Path worker) {
 		return new SshProvisioner.Request("mba.example", "mark", 2222, null, false, agent, worker,
-				".mechana/host-agent", "http://coordinator:8787", 8790, "secret", "sleep,fractal-render",
-				"fractal-render", "/private/tmp/mechana");
+				"~/.mechana/host-agent", "http://coordinator:8787", 8790, "secret", "sleep,fractal-render",
+				"fractal-render", "~/.mechana/sandbox");
 	}
 
 	private static boolean hasOption(List<String> command, String option, String value) {

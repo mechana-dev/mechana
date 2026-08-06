@@ -79,8 +79,8 @@ Select a count, execution mode, and comma-separated plugin list, then press **St
 to add the deficit up to that count.
 
 Choose **SANDBOXED** and one or more listed plugins. The agent verifies that the
-host is macOS or Linux, the requested plugin is listed in `sandboxed-capabilities`, and the
-sandbox root is outside the user's home directory. It launches each child with the
+host is macOS or Linux and the requested plugin is listed in
+`sandboxed-capabilities`. It launches each child with the
 configured `mechana.sandbox.root` system property. Native plugins also require the
 agent JVM to be started with explicit absolute `mechana.runtime.ffmpeg`,
 `mechana.runtime.ffprobe`, `mechana.runtime.tesseract`, or
@@ -123,6 +123,11 @@ coordinator URL, local host-agent and worker JAR paths, remote directory, and
 sandbox root. Leave **Identity** blank to use the normal SSH agent/config, or set
 an explicit private-key path. Host-key verification is strict by default; select
 **Accept new host key** only after independently verifying the target.
+
+Relative remote and sandbox directories are resolved beneath the SSH account's
+actual home directory. The portable defaults are `~/.mechana/host-agent` and
+`~/.mechana/sandbox`; the equivalent forms without `~/` are also accepted. They
+avoid root access and global filesystem locations.
 
 **Reinstall + start via SSH** performs this sequence:
 

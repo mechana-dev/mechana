@@ -82,9 +82,6 @@ public final class MacOsSandbox extends ProcessSandbox implements PlatformLaunch
 	String profile(SandboxRequest request) {
 		String root = literal(request.workspace().root());
 		String userHome = literal(Path.of(System.getProperty("user.home")).toAbsolutePath().normalize());
-		if (request.workspace().root()
-				.startsWith(Path.of(System.getProperty("user.home")).toAbsolutePath().normalize()))
-			throw new IllegalArgumentException("macOS sandbox workspaces must be outside the user's home directory");
 		StringBuilder profile = new StringBuilder("(version 1)\n(deny default)\n")
 				.append("(allow process*)\n(allow sysctl-read)\n(allow mach-lookup)\n(allow iokit-open)\n")
 				.append("(allow ipc*)\n").append("(allow file-read*)\n").append("(deny file-read* (subpath \"")
