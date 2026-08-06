@@ -949,3 +949,19 @@ Append-only record of material Mechana project changes and accepted decisions.
   ten-image artifact collection.
 - CPU, RAM, scratch-byte, process-count, cgroup, seccomp, dedicated-identity, and
   bounded-log enforcement remain explicitly unclaimed.
+# 2026-08-06 — Implement and validate the Windows sandbox backend
+
+- Added the Windows `PluginSandbox` backend behind the existing runtime manager.
+  A self-contained native launcher creates an AppContainer process and assigns it
+  to a Job Object; plugins remain outside the worker JVM.
+- Enforced read-only `input`, writable `work`/`output`/`logs`, home denial,
+  default network denial, CPU rate, process memory, active-process count,
+  timeout/cancellation, and kill-on-close descendant cleanup. Scratch-byte and
+  log-byte quotas remain planned.
+- Extended Worker Control SSH deployment to Windows OpenSSH, per-host Windows
+  launcher settings, runtime discovery, a per-user Scheduled Task, and a private
+  Java runtime beneath the configured Mechana directory.
+- Validated Hyperion (Windows ARM64 build 26200, Java 25.0.4): direct attempts to
+  modify input, read the user home, and reach the network were denied; writable
+  workspace access succeeded. Distributed job `2ebe40c5-ae0b-4efc-8b43-5dc83a5bb356`
+  completed all 20 tasks, including Hyperion task 4 on its first attempt.

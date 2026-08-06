@@ -125,4 +125,4 @@ contract is request/response-shaped and does not need a network listener inside
 the attempt. Explicitly sandboxed macOS and Linux workers route every current
 concrete plugin through this boundary, stage network inputs before launch, and
 require absolute operator-declared native executable paths where applicable.
-Windows enforcement remains directional.
+Windows uses the same boundary through its AppContainer and Job Object backend.

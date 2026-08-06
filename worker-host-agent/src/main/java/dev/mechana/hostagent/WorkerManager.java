@@ -121,6 +121,7 @@ final class WorkerManager {
 			copyRuntimeProperty(command, "ffprobe");
 			copyRuntimeProperty(command, "tesseract");
 			copyRuntimeProperty(command, "blender");
+			copyPathProperty(command, "mechana.windows.sandbox.launcher");
 		}
 		command.add("-jar");
 		command.add(config.workerJar().toAbsolutePath().normalize().toString());
@@ -131,9 +132,13 @@ final class WorkerManager {
 	}
 
 	private static void copyRuntimeProperty(List<String> command, String name) {
-		String value = System.getProperty("mechana.runtime." + name, "").strip();
+		copyPathProperty(command, "mechana.runtime." + name);
+	}
+
+	private static void copyPathProperty(List<String> command, String property) {
+		String value = System.getProperty(property, "").strip();
 		if (!value.isEmpty())
-			command.add("-Dmechana.runtime." + name + "=" + Path.of(value).toAbsolutePath().normalize());
+			command.add("-D" + property + "=" + Path.of(value).toAbsolutePath().normalize());
 	}
 
 	private String validatedCapabilities(WorkerLaunchMode mode, String requested) {
@@ -146,8 +151,8 @@ final class WorkerManager {
 			throw new IllegalArgumentException("Requested plugins are not allowed for " + mode + ": " + selected);
 		if (mode == WorkerLaunchMode.SANDBOXED) {
 			String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-			if (!os.contains("mac") && !os.contains("linux"))
-				throw new IllegalArgumentException("Sandboxed workers currently require macOS or Linux");
+			if (!os.contains("mac") && !os.contains("linux") && !os.contains("windows"))
+				throw new IllegalArgumentException("Sandboxed workers currently require macOS, Linux, or Windows");
 		}
 		return String.join(",", selected);
 	}

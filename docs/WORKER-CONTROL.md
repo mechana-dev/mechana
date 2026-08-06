@@ -103,7 +103,7 @@ are migrated to the previously selected host on first load.
 
 ## Provision a new host over SSH
 
-The desktop app can deploy Mechana to a macOS or Linux account that already has:
+The desktop app can deploy Mechana to a macOS, Linux, or Windows account that already has:
 
 - working OpenSSH access from the controller machine;
 - Java 25 available in the non-interactive SSH `PATH`;
@@ -131,13 +131,13 @@ avoid root access and global filesystem locations.
 
 **Reinstall + start via SSH** performs this sequence:
 
-1. connects with batch-mode `ssh` and detects `Darwin` or `Linux`;
+1. connects with batch-mode `ssh` and detects macOS, Linux, or Windows;
 2. discovers the remote home, Java executable, and native plugin runtimes;
 3. verifies every runtime required by the configured sandbox plugin set and fails
    with the missing prerequisite instead of deploying workers that cannot run it;
 4. uploads the host-agent JAR, worker JAR, and generated token-protected config;
 5. installs the verified runtime paths and starts `dev.mechana.worker-host-agent` as a per-user launchd job
-   on macOS or systemd user service on Linux;
+   on macOS, a systemd user service on Linux, or a per-user Scheduled Task on Windows;
 6. waits for the authenticated agent API; and
 7. starts the requested number of workers with the selected mode and plugins.
 
@@ -172,7 +172,7 @@ them, reloads the service, and starts the requested workers.
 
 This is "from scratch" for Mechana files and service registration; it does not
 install Java, configure SSH itself, change firewalls, enable Linux lingering, or
-support Windows OpenSSH service installation yet.
+install or configure the Windows OpenSSH service.
 
 ## Security and operational limits
 
@@ -184,7 +184,9 @@ token rotation, OS keychain storage, roles, audit logging, or host identity proo
 It does not find or kill arbitrary Java processes or adopt children after an agent
 restart. SSH provisioning installs a per-user launchd or systemd unit, but not a
 Windows service or a system-wide/root service.
-Sandbox mode supports macOS Seatbelt and Linux bubblewrap. All five concrete
+Sandbox mode supports macOS Seatbelt, Linux bubblewrap, and Windows AppContainer
+plus Job Objects. All five concrete
 plugins are migrated to the external plugin host. Linux requires a working
 `bwrap` installation and supported kernel namespaces; see
 [Linux worker setup](linux-worker.md) for enforced controls and limitations.
+See [Windows worker setup](windows-worker.md) for Windows controls and limitations.

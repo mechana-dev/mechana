@@ -52,6 +52,8 @@ final class WorkerControlFrame extends JFrame {
 	private final JTextField agentJar = new JTextField("worker-host-agent/target/mechana-worker-host-agent.jar", 24);
 	private final JTextField workerJar = new JTextField("mechana-worker/target/mechana-worker.jar", 24);
 	private final JTextField sandboxRoot = new JTextField("~/.mechana/sandbox", 22);
+	private final JTextField windowsSandboxLauncher = new JTextField(
+			"windows-sandbox-launcher/bin/Release/net10.0-windows/win-arm64/publish/mechana-windows-sandbox.exe", 28);
 	private final JLabel state = new JLabel("Not checked");
 	private final JTextArea workers = new JTextArea(9, 52);
 	private final JButton refresh = new JButton("Refresh");
@@ -124,6 +126,8 @@ final class WorkerControlFrame extends JFrame {
 		artifacts.add(agentJar);
 		artifacts.add(new JLabel("Worker JAR"));
 		artifacts.add(workerJar);
+		artifacts.add(new JLabel("Windows sandbox EXE"));
+		artifacts.add(windowsSandboxLauncher);
 		artifacts.add(deploy);
 		artifacts.add(restartAgent);
 		artifacts.add(stopAgent);
@@ -150,6 +154,12 @@ final class WorkerControlFrame extends JFrame {
 		deploy.addActionListener(event -> {
 			ensureToken();
 			run("Reinstalling", () -> {
+				try {
+					client.stop(baseUri(), tokenValue());
+				} catch (IOException ignored) {
+					// A first install or unreachable agent has no managed workers to stop through
+					// HTTP.
+				}
 				provisioner.deploy(provisionRequest());
 				waitForAgent();
 				return client.start(baseUri(), tokenValue(), (Integer) count.getValue(), selectedMode(),
@@ -221,7 +231,7 @@ final class WorkerControlFrame extends JFrame {
 				+ status.runningCount() + " running / " + status.requestedCount() + " requested");
 		if (status.launchMode() != null) {
 			launchMode.setSelectedItem(status.launchMode());
-			capabilities.setText(status.capabilities());
+			setCapabilities(status.capabilities());
 		}
 		StringBuilder text = new StringBuilder();
 		if (status.launchMode() != null) {
@@ -262,7 +272,11 @@ final class WorkerControlFrame extends JFrame {
 	private void applyModeDefaults() {
 		boolean sandboxed = selectedMode() == AgentClient.LaunchMode.SANDBOXED;
 		if (sandboxed)
-			capabilities.setText("fractal-render");
+			setCapabilities("fractal-render");
+	}
+	private void setCapabilities(String value) {
+		capabilities.setText(value);
+		capabilities.setCaretPosition(0);
 	}
 	private void setBusy(boolean busy) {
 		this.busy = busy;
@@ -336,7 +350,7 @@ final class WorkerControlFrame extends JFrame {
 				selectedMode(), capabilities.getText().strip(), sshUser.getText().strip(), (Integer) sshPort.getValue(),
 				identityFile.getText().strip(), acceptNewHostKey.isSelected(), coordinator.getText().strip(),
 				remoteDirectory.getText().strip(), agentJar.getText().strip(), workerJar.getText().strip(),
-				sandboxRoot.getText().strip());
+				sandboxRoot.getText().strip(), windowsSandboxLauncher.getText().strip());
 	}
 
 	private void applyProfile(SettingsStore.HostSettings profile) {
@@ -344,7 +358,7 @@ final class WorkerControlFrame extends JFrame {
 		token.setText(profile.token());
 		count.setValue(profile.count());
 		launchMode.setSelectedItem(profile.launchMode());
-		capabilities.setText(profile.capabilities());
+		setCapabilities(profile.capabilities());
 		sshUser.setText(profile.sshUser());
 		sshPort.setValue(profile.sshPort());
 		identityFile.setText(profile.identityFile());
@@ -354,6 +368,7 @@ final class WorkerControlFrame extends JFrame {
 		agentJar.setText(profile.agentJar());
 		workerJar.setText(profile.workerJar());
 		sandboxRoot.setText(profile.sandboxRoot());
+		windowsSandboxLauncher.setText(profile.windowsSandboxLauncher());
 	}
 
 	private SshProvisioner.Request provisionRequest() {
@@ -362,7 +377,8 @@ final class WorkerControlFrame extends JFrame {
 				identity.isBlank() ? null : Path.of(identity), acceptNewHostKey.isSelected(),
 				Path.of(agentJar.getText().strip()), Path.of(workerJar.getText().strip()),
 				remoteDirectory.getText().strip(), coordinator.getText().strip(), (Integer) port.getValue(),
-				tokenValue(), SANDBOXED_PLUGINS, SANDBOXED_PLUGINS, sandboxRoot.getText().strip());
+				tokenValue(), SANDBOXED_PLUGINS, SANDBOXED_PLUGINS, sandboxRoot.getText().strip(),
+				Path.of(windowsSandboxLauncher.getText().strip()));
 	}
 
 	private void waitForAgent() throws IOException, InterruptedException {

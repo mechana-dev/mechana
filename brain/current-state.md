@@ -17,7 +17,7 @@ This file reports repository evidence, not desired future status.
   network actions away from the event-dispatch thread.
 - The host-agent API and Swing controller can start a worker group in explicit
   `SANDBOXED` or `LEGACY` mode with a selected plugin capability set. Sandboxed
-  launch is currently macOS-only, uses an agent-configured root outside the user
+  launch is available on macOS, Linux, and Windows and uses an agent-configured root
   home, and is allowlisted to the sleep, FFmpeg video, fractal, Tesseract OCR, and
   Blender plugins. Blender's macOS profile grants I/O Kit device enumeration,
   which is required during Metal backend discovery even for CPU Cycles, and points
@@ -26,12 +26,13 @@ This file reports repository evidence, not desired future status.
   Status reports the effective mode, plugins, and sandbox root; a running group
   must be stopped before changing its mode or capabilities.
 - The desktop controller can provision the host-agent and worker JARs over
-  existing batch-mode SSH to a macOS or Linux user account, generate the secured
+  existing batch-mode SSH to a macOS, Linux, or Windows user account, generate the secured
   agent configuration, install a per-user launchd or systemd service, wait for
   agent readiness, and start the requested worker group. It can also stop managed
   workers and unload/disable the remote agent service over SSH. This requires an
   existing Java 25 runtime and SSH trust; it does not install prerequisites, use
-  sudo, modify firewalls, enable Linux lingering, or support Windows services.
+  sudo, modify firewalls, or enable Linux lingering. Windows persistence uses a
+  per-user Scheduled Task and a worker-owned private Java runtime.
 - The controller treats authenticated agent status as authoritative: it mirrors
   live workers, counts, mode, and plugins and disables worker actions until the
   selected agent responds. It distinguishes an unreachable endpoint from a

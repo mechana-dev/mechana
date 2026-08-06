@@ -122,6 +122,16 @@ class SshProvisionerTest {
 	}
 
 	@Test
+	void windowsAgentCleanupTargetsOnlyTheConfiguredMechanaJar() {
+		String command = SshProvisioner.windowsAgentStopCommand("C:/Users/markf/.mechana/host-agent", false);
+		assertTrue(command.contains("Name = 'java.exe'"));
+		assertTrue(command.contains("C:/Users/markf/.mechana/host-agent/mechana-worker-host-agent.jar"));
+		assertTrue(command.contains("C:/Users/markf/.mechana/host-agent/mechana-worker.jar"));
+		assertTrue(command.contains("Stop-Process -Id $agent.ProcessId"));
+		assertTrue(command.contains("agent or worker did not stop within 10 seconds"));
+	}
+
+	@Test
 	void restartsExistingMacOsAgentUsingResolvedHome() throws Exception {
 		Path agent = Files.writeString(temporary.resolve("agent.jar"), "agent");
 		Path worker = Files.writeString(temporary.resolve("worker.jar"), "worker");
@@ -163,7 +173,7 @@ class SshProvisionerTest {
 	private SshProvisioner.Request request(Path agent, Path worker) {
 		return new SshProvisioner.Request("mba.example", "mark", 2222, null, false, agent, worker,
 				"~/.mechana/host-agent", "http://coordinator:8787", 8790, "secret", "sleep,fractal-render",
-				"fractal-render", "~/.mechana/sandbox");
+				"fractal-render", "~/.mechana/sandbox", temporary.resolve("windows-sandbox.exe"));
 	}
 
 	private static boolean hasOption(List<String> command, String option, String value) {

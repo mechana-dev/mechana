@@ -31,8 +31,8 @@ import java.util.Properties;
 final class SettingsStore {
 	record HostSettings(int port, String token, int count, AgentClient.LaunchMode launchMode, String capabilities,
 			String sshUser, int sshPort, String identityFile, boolean acceptNewHostKey, String coordinator,
-			String remoteDirectory, String agentJar, String workerJar,
-			String sandboxRoot) implements java.io.Serializable {
+			String remoteDirectory, String agentJar, String workerJar, String sandboxRoot,
+			String windowsSandboxLauncher) implements java.io.Serializable {
 		private static final long serialVersionUID = 1L;
 	}
 	record Settings(List<String> hosts, String lastHost, Map<String, HostSettings> profiles) {
@@ -97,7 +97,8 @@ final class SettingsStore {
 		return new HostSettings(8790, "", 1, AgentClient.LaunchMode.SANDBOXED, "fractal-render",
 				System.getProperty("user.name"), 22, "", false, "http://127.0.0.1:8787", "~/.mechana/host-agent",
 				"worker-host-agent/target/mechana-worker-host-agent.jar", "mechana-worker/target/mechana-worker.jar",
-				"~/.mechana/sandbox");
+				"~/.mechana/sandbox",
+				"windows-sandbox-launcher/bin/Release/net10.0-windows/win-arm64/publish/mechana-windows-sandbox.exe");
 	}
 
 	private static HostSettings readProfile(Properties p, String prefix) {
@@ -116,7 +117,8 @@ final class SettingsStore {
 				p.getProperty(prefix + "remote-directory", defaults.remoteDirectory()),
 				p.getProperty(prefix + "agent-jar", defaults.agentJar()),
 				p.getProperty(prefix + "worker-jar", defaults.workerJar()),
-				p.getProperty(prefix + "sandbox-root", defaults.sandboxRoot()));
+				p.getProperty(prefix + "sandbox-root", defaults.sandboxRoot()),
+				p.getProperty(prefix + "windows-sandbox-launcher", defaults.windowsSandboxLauncher()));
 	}
 
 	private static void writeProfile(Properties p, String prefix, HostSettings profile) {
@@ -134,5 +136,6 @@ final class SettingsStore {
 		p.setProperty(prefix + "agent-jar", profile.agentJar());
 		p.setProperty(prefix + "worker-jar", profile.workerJar());
 		p.setProperty(prefix + "sandbox-root", profile.sandboxRoot());
+		p.setProperty(prefix + "windows-sandbox-launcher", profile.windowsSandboxLauncher());
 	}
 }

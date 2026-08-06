@@ -41,6 +41,7 @@ import dev.mechana.runtime.plugin.SandboxRequest;
 import dev.mechana.runtime.plugin.SandboxResult;
 import dev.mechana.runtime.plugin.SandboxControl;
 import dev.mechana.runtime.plugin.TrustMode;
+import dev.mechana.runtime.plugin.WindowsSandbox;
 import java.io.IOException;
 import java.io.File;
 import java.net.URI;
@@ -206,15 +207,18 @@ public final class WorkerAgent {
 			Path requestFrame = workspace.input().resolve("request.ndjson");
 			Files.writeString(requestFrame, json.writeValueAsString(hostRequest) + System.lineSeparator());
 			String hostClasspath = stageHostClasspath(workspace.input().resolve("runtime"));
-			Path javaBinary = Path.of(System.getProperty("java.home"), "bin", "java");
+			String javaName = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("windows")
+					? "java.exe"
+					: "java";
+			Path javaBinary = Path.of(System.getProperty("java.home"), "bin", javaName);
 			SandboxPolicy policy = new SandboxPolicy(TrustMode.SANDBOXED, false,
 					Runtime.getRuntime().availableProcessors(), Runtime.getRuntime().maxMemory(),
-					10L * 1024 * 1024 * 1024, Duration.ofHours(6), 1);
+					10L * 1024 * 1024 * 1024, Duration.ofHours(6), 16);
 			SandboxRequest request = new SandboxRequest(
 					java.util.List.of(javaBinary.toString(), "-Djava.awt.headless=true",
 							"-Djava.io.tmpdir=" + workspace.work(), "-cp", hostClasspath,
 							"dev.mechana.pluginhost.PluginHostMain"),
-					java.util.Map.of("PATH", "/usr/bin:/bin"), workspace, policy, requestFrame,
+					sandboxEnvironment(workspace), workspace, policy, requestFrame,
 					line -> handleHostEvent(line, context, completed, protocolFailure));
 			PluginSandbox platformSandbox = platformSandbox();
 			System.out.printf("Worker %s running task %s in %s%n", workerId, lease.taskId(),
@@ -238,6 +242,27 @@ public final class WorkerAgent {
 		}
 	}
 
+	private static Map<String, String> sandboxEnvironment(AttemptWorkspace workspace) {
+		Map<String, String> environment = new HashMap<>();
+		environment.put("PATH", Path.of(System.getProperty("java.home"), "bin").toString());
+		environment.put("HOME", workspace.work().toString());
+		environment.put("TMPDIR", workspace.work().toString());
+		environment.put("TMP", workspace.work().toString());
+		environment.put("TEMP", workspace.work().toString());
+		environment.put("USERPROFILE", workspace.work().toString());
+		for (String name : java.util.List.of("ALLUSERSPROFILE", "APPDATA", "CommonProgramFiles",
+				"CommonProgramFiles(x86)", "CommonProgramW6432", "COMPUTERNAME", "ComSpec", "DriverData",
+				"LOCALAPPDATA", "NUMBER_OF_PROCESSORS", "OS", "PATHEXT", "PROCESSOR_ARCHITECTURE",
+				"PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION", "ProgramData", "ProgramFiles",
+				"ProgramFiles(x86)", "ProgramW6432", "PUBLIC", "SystemDrive", "SystemRoot", "USERDOMAIN", "USERNAME",
+				"WINDIR")) {
+			String value = System.getenv(name);
+			if (value != null && !value.isBlank())
+				environment.put(name, value);
+		}
+		return Map.copyOf(environment);
+	}
+
 	private static PluginSandbox platformSandbox() throws IOException {
 		MacOsSandbox macOs = new MacOsSandbox();
 		if (macOs.supportsCurrentHost())
@@ -245,6 +270,9 @@ public final class WorkerAgent {
 		LinuxSandbox linux = new LinuxSandbox();
 		if (linux.supportsCurrentHost())
 			return linux;
+		WindowsSandbox windows = new WindowsSandbox();
+		if (windows.supportsCurrentHost())
+			return windows;
 		throw new IOException("No verified OS sandbox backend is available on this host");
 	}
 

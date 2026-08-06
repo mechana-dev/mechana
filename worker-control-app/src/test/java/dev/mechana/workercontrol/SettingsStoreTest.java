@@ -61,6 +61,6 @@ class SettingsStoreTest {
 			String sandboxRoot) {
 		return new SettingsStore.HostSettings(port, "token-" + port, 4, AgentClient.LaunchMode.SANDBOXED,
 				"sleep,fractal-render", "root", sshPort, "/keys/id", true, "http://coordinator:8787", remoteDirectory,
-				"/local/agent.jar", "/local/worker.jar", sandboxRoot);
+				"/local/agent.jar", "/local/worker.jar", sandboxRoot, "/local/windows-sandbox.exe");
 	}
 }
