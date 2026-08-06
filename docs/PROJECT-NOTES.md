@@ -926,7 +926,9 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Installed Bubblewrap 0.9.0 as the only new worker runtime dependency. Built all
   Java artifacts on the development machine and deployed them to the target; the
   Linux worker does not require Maven or another build tool.
-- The prebuilt host probe passed in the same root-owned service context as the
+- The prebuilt host probe passed workspace access, forbidden filesystem access,
+  private temporary storage, child-process crash isolation, timeout, cancellation,
+  cleanup, and post-failure recovery in the same root-owned service context as the
   existing agent. Two sandboxed Linux workers registered their actual guarantee
   set. Job `61c44154-443f-4009-9898-46b261cdcf56` completed four Linux sleep work
   units on attempt one; fractal job `ec7770e0-9743-4fdf-b8fa-8a4012694ae3`
