@@ -94,9 +94,12 @@ before changing mode or plugin selection.
 Choose **LEGACY** only for plugins that have not yet migrated to the sandbox host.
 The agent limits those selections to `capabilities`; this label intentionally does
 not imply OS isolation. **Stop all** gracefully stops all tracked children and
-forces remaining processes down after the configured timeout. Known hosts and the
-last settings are stored at `~/.mechana/worker-control.properties` (under the user
-profile on Windows).
+forces remaining processes down after the configured timeout. Known hosts and a
+separate complete settings profile for each host are stored at
+`~/.mechana/worker-control.properties` (under the user profile on Windows). Changing
+the selected host restores its last agent port/token, worker selection, SSH options,
+coordinator, remote directory, artifact paths, and sandbox root. Older global settings
+are migrated to the previously selected host on first load.
 
 ## Provision a new host over SSH
 

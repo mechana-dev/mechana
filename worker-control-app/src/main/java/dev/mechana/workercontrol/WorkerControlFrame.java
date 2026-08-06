@@ -24,7 +24,9 @@ import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
 
@@ -59,6 +61,8 @@ final class WorkerControlFrame extends JFrame {
 	private final JButton restartAgent = new JButton("Restart agent via SSH");
 	private final JButton stopAgent = new JButton("Stop remote agent via SSH");
 	private boolean changingHostList;
+	private final Map<String, SettingsStore.HostSettings> hostProfiles = new LinkedHashMap<>();
+	private String activeHost;
 	private boolean agentReady;
 	private boolean busy;
 	private long requestGeneration;
@@ -131,10 +135,15 @@ final class WorkerControlFrame extends JFrame {
 		add(new JScrollPane(workers), BorderLayout.CENTER);
 		refresh.addActionListener(event -> refreshStatus());
 		host.addActionListener(event -> {
-			if (!changingHostList)
+			if (!changingHostList) {
+				switchHost();
 				refreshStatus();
+			}
 		});
-		launchMode.addActionListener(event -> applyModeDefaults());
+		launchMode.addActionListener(event -> {
+			if (!changingHostList)
+				applyModeDefaults();
+		});
 		start.addActionListener(event -> run("Starting", () -> client.start(baseUri(), tokenValue(),
 				(Integer) count.getValue(), selectedMode(), capabilities.getText().strip()), Availability.KEEP));
 		stop.addActionListener(event -> run("Stopping", () -> client.stop(baseUri(), tokenValue()), Availability.KEEP));
@@ -273,22 +282,10 @@ final class WorkerControlFrame extends JFrame {
 		try {
 			SettingsStore.Settings s = store.load();
 			s.hosts().forEach(host::addItem);
+			hostProfiles.putAll(s.profiles());
 			host.setSelectedItem(s.lastHost());
-			port.setValue(s.port());
-			token.setText(s.token());
-			count.setValue(s.count());
-			launchMode.setSelectedItem(s.launchMode());
-			capabilities.setText(s.capabilities());
-			sshUser.setText(s.sshUser());
-			sshPort.setValue(s.sshPort());
-			identityFile.setText(s.identityFile());
-			acceptNewHostKey.setSelected(s.acceptNewHostKey());
-			coordinator.setText(s.coordinator());
-			remoteDirectory.setText(s.remoteDirectory());
-			agentJar.setText(s.agentJar());
-			workerJar.setText(s.workerJar());
-			sandboxRoot.setText(s.sandboxRoot());
-			applyModeDefaults();
+			activeHost = s.lastHost();
+			applyProfile(hostProfiles.getOrDefault(activeHost, SettingsStore.defaults()));
 		} catch (Exception failure) {
 			workers.setText("Could not load settings: " + failure.getMessage());
 		} finally {
@@ -297,6 +294,8 @@ final class WorkerControlFrame extends JFrame {
 	}
 	private void remember() {
 		try {
+			if (activeHost != null && !activeHost.isBlank())
+				hostProfiles.put(activeHost, currentProfile());
 			ArrayList<String> hosts = new ArrayList<>();
 			for (int i = 0; i < host.getItemCount(); i++)
 				hosts.add(host.getItemAt(i));
@@ -309,14 +308,52 @@ final class WorkerControlFrame extends JFrame {
 					changingHostList = false;
 				}
 			}
-			store.save(new SettingsStore.Settings(hosts, hostValue(), (Integer) port.getValue(), tokenValue(),
-					(Integer) count.getValue(), selectedMode(), capabilities.getText().strip(),
-					sshUser.getText().strip(), (Integer) sshPort.getValue(), identityFile.getText().strip(),
-					acceptNewHostKey.isSelected(), coordinator.getText().strip(), remoteDirectory.getText().strip(),
-					agentJar.getText().strip(), workerJar.getText().strip(), sandboxRoot.getText().strip()));
+			hostProfiles.put(hostValue(), currentProfile());
+			activeHost = hostValue();
+			store.save(new SettingsStore.Settings(hosts, activeHost, Map.copyOf(hostProfiles)));
 		} catch (IOException failure) {
 			workers.setText("Could not save settings: " + failure.getMessage());
 		}
+	}
+
+	private void switchHost() {
+		if (activeHost != null && !activeHost.isBlank())
+			hostProfiles.put(activeHost, currentProfile());
+		String selectedHost = hostValue();
+		SettingsStore.HostSettings profile = hostProfiles.computeIfAbsent(selectedHost, ignored -> currentProfile());
+		activeHost = selectedHost;
+		changingHostList = true;
+		try {
+			applyProfile(profile);
+		} finally {
+			changingHostList = false;
+		}
+		remember();
+	}
+
+	private SettingsStore.HostSettings currentProfile() {
+		return new SettingsStore.HostSettings((Integer) port.getValue(), tokenValue(), (Integer) count.getValue(),
+				selectedMode(), capabilities.getText().strip(), sshUser.getText().strip(), (Integer) sshPort.getValue(),
+				identityFile.getText().strip(), acceptNewHostKey.isSelected(), coordinator.getText().strip(),
+				remoteDirectory.getText().strip(), agentJar.getText().strip(), workerJar.getText().strip(),
+				sandboxRoot.getText().strip());
+	}
+
+	private void applyProfile(SettingsStore.HostSettings profile) {
+		port.setValue(profile.port());
+		token.setText(profile.token());
+		count.setValue(profile.count());
+		launchMode.setSelectedItem(profile.launchMode());
+		capabilities.setText(profile.capabilities());
+		sshUser.setText(profile.sshUser());
+		sshPort.setValue(profile.sshPort());
+		identityFile.setText(profile.identityFile());
+		acceptNewHostKey.setSelected(profile.acceptNewHostKey());
+		coordinator.setText(profile.coordinator());
+		remoteDirectory.setText(profile.remoteDirectory());
+		agentJar.setText(profile.agentJar());
+		workerJar.setText(profile.workerJar());
+		sandboxRoot.setText(profile.sandboxRoot());
 	}
 
 	private SshProvisioner.Request provisionRequest() {
