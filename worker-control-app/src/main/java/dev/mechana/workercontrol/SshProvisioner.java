@@ -251,7 +251,7 @@ final class SshProvisioner {
 		ssh(request, target, "mkdir -p " + quote(serviceDirectory));
 		copy(request, target, service, serviceDirectory + "/" + LABEL + ".service");
 		ssh(request, target,
-				linuxPortReleaseCommand(request.agentPort())
+				linuxLegacySystemServiceCleanupCommand() + "; " + linuxPortReleaseCommand(request.agentPort())
 						+ "; systemctl --user daemon-reload; systemctl --user enable " + LABEL
 						+ ".service; systemctl --user restart " + LABEL + ".service");
 	}
@@ -433,6 +433,12 @@ final class SshProvisioner {
 				+ "*) echo \"Port " + port
 				+ " is occupied by a non-Mechana process: $agent_command\" >&2; exit 1 ;; esac; agent_pid=$(" + listener
 				+ "); done";
+	}
+
+	static String linuxLegacySystemServiceCleanupCommand() {
+		return "if [ \"$(id -u)\" = 0 ] && systemctl cat mechana-worker-host-agent.service 2>/dev/null "
+				+ "| grep -Fq '/opt/mechana/host-agent/mechana-worker-host-agent.jar'; then "
+				+ "systemctl disable --now mechana-worker-host-agent.service; fi";
 	}
 
 	private static void validate(Request request) throws IOException {

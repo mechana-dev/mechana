@@ -136,7 +136,18 @@ class SshProvisionerTest {
 
 		assertTrue(commands.stream().map(List::getLast).anyMatch(value -> value.contains("systemctl --user enable ")
 				&& value.contains("systemctl --user restart dev.mechana.worker-host-agent.service")
+				&& value.contains("systemctl disable --now mechana-worker-host-agent.service")
+				&& value.contains("/opt/mechana/host-agent/mechana-worker-host-agent.jar")
 				&& value.contains("ss -ltnp 'sport = :8790'") && value.contains("*mechana-worker-host-agent.jar*")));
+	}
+
+	@Test
+	void legacyLinuxSystemServiceCleanupIsRootOnlyAndPathRestricted() {
+		String command = SshProvisioner.linuxLegacySystemServiceCleanupCommand();
+		assertTrue(command.contains("[ \"$(id -u)\" = 0 ]"));
+		assertTrue(command.contains("systemctl cat mechana-worker-host-agent.service"));
+		assertTrue(command.contains("grep -Fq '/opt/mechana/host-agent/mechana-worker-host-agent.jar'"));
+		assertTrue(command.contains("systemctl disable --now mechana-worker-host-agent.service"));
 	}
 
 	@Test

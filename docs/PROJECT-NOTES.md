@@ -1020,3 +1020,6 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Linux reinstall also removes a verified stale Mechana agent holding the selected
   port, including legacy `/opt` deployments, while refusing to kill an unrelated
   listener.
+- Root-targeted Linux reinstall disables the specifically verified legacy
+  `/etc/systemd/system/mechana-worker-host-agent.service` supervisor before port
+  cleanup so the obsolete `/opt` agent cannot respawn.
