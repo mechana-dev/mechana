@@ -65,6 +65,7 @@ Worker Control stores a complete profile per hostname and restores it when the
 operator changes hosts. Legacy global settings migrate to the previously selected
 host, while missing profiles receive defaults without replacing a later saved
 customization. The known development hosts are pre-populated with their established
-SSH usernames and ports and the complete supported plugin capability set; SSH
-authentication continues to rely on existing keys and batch-mode OpenSSH rather
-than password storage.
+SSH usernames and ports, the complete supported plugin capability set, and the
+shared MBA coordinator URL rather than per-worker localhost; SSH authentication
+continues to rely on existing keys and batch-mode OpenSSH rather than password
+storage.

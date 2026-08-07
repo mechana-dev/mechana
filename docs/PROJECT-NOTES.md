@@ -1004,7 +1004,8 @@ Append-only record of material Mechana project changes and accepted decisions.
 ## 2026-08-07 — Seed development-fleet Worker Control profiles
 
 - Added migration-safe defaults for the MBA, Rocinante, Linux, and Hyperion test
-  hosts, including each host's established SSH username and port.
+  hosts, including each host's established SSH username and port and the shared
+  `http://marks-macbook-air-m4:8787` coordinator URL.
 - Defaulted new host profiles and the plugin field to the complete current set:
   sleep, FFmpeg video, fractal rendering, Tesseract OCR, and Blender rendering.
 - Preserved existing per-host customizations and other legacy fields while migrating

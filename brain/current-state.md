@@ -62,7 +62,8 @@ This file reports repository evidence, not desired future status.
 - Worker Control persists connection, SSH, launch, plugin, and deployment settings
   independently for each host. Its four development-fleet host profiles are seeded
   with the established SSH users and ports and all five currently supported plugin
-  capabilities; saved per-host customizations remain authoritative.
+  capabilities and the MBA coordinator URL; saved per-host customizations remain
+  authoritative.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/

@@ -30,7 +30,8 @@ import java.util.Properties;
 
 final class SettingsStore {
 	static final String ALL_SUPPORTED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render";
-	private static final int CURRENT_VERSION = 2;
+	static final String FLEET_COORDINATOR = "http://marks-macbook-air-m4:8787";
+	private static final int CURRENT_VERSION = 3;
 	private static final Map<String, SshDefaults> KNOWN_HOSTS = Map.of("marks-macbook-air-m4",
 			new SshDefaults("markvita", 22), "rocinante", new SshDefaults("markvita", 21012), "srv959600",
 			new SshDefaults("root", 22), "hyperion", new SshDefaults("markf", 22));
@@ -66,6 +67,7 @@ final class SettingsStore {
 				hosts.add(host);
 		}
 		String lastHost = p.getProperty("last-host", "localhost");
+		int version = Integer.parseInt(p.getProperty("settings-version", "1"));
 		if (!hosts.contains(lastHost))
 			hosts.add(lastHost);
 		KNOWN_HOSTS.keySet().stream().sorted().filter(host -> !hosts.contains(host)).forEach(hosts::add);
@@ -73,9 +75,10 @@ final class SettingsStore {
 		Map<String, HostSettings> profiles = new LinkedHashMap<>();
 		for (int i = 0; i < hosts.size(); i++) {
 			String prefix = "profile." + i + ".";
-			if (p.containsKey(prefix + "port"))
-				profiles.put(hosts.get(i), readProfile(p, prefix, defaultsFor(hosts.get(i))));
-			else if (hosts.get(i).equals(lastHost))
+			if (p.containsKey(prefix + "port")) {
+				HostSettings profile = readProfile(p, prefix, defaultsFor(hosts.get(i)));
+				profiles.put(hosts.get(i), migrateKnownCoordinator(hosts.get(i), profile, version));
+			} else if (hosts.get(i).equals(lastHost))
 				profiles.put(hosts.get(i), migrateLegacyProfile(hosts.get(i), legacy));
 			else
 				profiles.put(hosts.get(i), defaultsFor(hosts.get(i)));
@@ -116,7 +119,7 @@ final class SettingsStore {
 		SshDefaults ssh = KNOWN_HOSTS.get(host);
 		if (ssh == null)
 			return defaults;
-		return withSshAndCapabilities(defaults, ssh.user(), ssh.port(), ALL_SUPPORTED_PLUGINS);
+		return withFleetDefaults(defaults, ssh.user(), ssh.port(), ALL_SUPPORTED_PLUGINS, FLEET_COORDINATOR);
 	}
 
 	private static HostSettings readProfile(Properties p, String prefix, HostSettings defaults) {
@@ -141,13 +144,23 @@ final class SettingsStore {
 
 	private static HostSettings migrateLegacyProfile(String host, HostSettings legacy) {
 		SshDefaults ssh = KNOWN_HOSTS.get(host);
-		return ssh == null ? legacy : withSshAndCapabilities(legacy, ssh.user(), ssh.port(), ALL_SUPPORTED_PLUGINS);
+		return ssh == null
+				? legacy
+				: withFleetDefaults(legacy, ssh.user(), ssh.port(), ALL_SUPPORTED_PLUGINS, FLEET_COORDINATOR);
 	}
 
-	private static HostSettings withSshAndCapabilities(HostSettings profile, String sshUser, int sshPort,
-			String capabilities) {
+	private static HostSettings migrateKnownCoordinator(String host, HostSettings profile, int version) {
+		if (version >= CURRENT_VERSION || !KNOWN_HOSTS.containsKey(host)
+				|| !defaults().coordinator().equals(profile.coordinator()))
+			return profile;
+		return withFleetDefaults(profile, profile.sshUser(), profile.sshPort(), profile.capabilities(),
+				FLEET_COORDINATOR);
+	}
+
+	private static HostSettings withFleetDefaults(HostSettings profile, String sshUser, int sshPort,
+			String capabilities, String coordinator) {
 		return new HostSettings(profile.port(), profile.token(), profile.count(), profile.launchMode(), capabilities,
-				sshUser, sshPort, profile.identityFile(), profile.acceptNewHostKey(), profile.coordinator(),
+				sshUser, sshPort, profile.identityFile(), profile.acceptNewHostKey(), coordinator,
 				profile.remoteDirectory(), profile.agentJar(), profile.workerJar(), profile.sandboxRoot(),
 				profile.windowsSandboxLauncher());
 	}

@@ -79,7 +79,7 @@ class SettingsStoreTest {
 		assertEquals(9911, migrated.port());
 		assertEquals("secret", migrated.token());
 		assertEquals(7, migrated.count());
-		assertEquals("http://mba:8787", migrated.coordinator());
+		assertEquals(SettingsStore.FLEET_COORDINATOR, migrated.coordinator());
 		assertEquals("markvita", migrated.sshUser());
 		assertEquals(21012, migrated.sshPort());
 		assertEquals(SettingsStore.ALL_SUPPORTED_PLUGINS, migrated.capabilities());
@@ -96,6 +96,28 @@ class SettingsStoreTest {
 		assertEquals("custom-user", loaded.sshUser());
 		assertEquals(2222, loaded.sshPort());
 		assertEquals("sleep", loaded.capabilities());
+	}
+
+	@Test
+	void migratesKnownVersionTwoProfilesAwayFromLocalhostCoordinator() throws Exception {
+		Path file = temporary.resolve("settings.properties");
+		Files.writeString(file, "settings-version=2\nhost.0=srv959600\nlast-host=srv959600\nprofile.0.port=8790\n"
+				+ "profile.0.coordinator=http\\://127.0.0.1\\:8787\n");
+
+		SettingsStore.HostSettings loaded = new SettingsStore(file).load().profiles().get("srv959600");
+
+		assertEquals(SettingsStore.FLEET_COORDINATOR, loaded.coordinator());
+	}
+
+	@Test
+	void preservesExplicitCoordinatorCustomizationAfterMigration() throws Exception {
+		Path file = temporary.resolve("settings.properties");
+		Files.writeString(file, "settings-version=3\nhost.0=hyperion\nlast-host=hyperion\nprofile.0.port=8790\n"
+				+ "profile.0.coordinator=http\\://custom-coordinator\\:8787\n");
+
+		SettingsStore.HostSettings loaded = new SettingsStore(file).load().profiles().get("hyperion");
+
+		assertEquals("http://custom-coordinator:8787", loaded.coordinator());
 	}
 
 	@Test
@@ -125,5 +147,6 @@ class SettingsStoreTest {
 		assertEquals(user, profile.sshUser());
 		assertEquals(sshPort, profile.sshPort());
 		assertEquals(SettingsStore.ALL_SUPPORTED_PLUGINS, profile.capabilities());
+		assertEquals(SettingsStore.FLEET_COORDINATOR, profile.coordinator());
 	}
 }
