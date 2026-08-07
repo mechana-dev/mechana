@@ -297,7 +297,7 @@ final class SshProvisioner {
 	private static void writeConfig(Path file, Request request, String java, String remote, String sandboxRoot)
 			throws IOException {
 		Properties properties = new Properties();
-		properties.setProperty("bind-address", "0.0.0.0");
+		properties.setProperty("bind-address", "127.0.0.1");
 		properties.setProperty("port", Integer.toString(request.agentPort()));
 		properties.setProperty("token", request.token());
 		properties.setProperty("machine-name", request.host());
@@ -421,9 +421,8 @@ final class SshProvisioner {
 
 	private static void validate(Request request) throws IOException {
 		validateConnection(request);
-		if (request.host().isBlank() || request.sshUser().isBlank() || request.token().isBlank()
-				|| request.coordinator().isBlank())
-			throw new IllegalArgumentException("Host, SSH user, token, and coordinator are required");
+		if (request.host().isBlank() || request.sshUser().isBlank() || request.coordinator().isBlank())
+			throw new IllegalArgumentException("Host, SSH user, and coordinator are required");
 		if (!safeRemotePath(request.remoteDirectory()))
 			throw new IllegalArgumentException("Remote directory must not contain spaces or '..'");
 		if (!safeRemotePath(request.sandboxRoot()))

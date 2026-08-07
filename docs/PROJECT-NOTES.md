@@ -1012,3 +1012,6 @@ Append-only record of material Mechana project changes and accepted decisions.
   global settings into independent versioned profiles on the next save.
 - Added focused settings migration, customization-preservation, and host-switching
   regression tests. No SSH password storage or password authentication was added.
+- Made the bearer token optional for SSH-tunneled development management. Blank
+  tokens now remain blank, and generated agents bind only to remote loopback;
+  nonblank tokens continue to enable bearer authentication.

@@ -69,8 +69,10 @@ every client that can reach the port full worker start/stop authority. If
 java -jar worker-control-app/target/mechana-worker-control.jar
 ```
 
-Enter the agent hostname/IP, port, and matching token. The app probes the selected
-agent at startup, after host selection, and on **Refresh**. An authenticated response
+Enter the agent hostname/IP and port. The token is optional for development:
+leaving it blank deploys a loopback-only agent reached through the SSH tunnel; a
+nonblank value enables bearer authentication. The app probes the selected agent at
+startup, after host selection, and on **Refresh**. A successful response
 is shown as **AGENT ONLINE** and its live worker records, counts, execution mode, and
 plugins replace stale display values. **Start** and **Stop all** remain disabled until
 that probe succeeds. An HTTP-responding agent that rejects the token is shown as
@@ -135,7 +137,8 @@ avoid root access and global filesystem locations.
 2. discovers the remote home, Java executable, and native plugin runtimes;
 3. verifies every runtime required by the configured sandbox plugin set and fails
    with the missing prerequisite instead of deploying workers that cannot run it;
-4. uploads the host-agent JAR, worker JAR, and generated token-protected config;
+4. uploads the host-agent JAR, worker JAR, and agent config, using bearer
+   authentication when the Token field is nonblank;
 5. installs the verified runtime paths and starts `dev.mechana.worker-host-agent` as a per-user launchd job
    on macOS, a systemd user service on Linux, or a per-user Scheduled Task on Windows;
 6. waits for the authenticated agent API; and
@@ -154,9 +157,9 @@ fails with an explicit diagnostic and does not kill that process.
 No root access is requested. Linux user services require a functioning user
 systemd session; staying active after logout may require an administrator to
 enable lingering for that account. The generated agent listens on port 8790 (or
-the selected port) on all interfaces, protected by a generated or supplied bearer
-token. Use a trusted LAN or encrypted overlay and restrict the port with the host
-firewall.
+the selected port) on remote loopback and is reached through the authenticated SSH
+tunnel. A nonblank Token field adds bearer authentication; a blank field is the
+development convenience mode.
 
 **Stop remote agent via SSH** first asks the agent to stop its managed workers,
 then unloads/disables the remote launchd or systemd user service. Uploaded files
@@ -176,10 +179,11 @@ install or configure the Windows OpenSSH service.
 
 ## Security and operational limits
 
-The first version uses bearer-token authentication over plain HTTP by default and
-supports an explicit unauthenticated development mode. Restrict either mode to
-a trusted LAN or encrypted overlay network, protect the settings files, use unique
-random tokens per environment, and apply firewall rules. It does not provide TLS,
+SSH provisioning binds the agent to remote loopback and carries management traffic
+through an authenticated SSH tunnel. Bearer authentication remains available when
+the Token field is nonblank and is optional for development when it is blank. Protect
+saved nonblank tokens. Direct non-loopback agent configurations still require a token
+unless `allow-unauthenticated=true` explicitly opts into the less safe mode. It does not provide TLS,
 token rotation, OS keychain storage, roles, audit logging, or host identity proof.
 It does not find or kill arbitrary Java processes or adopt children after an agent
 restart. SSH provisioning installs a per-user launchd or systemd unit, but not a

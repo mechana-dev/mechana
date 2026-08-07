@@ -21,9 +21,7 @@ import java.awt.FlowLayout;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
-import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +30,6 @@ import javax.swing.*;
 
 final class WorkerControlFrame extends JFrame {
 	private static final long serialVersionUID = 1L;
-	private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
 	private static final String SANDBOXED_PLUGINS = SettingsStore.ALL_SUPPORTED_PLUGINS;
 	private final transient AgentClient client;
 	private final transient SettingsStore store;
@@ -84,6 +81,7 @@ final class WorkerControlFrame extends JFrame {
 		host.setEditable(true);
 		workers.setEditable(false);
 		capabilities.setToolTipText("Comma-separated plugin capabilities allowed by the selected host agent");
+		token.setToolTipText("Optional for development; blank uses the SSH tunnel without bearer authentication");
 		workers.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12));
 		JPanel connection = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		connection.add(new JLabel("Host"));
@@ -153,7 +151,6 @@ final class WorkerControlFrame extends JFrame {
 				(Integer) count.getValue(), selectedMode(), capabilities.getText().strip()), Availability.KEEP));
 		stop.addActionListener(event -> run("Stopping", () -> client.stop(baseUri(), tokenValue()), Availability.KEEP));
 		deploy.addActionListener(event -> {
-			ensureToken();
 			run("Reinstalling", () -> {
 				try {
 					client.stop(baseUri(), tokenValue());
@@ -401,14 +398,6 @@ final class WorkerControlFrame extends JFrame {
 			}
 		}
 		throw new IOException("Installed agent did not become reachable: " + last.getMessage(), last);
-	}
-
-	private void ensureToken() {
-		if (tokenValue().isBlank()) {
-			byte[] random = new byte[32];
-			TOKEN_RANDOM.nextBytes(random);
-			token.setText(Base64.getUrlEncoder().withoutPadding().encodeToString(random));
-		}
 	}
 
 	static void usePlainIntegerFormat(JSpinner spinner) {

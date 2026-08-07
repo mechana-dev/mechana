@@ -50,6 +50,9 @@ This file reports repository evidence, not desired future status.
   existing Java 25 runtime and SSH trust; it does not install prerequisites, use
   sudo, modify firewalls, or enable Linux lingering. Windows persistence uses a
   per-user Scheduled Task and a worker-owned private Java runtime.
+- SSH-provisioned agents bind only to remote loopback and are reached through the
+  controller's authenticated SSH tunnel. Their bearer token is optional for
+  development; a nonblank saved token retains the additional HTTP authentication.
 - The controller treats authenticated agent status as authoritative: it mirrors
   live workers, counts, mode, and plugins and disables worker actions until the
   selected agent responds. It distinguishes an unreachable endpoint from a

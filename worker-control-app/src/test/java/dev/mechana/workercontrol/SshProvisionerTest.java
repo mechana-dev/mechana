@@ -67,6 +67,7 @@ class SshProvisionerTest {
 						&& value.contains("occupied by a non-Mechana process")));
 		assertTrue(
 				uploadedText.stream().anyMatch(value -> value.contains("sandbox-root=/Users/remote/.mechana/sandbox")));
+		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("bind-address=127.0.0.1")));
 		assertTrue(commands.stream().map(List::getLast)
 				.anyMatch(value -> value.contains("'/Users/remote/.mechana/sandbox'")));
 		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("dev.mechana.worker-host-agent")));
@@ -80,6 +81,32 @@ class SshProvisionerTest {
 						"mark@mba.example:/Users/remote/Library/LaunchAgents/dev.mechana.worker-host-agent.plist")));
 		assertTrue(commands.stream().filter(command -> command.getFirst().equals("scp")).map(List::getLast)
 				.noneMatch(value -> value.contains("$HOME")));
+	}
+
+	@Test
+	void permitsBlankDevelopmentTokenForLoopbackAgent() throws Exception {
+		Path agent = Files.writeString(temporary.resolve("agent.jar"), "agent");
+		Path worker = Files.writeString(temporary.resolve("worker.jar"), "worker");
+		List<String> uploadedText = new ArrayList<>();
+		SshProvisioner provisioner = new SshProvisioner((command, timeout) -> {
+			if (command.getFirst().equals("scp")) {
+				Path source = Path.of(command.get(command.size() - 2));
+				if (!source.equals(agent) && !source.equals(worker))
+					uploadedText.add(Files.readString(source));
+				return "";
+			}
+			return switch (command.getLast()) {
+				case "uname -s" -> "Darwin\n";
+				case "pwd" -> "/Users/remote\n";
+				case "command -v java" -> "/usr/bin/java\n";
+				default -> "";
+			};
+		});
+
+		provisioner.deploy(request(agent, worker, ""));
+
+		assertTrue(uploadedText.stream()
+				.anyMatch(value -> value.contains("bind-address=127.0.0.1") && value.contains("token=")));
 	}
 
 	@Test
@@ -181,8 +208,12 @@ class SshProvisionerTest {
 	}
 
 	private SshProvisioner.Request request(Path agent, Path worker) {
+		return request(agent, worker, "secret");
+	}
+
+	private SshProvisioner.Request request(Path agent, Path worker, String token) {
 		return new SshProvisioner.Request("mba.example", "mark", 2222, null, false, agent, worker,
-				"~/.mechana/host-agent", "http://coordinator:8787", 8790, "secret", "sleep,fractal-render",
+				"~/.mechana/host-agent", "http://coordinator:8787", 8790, token, "sleep,fractal-render",
 				"fractal-render", "~/.mechana/sandbox", temporary.resolve("windows-sandbox.exe"));
 	}
 

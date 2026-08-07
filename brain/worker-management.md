@@ -56,6 +56,11 @@ workers. These modes are suitable only for an appropriately firewalled trusted
 LAN/tailnet. TLS, OS credential storage, token rotation, roles, audit logging,
 service installers, and durable adoption remain production work.
 
+Worker Control's SSH provisioning path binds the agent to remote loopback and
+reaches it through an authenticated SSH tunnel. A blank Token field is therefore
+allowed as a development convenience on this path; a nonblank token retains
+bearer authentication in addition to the tunnel.
+
 The current host agent controls process count, not the full accepted CPU, RAM,
 scratch, cache, plugin allowlist, network, or sandbox policy. Those remain roadmap
 items and must not be presented as implemented guarantees. See
