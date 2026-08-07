@@ -24,6 +24,7 @@
     <module>mechana-client</module>
     <module>worker-host-agent</module>
     <module>worker-control-app</module>
+    <module>client-job-launcher</module>
   </modules>
 
   <properties>
