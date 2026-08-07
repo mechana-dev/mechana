@@ -56,6 +56,34 @@ public class ProcessSandbox implements PluginSandbox {
 		builder.environment().putAll(request.environment());
 		builder.environment().put("HOME", request.workspace().work().toString());
 		builder.environment().put("TMPDIR", request.workspace().work().toString());
+		if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("windows")) {
+			String systemRoot = System.getenv("SystemRoot");
+			if (systemRoot == null || systemRoot.isBlank())
+				systemRoot = System.getenv().getOrDefault("WINDIR", "C:\\Windows");
+			builder.environment().putIfAbsent("SystemRoot", systemRoot);
+			builder.environment().putIfAbsent("WINDIR", systemRoot);
+			copyHostEnvironment(builder.environment(), "ComSpec");
+			copyHostEnvironment(builder.environment(), "PATH");
+			copyHostEnvironment(builder.environment(), "ProgramData");
+			copyHostEnvironment(builder.environment(), "LOCALAPPDATA");
+			for (String name : List.of("ALLUSERSPROFILE", "CommonProgramFiles", "CommonProgramFiles(x86)",
+					"CommonProgramW6432", "DriverData", "NUMBER_OF_PROCESSORS", "OS", "PATHEXT",
+					"PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION",
+					"ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "PUBLIC", "SystemDrive", "COMPUTERNAME",
+					"USERDOMAIN", "USERNAME", "USER"))
+				copyHostEnvironment(builder.environment(), name);
+			System.getenv().entrySet().stream().filter(entry -> entry.getKey().endsWith("_POSIX_FD_STATE"))
+					.forEach(entry -> builder.environment().putIfAbsent(entry.getKey(), entry.getValue()));
+			builder.environment().put("USERPROFILE", request.workspace().work().toString());
+			String work = request.workspace().work().toString();
+			if (work.length() >= 3 && work.charAt(1) == ':') {
+				builder.environment().put("HOMEDRIVE", work.substring(0, 2));
+				builder.environment().put("HOMEPATH", work.substring(2));
+			}
+			builder.environment().put("APPDATA", request.workspace().work().resolve("AppData").toString());
+			builder.environment().put("TEMP", request.workspace().work().toString());
+			builder.environment().put("TMP", request.workspace().work().toString());
+		}
 		Instant started = Instant.now();
 		Process process = builder.start();
 		Thread stdoutReader = Thread.ofVirtual().name("mechana-sandbox-stdout").start(() -> {
@@ -92,6 +120,12 @@ public class ProcessSandbox implements PluginSandbox {
 		stdoutReader.join();
 		return new SandboxResult(exitCode, timedOut, cancellation.get(), Duration.between(started, Instant.now()),
 				stdout, stderr, capabilities);
+	}
+
+	private static void copyHostEnvironment(Map<String, String> environment, String name) {
+		String value = System.getenv(name);
+		if (value != null && !value.isBlank())
+			environment.putIfAbsent(name, value);
 	}
 
 	private static void terminateTree(Process process) throws InterruptedException {

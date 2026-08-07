@@ -23,14 +23,20 @@ import java.util.function.Consumer;
 
 /** One process launch under an attempt policy. */
 public record SandboxRequest(List<String> command, Map<String, String> environment, AttemptWorkspace workspace,
-		SandboxPolicy policy, Path standardInput, Consumer<String> stdoutLineConsumer) {
+		SandboxPolicy policy, Path standardInput, Consumer<String> stdoutLineConsumer,
+		List<Path> runtimeReadOnlyPaths) {
 	public SandboxRequest(List<String> command, Map<String, String> environment, AttemptWorkspace workspace,
 			SandboxPolicy policy) {
-		this(command, environment, workspace, policy, null, null);
+		this(command, environment, workspace, policy, null, null, List.of());
+	}
+	public SandboxRequest(List<String> command, Map<String, String> environment, AttemptWorkspace workspace,
+			SandboxPolicy policy, Path standardInput, Consumer<String> stdoutLineConsumer) {
+		this(command, environment, workspace, policy, standardInput, stdoutLineConsumer, List.of());
 	}
 	public SandboxRequest {
 		command = List.copyOf(command);
 		environment = Map.copyOf(environment);
+		runtimeReadOnlyPaths = List.copyOf(runtimeReadOnlyPaths);
 		Objects.requireNonNull(workspace);
 		Objects.requireNonNull(policy);
 		if (command.isEmpty())

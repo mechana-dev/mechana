@@ -1,11 +1,12 @@
 # Sandbox and plugin runtime architecture
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-06
 
 This is the canonical sandbox architecture for Architecture Baseline 1. It
-describes the contract Mechana intends to preserve; it does not claim that
-production isolation is implemented. Current evidence remains in
-[current state](current-state.md).
+describes the contract Mechana intends to preserve. Individual platform
+guarantees are claimed only where the implementation and adversarial tests cited
+in [current state](current-state.md) establish them; this document does not claim
+that every proposed control or plugin runtime is production-certified.
 
 ## Status vocabulary
 
@@ -79,9 +80,11 @@ implementations or identical guarantees.
   UTS, and network namespaces plus restricted mounts. Cgroups, seccomp filtering,
   dedicated identities, and mandatory-access-control integration remain
   directional and are not advertised.
-- **Windows:** implemented with AppContainer identity and default-deny filesystem/network
-  access, workspace ACL grants, and a Job Object for CPU, memory, process-count,
-  and process-tree lifecycle limits.
+- **Windows:** implemented with a transient AppContainer identity, explicit NTFS
+  ACL grants, inherited-handle allowlisting, and Job Object CPU, memory,
+  process-count, and kill-on-close controls. Network-denied policy is verified;
+  network grants and full read invisibility remain unimplemented. See the
+  [Windows worker guide](../docs/windows-worker.md).
 - **macOS:** the strongest maintainable combination of process identity,
   filesystem permissions, resource controls, network policy, and virtualization
   when host controls cannot provide the required guarantee.
@@ -276,12 +279,3 @@ restriction, home denial, network denial, timeout, and Bubblewrap parent-death
 enforcement. CPU, RAM, scratch-byte, process-count, cgroup, seccomp, log-size, and
 dedicated-identity controls remain unimplemented. See the
 [Linux guide](../docs/linux-worker.md).
-
-The Windows backend uses a self-contained native launcher built for the target
-Windows architecture. It grants read-only access to the worker-owned private Java
-runtime, read/write access only to `work`, `output`, and `logs`, and read-only
-access to `input`. AppContainer provides network and home-directory denial. A Job
-Object enforces per-process memory, CPU rate, active-process count, and
-kill-on-close. Timeout and cancellation terminate the launcher, which closes the
-Job Object and its descendants. Scratch-byte quotas and log-size quotas are not
-yet enforced. See the [Windows guide](../docs/windows-worker.md).

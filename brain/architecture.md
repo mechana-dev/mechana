@@ -1,6 +1,6 @@
 # Architecture
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-06
 
 ## Stable shape
 
@@ -125,4 +125,6 @@ contract is request/response-shaped and does not need a network listener inside
 the attempt. Explicitly sandboxed macOS and Linux workers route every current
 concrete plugin through this boundary, stage network inputs before launch, and
 require absolute operator-declared native executable paths where applicable.
-Windows uses the same boundary through its AppContainer and Job Object backend.
+Windows now uses a verified AppContainer and Job Object backend for the pure-Java
+plugin-host path. Native Windows plugin runtimes still require individual
+certification.
