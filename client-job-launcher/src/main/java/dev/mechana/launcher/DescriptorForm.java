@@ -84,7 +84,11 @@ final class DescriptorForm extends JPanel {
 			editors.put(field, editor);
 			constraints.gridy++;
 		}
-		add(fields, BorderLayout.NORTH);
+		JScrollPane fieldScroller = new JScrollPane(fields, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+				ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		fieldScroller.setBorder(BorderFactory.createEmptyBorder());
+		fieldScroller.getVerticalScrollBar().setUnitIncrement(16);
+		add(fieldScroller, BorderLayout.CENTER);
 		add(new JLabel("Output: " + descriptor.output().label() + " (" + descriptor.output().provider() + ") — "
 				+ descriptor.resourceEstimate()), BorderLayout.SOUTH);
 	}

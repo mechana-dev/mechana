@@ -44,6 +44,8 @@ This file reports repository evidence, not desired future status.
 - Launcher capability labels omit transient worker counts. All five submission
   forms expose `Tasks (0 = fleet)` consistently; zero resolves server-side to one
   task per currently compatible worker, capped by the job's finite work units.
+  Descriptor forms scroll independently so every field remains reachable when
+  the history divider leaves a short submission area.
 - The host-agent API and Swing controller can start a worker group in explicit
   `SANDBOXED` or `LEGACY` mode with a selected plugin capability set. Sandboxed
   launch is available on macOS, Linux, and Windows and uses an agent-configured root

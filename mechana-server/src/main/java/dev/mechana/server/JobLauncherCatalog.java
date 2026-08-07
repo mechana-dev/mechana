@@ -68,9 +68,9 @@ final class JobLauncherCatalog {
 				descriptor("blender-render", "Blender render", "/api/jobs/blender", serverFiles,
 						"Blender Cycles CPU runtime; frame scratch plus final movie",
 						file("sourcePath", "Packed .blend file", "samples/blender/mechana-camera-orbit-2s.blend"),
+						integer("taskCount", "Tasks (0 = fleet)", "0", 0, 100000),
 						integer("firstFrame", "First frame", "1", 0, 1000000),
 						integer("lastFrame", "Last frame", "48", 0, 1000000),
-						integer("taskCount", "Tasks (0 = fleet)", "0", 0, 100000),
 						integer("width", "Width", "640", 64, 8192), integer("height", "Height", "360", 64, 8192),
 						integer("samples", "Samples", "32", 1, 4096),
 						integer("fps", "Frames per second", "24", 1, 240)));

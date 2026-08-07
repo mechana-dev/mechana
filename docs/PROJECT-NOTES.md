@@ -1119,3 +1119,6 @@ cloud providers remain future direction; see `brain/current-state.md` and
   dropdown entries no longer show worker counts, every plugin uses
   `Tasks (0 = fleet)`, and zero now means one task per compatible connected
   worker rather than a plugin-specific multiplier or rejection.
+- Made descriptor forms vertically scrollable so longer plugin forms cannot be
+  clipped by the jobs-history divider, and moved Blender's Tasks control directly
+  below its source picker.

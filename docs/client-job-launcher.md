@@ -21,6 +21,8 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
 - Presents every capability with the same `Tasks (0 = fleet)` control. Zero
   creates one task per currently compatible worker, capped by finite work such as
   pages, images, or frames; a positive value requests that explicit task count.
+- Descriptor forms scroll independently when their fields exceed the available
+  submission-panel height. Blender places Tasks directly below its source picker.
 - Capability names do not include transient worker counts. Availability still
   comes from the live schedulable fleet and becomes stale on disconnect.
 - Refreshes active and completed jobs, including progress, worker assignments,

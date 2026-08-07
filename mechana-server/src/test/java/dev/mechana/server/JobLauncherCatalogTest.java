@@ -42,6 +42,7 @@ class JobLauncherCatalogTest {
 		assertEquals("24", defaults.get("fps"));
 		assertEquals("640", defaults.get("width"));
 		assertEquals("360", defaults.get("height"));
+		assertEquals("taskCount", descriptor.fields().get(1).name());
 	}
 
 	@Test
