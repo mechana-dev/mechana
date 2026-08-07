@@ -127,12 +127,14 @@ final class WorkerControlFrame extends JFrame {
 		artifacts.add(workerJar);
 		artifacts.add(new JLabel("Windows sandbox EXE"));
 		artifacts.add(windowsSandboxLauncher);
-		artifacts.add(deploy);
-		artifacts.add(restartAgent);
-		artifacts.add(stopAgent);
+		JPanel remoteActions = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		remoteActions.add(deploy);
+		remoteActions.add(restartAgent);
+		remoteActions.add(stopAgent);
 		provisioning.add(ssh);
 		provisioning.add(paths);
 		provisioning.add(artifacts);
+		provisioning.add(remoteActions);
 		top.add(provisioning, BorderLayout.SOUTH);
 		add(top, BorderLayout.NORTH);
 		add(new JScrollPane(workers), BorderLayout.CENTER);

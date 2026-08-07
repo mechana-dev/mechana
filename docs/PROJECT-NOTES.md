@@ -1023,3 +1023,5 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Root-targeted Linux reinstall disables the specifically verified legacy
   `/etc/systemd/system/mechana-worker-host-agent.service` supervisor before port
   cleanup so the obsolete `/opt` agent cannot respawn.
+- Moved the remote SSH action buttons to a dedicated row so Worker Control packs
+  into a narrower window without shrinking its path fields.
