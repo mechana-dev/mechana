@@ -26,7 +26,10 @@ import java.awt.Insets;
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.prefs.Preferences;
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 final class DescriptorForm extends JPanel {
 	private static final long serialVersionUID = 1L;
@@ -34,7 +37,7 @@ final class DescriptorForm extends JPanel {
 	@SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "Swing panels are not deserialized")
 	private final transient Map<SubmissionField, JTextField> editors = new LinkedHashMap<>();
 
-	DescriptorForm(JobLauncherDescriptor descriptor) {
+	DescriptorForm(JobLauncherDescriptor descriptor, Preferences settings) {
 		super(new BorderLayout(8, 8));
 		this.descriptor = descriptor;
 		JPanel fields = new JPanel(new GridBagLayout());
@@ -47,8 +50,25 @@ final class DescriptorForm extends JPanel {
 			constraints.weightx = 0;
 			constraints.fill = GridBagConstraints.NONE;
 			fields.add(new JLabel(field.label()), constraints);
-			JTextField editor = new JTextField(field.defaultValue(), 28);
+			JTextField editor = new JTextField(settings.get(field.name(), field.defaultValue()), 28);
 			editor.setToolTipText(field.help());
+			editor.getDocument().addDocumentListener(new DocumentListener() {
+				@Override
+				public void insertUpdate(DocumentEvent event) {
+					remember();
+				}
+				@Override
+				public void removeUpdate(DocumentEvent event) {
+					remember();
+				}
+				@Override
+				public void changedUpdate(DocumentEvent event) {
+					remember();
+				}
+				private void remember() {
+					settings.put(field.name(), editor.getText());
+				}
+			});
 			constraints.gridx = 1;
 			constraints.weightx = 1;
 			constraints.fill = GridBagConstraints.HORIZONTAL;

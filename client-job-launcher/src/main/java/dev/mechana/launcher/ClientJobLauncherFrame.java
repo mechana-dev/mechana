@@ -95,7 +95,8 @@ final class ClientJobLauncherFrame extends JFrame {
 			forms.removeAll();
 			for (JobLauncherDescriptor descriptor : result.capabilities()) {
 				capabilities.addItem(descriptor);
-				forms.add(new DescriptorForm(descriptor), descriptor.capabilityId());
+				forms.add(new DescriptorForm(descriptor, settings.node("forms").node(descriptor.capabilityId())),
+						descriptor.capabilityId());
 			}
 			showJobs(result.jobs());
 			connectionState
