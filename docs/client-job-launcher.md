@@ -30,6 +30,11 @@ The current server is still a loopback-oriented development server. File fields
 therefore select paths readable by that server; the picker does not upload bytes.
 Server-local remains the only implemented artifact provider.
 
+The Blender form defaults to `samples/blender/mechana-camera-orbit-2s.blend`, a
+packed lightweight geometry scene with a continuously orbiting camera. Frames
+1–48 at 24 fps produce a two-second clip; the development defaults use 640×360,
+32 Cycles samples, and eight distributed tasks.
+
 ## Direction
 
 The descriptor belongs in the plugin package/manifest once the general plugin

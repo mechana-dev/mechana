@@ -30,4 +30,17 @@ class JobLauncherCatalogTest {
 		assertEquals(2, descriptors.getFirst().availableWorkers());
 		assertTrue(descriptors.stream().allMatch(item -> item.output().provider().equals("server-local")));
 	}
+
+	@Test
+	void blenderDefaultsToTheTwoSecondCameraOrbitSample() {
+		var descriptor = JobLauncherCatalog.available(Map.of("blender-render", 4)).getFirst();
+		Map<String, String> defaults = descriptor.fields().stream()
+				.collect(java.util.stream.Collectors.toMap(field -> field.name(), field -> field.defaultValue()));
+		assertEquals("samples/blender/mechana-camera-orbit-2s.blend", defaults.get("sourcePath"));
+		assertEquals("1", defaults.get("firstFrame"));
+		assertEquals("48", defaults.get("lastFrame"));
+		assertEquals("24", defaults.get("fps"));
+		assertEquals("640", defaults.get("width"));
+		assertEquals("360", defaults.get("height"));
+	}
 }

@@ -67,10 +67,11 @@ final class JobLauncherCatalog {
 						integer("pageCount", "Page count (0 = all)", "0", 0, 100000)),
 				descriptor("blender-render", "Blender render", "/api/jobs/blender", serverFiles,
 						"Blender Cycles CPU runtime; frame scratch plus final movie",
-						file("sourcePath", "Packed .blend file"), integer("firstFrame", "First frame", "1", 0, 1000000),
-						integer("lastFrame", "Last frame", "120", 0, 1000000),
-						integer("taskCount", "Tasks", "8", 1, 100000), integer("width", "Width", "1920", 64, 8192),
-						integer("height", "Height", "1080", 64, 8192), integer("samples", "Samples", "128", 1, 4096),
+						file("sourcePath", "Packed .blend file", "samples/blender/mechana-camera-orbit-2s.blend"),
+						integer("firstFrame", "First frame", "1", 0, 1000000),
+						integer("lastFrame", "Last frame", "48", 0, 1000000),
+						integer("taskCount", "Tasks", "8", 1, 100000), integer("width", "Width", "640", 64, 8192),
+						integer("height", "Height", "360", 64, 8192), integer("samples", "Samples", "32", 1, 4096),
 						integer("fps", "Frames per second", "24", 1, 240)));
 	}
 
@@ -80,7 +81,11 @@ final class JobLauncherCatalog {
 	}
 
 	private static SubmissionField file(String name, String label) {
-		return new SubmissionField(name, label, "file", true, "", null, null, List.of(), "Server-readable path");
+		return file(name, label, "");
+	}
+
+	private static SubmissionField file(String name, String label, String value) {
+		return new SubmissionField(name, label, "file", true, value, null, null, List.of(), "Server-readable path");
 	}
 
 	private static SubmissionField text(String name, String label, String value) {

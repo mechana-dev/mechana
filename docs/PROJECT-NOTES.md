@@ -1105,3 +1105,6 @@ cloud providers remain future direction; see `brain/current-state.md` and
   record and its server-local artifacts while leaving active jobs untouched.
 - Added version-controlled macOS `.command` launchers for the server, Worker
   Control, and Client Job Launcher plus an installer under `scripts/macos`.
+- Added a packed two-second Blender geometry/orbit sample and made it the Client
+  Job Launcher's Blender default: frames 1–48 at 24 fps, with visible camera
+  movement throughout and development-sized 640×360/32-sample rendering.
