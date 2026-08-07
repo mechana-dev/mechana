@@ -400,6 +400,18 @@ public final class MechanaServer implements AutoCloseable {
 					sendJson(exchange, 200, status);
 					return;
 				}
+				if ("DELETE".equals(exchange.getRequestMethod()) && "/api/jobs/completed".equals(path)) {
+					requireLoopback(exchange);
+					List<String> jobIds = completedJobs.snapshots().stream().map(InMemoryJobMonitor.Snapshot::jobId)
+							.toList();
+					for (String jobId : jobIds) {
+						completedJobs.purge(jobId);
+						scheduler.purgeCompleted(jobId);
+					}
+					System.out.printf("Purged all completed jobs (%d)%n", jobIds.size());
+					sendEmpty(exchange, 204);
+					return;
+				}
 				if ("DELETE".equals(exchange.getRequestMethod()) && path.startsWith("/api/jobs/")) {
 					requireLoopback(exchange);
 					String jobId = path.substring("/api/jobs/".length());

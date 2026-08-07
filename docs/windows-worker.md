@@ -22,6 +22,13 @@ This creates `C:\ProgramData\Mechana\runtime\java-25`. The installer refuses
 to overwrite an existing runtime. Build a replacement separately, stop workers,
 then replace the old directory as an explicit maintenance operation.
 
+Worker Control's **Reinstall + start via SSH** action deploys the agent and worker
+JARs and starts the scheduled task. The sandbox launcher is embedded in the worker
+JAR as PowerShell; no separately built `mechana-windows-sandbox.exe` is required.
+The private Java runtime above remains a host prerequisite. When an older profile
+still contains the generic `~/.mechana/sandbox` default, Windows provisioning maps
+it to `C:\ProgramData\Mechana\sandbox`; explicit absolute custom paths are preserved.
+
 ## Validate a host
 
 ```powershell

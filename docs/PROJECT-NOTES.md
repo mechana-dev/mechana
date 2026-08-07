@@ -1081,3 +1081,25 @@ owned-history purge. The new Swing module follows Worker Control conventions.
 Plugin-manifest descriptors, uploads, authentication, client-local storage, and
 cloud providers remain future direction; see `brain/current-state.md` and
 `docs/client-job-launcher.md`.
+
+## 2026-08-07 — Remove obsolete Windows launcher deployment requirement
+
+- Updated Worker Control's Windows SSH provisioning to use the PowerShell sandbox
+  launcher embedded in the worker JAR.
+- Removed the external Windows sandbox EXE field from the visible controller UI and
+  stopped uploading or forwarding the retired launcher property.
+- Kept the old saved profile value readable for migration compatibility; it no
+  longer affects deployment.
+- Added a regression assertion that generated Windows agent scripts do not contain
+  the obsolete launcher property.
+- Migrated the generic saved Windows sandbox default from the SSH user's home to
+  `C:\ProgramData\Mechana\sandbox` during reprovisioning, while preserving explicit
+  absolute operator paths.
+- Replaced the raw missing-task failure from Windows agent restart with an
+  actionable instruction to reinstall when the managed scheduled task is absent.
+- Labeled the verified `windows-appcontainer-job` worker backend as `Windows
+  sandbox` in the server dashboard, consistently with the existing macOS and Linux
+  labels.
+- Added a confirmed `Purge all` action to the server dashboard and Client Job
+  Launcher. The loopback-only bulk endpoint removes every durable completed-job
+  record and its server-local artifacts while leaving active jobs untouched.

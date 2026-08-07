@@ -42,6 +42,7 @@ final class ClientJobLauncherFrame extends JFrame {
 	private final JButton start = new JButton("Start");
 	private final JButton abort = new JButton("Abort selected");
 	private final JButton purge = new JButton("Purge selected");
+	private final JButton purgeAll = new JButton("Purge all");
 	private final DefaultTableModel jobsModel = new ReadOnlyTableModel();
 	private final JTable jobs = new JTable(jobsModel);
 	@SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "Swing frames are not deserialized")
@@ -70,6 +71,7 @@ final class ClientJobLauncherFrame extends JFrame {
 		JPanel historyActions = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		historyActions.add(new JLabel("Jobs and completed history"));
 		historyActions.add(purge);
+		historyActions.add(purgeAll);
 		JPanel history = new JPanel(new BorderLayout());
 		history.add(historyActions, BorderLayout.NORTH);
 		history.add(new JScrollPane(jobs), BorderLayout.CENTER);
@@ -82,6 +84,7 @@ final class ClientJobLauncherFrame extends JFrame {
 		start.addActionListener(event -> submit());
 		abort.addActionListener(event -> abortSelected());
 		purge.addActionListener(event -> purgeSelected());
+		purgeAll.addActionListener(event -> purgeAll());
 		setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		setSize(980, 720);
 		setLocationByPlatform(true);
@@ -154,6 +157,20 @@ final class ClientJobLauncherFrame extends JFrame {
 	}
 	private void purgeSelected() {
 		mutateSelected(true);
+	}
+	private void purgeAll() {
+		long completed = jobItems.stream().filter(LauncherJob::purgeAllowed).count();
+		if (completed == 0)
+			return;
+		int choice = JOptionPane.showConfirmDialog(this,
+				"Permanently delete all " + completed + " completed jobs and their server-local artifacts?",
+				"Purge all completed jobs", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+		if (choice != JOptionPane.YES_OPTION)
+			return;
+		run(() -> {
+			client.purgeAll(serverUri());
+			return completed;
+		}, ignored -> refreshJobs());
 	}
 	private void mutateSelected(boolean purgeJob) {
 		int row = jobs.getSelectedRow();
@@ -229,6 +246,7 @@ final class ClientJobLauncherFrame extends JFrame {
 		start.setEnabled(!busy && capabilities.getItemCount() > 0);
 		abort.setEnabled(!busy);
 		purge.setEnabled(!busy);
+		purgeAll.setEnabled(!busy && jobItems.stream().anyMatch(LauncherJob::purgeAllowed));
 	}
 	private void showError(Throwable failure) {
 		JOptionPane.showMessageDialog(this, failure.getMessage(), "Mechana", JOptionPane.ERROR_MESSAGE);

@@ -1,6 +1,6 @@
 # Current state
 
-Verified: 2026-08-06
+Verified: 2026-08-07
 
 This file reports repository evidence, not desired future status.
 
@@ -37,7 +37,8 @@ This file reports repository evidence, not desired future status.
   descriptor-defined forms for the five existing plugins, submits through their
   existing endpoints, refreshes live/completed job state, shows worker assignments
   and provider-aware server-local artifact references, aborts jobs, and purges
-  completed server-owned history. Descriptors currently come from a server-side
+  selected or all completed server-owned history after confirmation. Descriptors
+  currently come from a server-side
   composition catalog rather than plugin manifests; file fields are server-readable
   paths rather than uploads, and remote authenticated operation is not established.
 - The host-agent API and Swing controller can start a worker group in explicit
@@ -75,6 +76,12 @@ This file reports repository evidence, not desired future status.
   with the established SSH users and ports and all five currently supported plugin
   capabilities and the MBA coordinator URL; saved per-host customizations remain
   authoritative.
+- Windows SSH deployment uses the sandbox backend embedded in the worker JAR; it
+  does not require or upload the retired external .NET sandbox-launcher executable.
+  Existing saved launcher-path settings are retained only for profile migration
+  compatibility and are not used. Windows reprovisioning also migrates the generic
+  `~/.mechana/sandbox` default to `C:\ProgramData\Mechana\sandbox`, outside the SSH
+  user's home as required by sandbox policy.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/

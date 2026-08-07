@@ -33,6 +33,14 @@ class SshProvisionerTest {
 	Path temporary;
 
 	@Test
+	void migratesDefaultWindowsSandboxOutsideTheUserHome() {
+		assertEquals("C:/ProgramData/Mechana/sandbox", SshProvisioner.resolveSandboxDirectory("C:/Users/markf",
+				"~/.mechana/sandbox", SshProvisioner.RemoteOs.WINDOWS));
+		assertEquals("D:/Mechana/sandbox", SshProvisioner.resolveSandboxDirectory("C:/Users/markf",
+				"D:/Mechana/sandbox", SshProvisioner.RemoteOs.WINDOWS));
+	}
+
+	@Test
 	void deploysMacOsLaunchAgentAndArtifactsUsingBatchSsh() throws Exception {
 		Path agent = Files.writeString(temporary.resolve("agent.jar"), "agent");
 		Path worker = Files.writeString(temporary.resolve("worker.jar"), "worker");
@@ -204,11 +212,33 @@ class SshProvisionerTest {
 	}
 
 	@Test
+	void windowsRestartExplainsWhenTheManagedAgentIsNotInstalled() throws Exception {
+		Path agent = Files.writeString(temporary.resolve("agent.jar"), "agent");
+		Path worker = Files.writeString(temporary.resolve("worker.jar"), "worker");
+		List<String> remoteCommands = new ArrayList<>();
+		SshProvisioner provisioner = new SshProvisioner((command, timeout) -> {
+			remoteCommands.add(command.getLast());
+			return switch (command.getLast()) {
+				case "uname -s" -> throw new java.io.IOException("not available");
+				case "ver" -> "Microsoft Windows [Version 10.0]\n";
+				case "cd" -> "C:\\Users\\markf\n";
+				default -> "";
+			};
+		});
+
+		provisioner.restart(request(agent, worker));
+
+		assertTrue(remoteCommands.stream()
+				.anyMatch(command -> command.contains("Agent is not installed; use Reinstall + start via SSH")));
+	}
+
+	@Test
 	void windowsAgentScriptRemovesLegacyInboundRule() {
-		String script = SshProvisioner.windowsScript("C:/runtime/java.exe", "C:/mechana", "C:/mechana/sandbox.exe",
-				Map.of(), 8790, "100.110.181.104");
+		String script = SshProvisioner.windowsScript("C:/runtime/java.exe", "C:/mechana", Map.of(), 8790,
+				"100.110.181.104");
 		assertTrue(script.contains("Remove-NetFirewallRule"));
 		assertTrue(!script.contains("New-NetFirewallRule"));
+		assertTrue(!script.contains("mechana.windows.sandbox.launcher"));
 	}
 
 	@Test

@@ -20,7 +20,9 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
   and Blender render and submits through their existing server endpoints.
 - Refreshes active and completed jobs, including progress, worker assignments,
   diagnostics, completion time, and provider-aware artifact references.
-- Aborts active jobs and purges completed server-owned history/artifacts.
+- Aborts active jobs and purges selected or all completed server-owned
+  history/artifacts. Bulk purge requires confirmation and does not affect active
+  jobs.
 - Retains the last successful capability view during a disconnect and labels it
   stale rather than presenting it as fresh scheduling state.
 
