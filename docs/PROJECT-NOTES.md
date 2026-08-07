@@ -1000,3 +1000,13 @@ Append-only record of material Mechana project changes and accepted decisions.
   after correcting duplicate Linux host-agent services and routing Hyperion directly
   to the MBA over the VM network. Host-agent restart does not yet persist and restore
   the requested worker count; this is documented as follow-up rather than claimed.
+
+## 2026-08-07 04:30:00 EDT
+
+Added the generic Client Job Launcher foundation: schedulable-capability discovery,
+descriptor-rendered forms for the five current plugins, generic submission,
+live/completed job monitoring, abort, provider-aware server-local artifacts, and
+owned-history purge. The new Swing module follows Worker Control conventions.
+Plugin-manifest descriptors, uploads, authentication, client-local storage, and
+cloud providers remain future direction; see `brain/current-state.md` and
+`docs/client-job-launcher.md`.
