@@ -82,6 +82,11 @@ This file reports repository evidence, not desired future status.
   compatibility and are not used. Windows reprovisioning also migrates the generic
   `~/.mechana/sandbox` default to `C:\ProgramData\Mechana\sandbox`, outside the SSH
   user's home as required by sandbox policy.
+- Windows SSH reprovisioning resolves native plugin executables only from the
+  sandbox runtime staging tree beneath `C:\ProgramData\Mechana\runtime`. It
+  fails before deployment when a requested native capability has not been staged,
+  rather than advertising a capability whose system-installed executable the
+  AppContainer will reject.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/
@@ -104,6 +109,9 @@ This file reports repository evidence, not desired future status.
   for active cancellation and cleanup, while worker startup reclaims marked,
   unlocked attempts abandoned by a crash. Legacy workers retain the existing
   in-process execution paths for compatibility.
+- Abandoned-attempt reclamation reports filesystem access failures as ordinary
+  cleanup diagnostics rather than leaking traversal exceptions that can terminate
+  a replacement worker during startup.
 - An in-memory scheduler for sleep tasks with pull-based workers, renewable leases,
   expired-work requeueing, stale-completion rejection, and a three-attempt ceiling
   for worker-reported failures and expired leases. Exhaustion fails the job and

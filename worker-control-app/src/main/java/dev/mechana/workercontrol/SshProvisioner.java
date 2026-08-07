@@ -353,11 +353,10 @@ final class SshProvisioner {
 	static String runtimeDiscoveryCommand(RemoteOs os, String name) {
 		if (os == RemoteOs.WINDOWS) {
 			String executable = name + ".exe";
-			return "powershell.exe -NoProfile -Command \"$found=(Get-Command " + executable
-					+ " -ErrorAction SilentlyContinue).Source; if($found){$found}else{$roots=@($env:ProgramFiles,"
-					+ "(Join-Path $env:LOCALAPPDATA 'Microsoft\\WinGet\\Packages')); Get-ChildItem -Path $roots "
-					+ "-Filter '" + executable + "' -File -Recurse -ErrorAction SilentlyContinue | "
-					+ "Select-Object -First 1 -ExpandProperty FullName}\"";
+			return "powershell.exe -NoProfile -Command \"Get-ChildItem -Path "
+					+ "(Join-Path $env:ProgramData 'Mechana\\runtime') -Filter '" + executable
+					+ "' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 "
+					+ "-ExpandProperty FullName\"";
 		}
 		List<String> candidates = new ArrayList<>();
 		if (os == RemoteOs.MACOS) {

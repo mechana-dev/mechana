@@ -1108,3 +1108,10 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added a packed two-second Blender geometry/orbit sample and made it the Client
   Job Launcher's Blender default: frames 1–48 at 24 fps, with visible camera
   movement throughout and development-sized 640×360/32-sample rendering.
+- Corrected Windows native-runtime discovery to select only executables staged
+  beneath `C:\ProgramData\Mechana\runtime`. Worker Control now fails
+  reprovisioning when a requested native sandbox runtime is absent instead of
+  configuring an installed path that the AppContainer must reject.
+- Made abandoned sandbox workspace deletion propagate filesystem traversal
+  failures as checked cleanup errors, preventing inaccessible stale Windows
+  AppContainer scratch from crashing replacement workers during startup.

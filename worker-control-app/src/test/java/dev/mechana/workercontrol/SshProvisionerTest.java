@@ -192,6 +192,15 @@ class SshProvisionerTest {
 	}
 
 	@Test
+	void discoversOnlySandboxStagedRuntimesOnWindows() {
+		String blender = SshProvisioner.runtimeDiscoveryCommand(SshProvisioner.RemoteOs.WINDOWS, "blender");
+		assertTrue(blender.contains("$env:ProgramData 'Mechana\\runtime'"));
+		assertTrue(blender.contains("-Filter 'blender.exe'"));
+		assertTrue(!blender.contains("$env:ProgramFiles"));
+		assertTrue(!blender.contains("$env:LOCALAPPDATA"));
+	}
+
+	@Test
 	void staleAgentCleanupIsRestrictedToVerifiedMechanaListeners() throws Exception {
 		String command = SshProvisioner.macOsPortReleaseCommand(21012);
 		assertTrue(command.contains("lsof -nP -tiTCP:21012"));
