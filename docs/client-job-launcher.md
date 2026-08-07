@@ -23,6 +23,9 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
   pages, images, or frames; a positive value requests that explicit task count.
 - Descriptor forms scroll independently when their fields exceed the available
   submission-panel height. Blender places Tasks directly below its source picker.
+- File fields honor descriptor-provided accepted extensions in both the chooser
+  and pre-submit validation. OCR accepts `.pdf` and Blender accepts `.blend`;
+  server validation remains authoritative if another client bypasses the launcher.
 - Capability names do not include transient worker counts. Availability still
   comes from the live schedulable fleet and becomes stale on disconnect.
 - Refreshes active and completed jobs, including progress, worker assignments,

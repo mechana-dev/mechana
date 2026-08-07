@@ -1149,3 +1149,16 @@ cloud providers remain future direction; see `brain/current-state.md` and
   Blender job launched both fixed Hyperion workers concurrently without the prior
   Java-security or Blender `Access is denied` startup failures and assembled its
   final movie successfully.
+
+## 2026-08-07 16:59:45 EDT — Validate descriptor-driven file types
+
+- Diagnosed an OCR submission of a `.docx` file that reached PDFBox and surfaced
+  as an opaque HTTP 500 parser error even though the plugin accepts PDF input only.
+- Extended generic submission fields with accepted-extension metadata. The Client
+  Job Launcher now filters file selection and rejects mismatched extensions before
+  submission without embedding OCR or Blender semantics in the client.
+- Declared `.pdf` for OCR and `.blend` for Blender. Server-side OCR submission also
+  verifies the PDF extension and `%PDF-` signature so alternate clients receive a
+  clear client-input error instead of an internal parser failure.
+- Added protocol-compatible constructor behavior plus launcher and server catalog
+  regression coverage.

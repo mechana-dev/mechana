@@ -46,6 +46,11 @@ This file reports repository evidence, not desired future status.
   task per currently compatible worker, capped by the job's finite work units.
   Descriptor forms scroll independently so every field remains reachable when
   the history divider leaves a short submission area.
+- Submission descriptors can declare accepted extensions for file fields. The
+  generic launcher applies those rules to its file chooser and pre-submit
+  validation; OCR currently requires `.pdf` and Blender requires `.blend`.
+  Server-side OCR submission independently checks the PDF extension and signature
+  and reports invalid input as a client error instead of exposing a PDFBox failure.
 - The Blender launcher defaults to a packed, lightweight two-second orbit sample
   at `samples/blender/mechana-camera-orbit-2s.blend`: frames 1–48 at 24 fps with
   continuous camera motion and development-sized 640×360/32-sample settings.

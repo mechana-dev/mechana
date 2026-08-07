@@ -18,6 +18,7 @@ package dev.mechana.server;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -58,5 +59,12 @@ class JobLauncherCatalogTest {
 			assertEquals("0", tasks.defaultValue());
 			assertEquals(0d, tasks.minimum());
 		}
+	}
+
+	@Test
+	void fileFieldsAdvertisePluginSpecificExtensions() {
+		var descriptors = JobLauncherCatalog.available(Map.of("ocr-tesseract", 1, "blender-render", 1));
+		assertEquals(List.of("pdf"), descriptors.getFirst().fields().getFirst().acceptedExtensions());
+		assertEquals(List.of("blend"), descriptors.getLast().fields().getFirst().acceptedExtensions());
 	}
 }

@@ -16,6 +16,7 @@
 package dev.mechana.launcher;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.mechana.protocol.Messages.JobLauncherDescriptor;
 import dev.mechana.protocol.Messages.OutputDescriptor;
@@ -53,5 +54,17 @@ class DescriptorFormTest {
 		Preferences settings = Preferences.userRoot().node("dev/mechana/test/" + UUID.randomUUID());
 		DescriptorForm form = new DescriptorForm(descriptor, settings);
 		assertEquals(JScrollPane.class, form.getComponent(0).getClass());
+	}
+
+	@Test
+	void validatesDescriptorProvidedFileExtensions() {
+		var descriptor = new JobLauncherDescriptor("ocr", "OCR", "/api/jobs/ocr",
+				List.of(new SubmissionField("sourcePath", "Input PDF", "file", true, "document.docx", null, null,
+						List.of(), "", List.of("pdf"))),
+				new OutputDescriptor("server-local", "directory", "Artifacts", false), "small", 1, "now");
+		Preferences settings = Preferences.userRoot().node("dev/mechana/test/" + UUID.randomUUID());
+		IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+				() -> new DescriptorForm(descriptor, settings).values());
+		assertEquals("Input PDF must be a .pdf file", failure.getMessage());
 	}
 }

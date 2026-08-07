@@ -59,7 +59,8 @@ final class JobLauncherCatalog {
 						integer("maxIterations", "Maximum iterations", "1000", 16, 100000),
 						integer("seed", "Seed", "1", Long.MIN_VALUE, Long.MAX_VALUE)),
 				descriptor("ocr-tesseract", "OCR / Tesseract", "/api/jobs/ocr", serverFiles,
-						"PDF rasterization on server; Tesseract runtime on workers", file("sourcePath", "Input PDF"),
+						"PDF rasterization on server; Tesseract runtime on workers",
+						file("sourcePath", "Input PDF", "", "pdf"),
 						integer("taskCount", "Tasks (0 = fleet)", "0", 0, 10000),
 						integer("dpi", "DPI", "300", 150, 600), text("language", "Language", "eng"),
 						text("title", "Document title", "OCR Document"),
@@ -67,7 +68,8 @@ final class JobLauncherCatalog {
 						integer("pageCount", "Page count (0 = all)", "0", 0, 100000)),
 				descriptor("blender-render", "Blender render", "/api/jobs/blender", serverFiles,
 						"Blender Cycles CPU runtime; frame scratch plus final movie",
-						file("sourcePath", "Packed .blend file", "samples/blender/mechana-camera-orbit-2s.blend"),
+						file("sourcePath", "Packed .blend file", "samples/blender/mechana-camera-orbit-2s.blend",
+								"blend"),
 						integer("taskCount", "Tasks (0 = fleet)", "0", 0, 100000),
 						integer("firstFrame", "First frame", "1", 0, 1000000),
 						integer("lastFrame", "Last frame", "48", 0, 1000000),
@@ -86,7 +88,12 @@ final class JobLauncherCatalog {
 	}
 
 	private static SubmissionField file(String name, String label, String value) {
-		return new SubmissionField(name, label, "file", true, value, null, null, List.of(), "Server-readable path");
+		return file(name, label, value, new String[0]);
+	}
+
+	private static SubmissionField file(String name, String label, String value, String... acceptedExtensions) {
+		return new SubmissionField(name, label, "file", true, value, null, null, List.of(), "Server-readable path",
+				List.of(acceptedExtensions));
 	}
 
 	private static SubmissionField text(String name, String label, String value) {

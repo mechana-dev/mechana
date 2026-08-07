@@ -24,12 +24,14 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.io.File;
+import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.prefs.Preferences;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
 final class DescriptorForm extends JPanel {
 	private static final long serialVersionUID = 1L;
@@ -75,7 +77,7 @@ final class DescriptorForm extends JPanel {
 			fields.add(editor, constraints);
 			if ("file".equals(field.type())) {
 				JButton browse = new JButton("Choose…");
-				browse.addActionListener(event -> chooseFile(editor));
+				browse.addActionListener(event -> chooseFile(field, editor));
 				constraints.gridx = 2;
 				constraints.weightx = 0;
 				constraints.fill = GridBagConstraints.NONE;
@@ -107,6 +109,11 @@ final class DescriptorForm extends JPanel {
 		if (field.required() && text.isBlank())
 			throw new IllegalArgumentException(field.label() + " is required");
 		try {
+			if ("file".equals(field.type()) && !text.isBlank() && !field.acceptedExtensions().isEmpty()) {
+				String lower = text.toLowerCase(Locale.ROOT);
+				if (field.acceptedExtensions().stream().noneMatch(extension -> lower.endsWith("." + extension)))
+					throw new IllegalArgumentException(field.label() + " must be a " + acceptedTypes(field));
+			}
 			Object value = switch (field.type()) {
 				case "integer" -> Long.parseLong(text);
 				case "decimal" -> Double.parseDouble(text);
@@ -124,8 +131,16 @@ final class DescriptorForm extends JPanel {
 		}
 	}
 
-	private void chooseFile(JTextField editor) {
+	private static String acceptedTypes(SubmissionField field) {
+		return field.acceptedExtensions().stream().map(extension -> "." + extension)
+				.collect(java.util.stream.Collectors.joining(" or ")) + " file";
+	}
+
+	private void chooseFile(SubmissionField field, JTextField editor) {
 		JFileChooser chooser = new JFileChooser();
+		if (!field.acceptedExtensions().isEmpty())
+			chooser.setFileFilter(new FileNameExtensionFilter(field.label() + " (" + acceptedTypes(field) + ")",
+					field.acceptedExtensions().toArray(String[]::new)));
 		if (!editor.getText().isBlank())
 			chooser.setSelectedFile(new File(editor.getText()));
 		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)

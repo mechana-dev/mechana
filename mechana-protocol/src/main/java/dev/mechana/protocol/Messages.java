@@ -69,7 +69,12 @@ public final class Messages {
 	}
 
 	public record SubmissionField(String name, String label, String type, boolean required, String defaultValue,
-			Double minimum, Double maximum, List<String> choices, String help) {
+			Double minimum, Double maximum, List<String> choices, String help, List<String> acceptedExtensions) {
+		public SubmissionField(String name, String label, String type, boolean required, String defaultValue,
+				Double minimum, Double maximum, List<String> choices, String help) {
+			this(name, label, type, required, defaultValue, minimum, maximum, choices, help, List.of());
+		}
+
 		public SubmissionField {
 			Objects.requireNonNull(name, "name");
 			Objects.requireNonNull(label, "label");
@@ -77,6 +82,13 @@ public final class Messages {
 			defaultValue = defaultValue == null ? "" : defaultValue;
 			choices = choices == null ? List.of() : List.copyOf(choices);
 			help = help == null ? "" : help;
+			acceptedExtensions = acceptedExtensions == null
+					? List.of()
+					: List.copyOf(acceptedExtensions.stream()
+							.map(extension -> extension.toLowerCase(java.util.Locale.ROOT).replaceFirst("^\\.", ""))
+							.filter(extension -> !extension.isBlank()).distinct().toList());
+			if (!acceptedExtensions.isEmpty() && !"file".equals(type))
+				throw new IllegalArgumentException("acceptedExtensions requires a file field");
 		}
 	}
 

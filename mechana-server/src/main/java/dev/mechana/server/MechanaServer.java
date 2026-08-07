@@ -780,6 +780,15 @@ public final class MechanaServer implements AutoCloseable {
 		Path source = Path.of(request.sourcePath()).toAbsolutePath().normalize();
 		if (!Files.isRegularFile(source))
 			throw new IllegalArgumentException("PDF source does not exist: " + source);
+		Path fileName = source.getFileName();
+		if (fileName == null || !fileName.toString().toLowerCase(java.util.Locale.ROOT).endsWith(".pdf"))
+			throw new IllegalArgumentException("OCR input must be a PDF file: " + source);
+		byte[] signature = new byte[5];
+		try (var input = Files.newInputStream(source)) {
+			if (input.readNBytes(signature, 0, signature.length) != signature.length || !java.util.Arrays
+					.equals(signature, "%PDF-".getBytes(java.nio.charset.StandardCharsets.US_ASCII)))
+				throw new IllegalArgumentException("OCR input is not a valid PDF file: " + source);
+		}
 		Path scratch = workRoot.resolve(UUID.randomUUID().toString());
 		Path pages = scratch.resolve("pages");
 		Files.createDirectories(pages);
