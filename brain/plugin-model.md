@@ -92,3 +92,13 @@ backend. Sleep, fractal, FFmpeg, Tesseract, and Blender are verified on Hyperion
 for the runtime versions recorded in the [Windows worker guide](../docs/windows-worker.md).
 Native runtime certification is versioned evidence, not a blanket approval of
 future versions, add-ons, codecs, languages, or GPU paths.
+
+## Client submission descriptors
+
+A plugin's user-facing contract includes a versioned submission descriptor:
+input and output artifact shapes, option fields, defaults and validation,
+presentation hints, and resource estimates. The launcher renders this contract;
+it does not select Java classes based on plugin identity. The implemented first
+slice uses a server composition catalog for the five existing plugins pending the
+general manifest contract. That catalog is an adapter, not yet plugin-owned
+manifest evidence.

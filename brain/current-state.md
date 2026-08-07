@@ -32,6 +32,14 @@ This file reports repository evidence, not desired future status.
   configured worker limit, and tracks only child workers it launches. The compact
   Swing controller persists known hosts and last settings locally and performs
   network actions away from the event-dispatch thread.
+- A separate `client-job-launcher` Swing leaf module connects to the development
+  server, lists only capabilities advertised by connected workers, renders
+  descriptor-defined forms for the five existing plugins, submits through their
+  existing endpoints, refreshes live/completed job state, shows worker assignments
+  and provider-aware server-local artifact references, aborts jobs, and purges
+  completed server-owned history. Descriptors currently come from a server-side
+  composition catalog rather than plugin manifests; file fields are server-readable
+  paths rather than uploads, and remote authenticated operation is not established.
 - The host-agent API and Swing controller can start a worker group in explicit
   `SANDBOXED` or `LEGACY` mode with a selected plugin capability set. Sandboxed
   launch is available on macOS, Linux, and Windows and uses an agent-configured root
