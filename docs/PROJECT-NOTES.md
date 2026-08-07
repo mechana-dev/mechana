@@ -1103,3 +1103,5 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added a confirmed `Purge all` action to the server dashboard and Client Job
   Launcher. The loopback-only bulk endpoint removes every durable completed-job
   record and its server-local artifacts while leaving active jobs untouched.
+- Added version-controlled macOS `.command` launchers for the server, Worker
+  Control, and Client Job Launcher plus an installer under `scripts/macos`.
