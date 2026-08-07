@@ -37,6 +37,7 @@ final class WorkerControlFrame extends JFrame {
 	private final transient AgentClient client;
 	private final transient SettingsStore store;
 	private final transient SshProvisioner provisioner;
+	private final transient SshAgentTunnel agentTunnel = new SshAgentTunnel();
 	private final JComboBox<String> host = new JComboBox<>();
 	private final JSpinner port = new JSpinner(new SpinnerNumberModel(8790, 1, 65535, 1));
 	private final JPasswordField token = new JPasswordField(16);
@@ -257,8 +258,8 @@ final class WorkerControlFrame extends JFrame {
 			state.setText(agentUnavailable ? "AGENT UNAVAILABLE" : "ERROR");
 		workers.setText(cause.getMessage());
 	}
-	private URI baseUri() {
-		return URI.create("http://" + hostValue() + ":" + port.getValue());
+	private URI baseUri() throws IOException, InterruptedException {
+		return agentTunnel.connect(provisionRequest());
 	}
 	private String hostValue() {
 		return String.valueOf(host.getEditor().getItem()).trim();
@@ -283,6 +284,7 @@ final class WorkerControlFrame extends JFrame {
 		updateControls();
 	}
 	private void updateControls() {
+		host.setEnabled(!busy);
 		refresh.setEnabled(!busy);
 		start.setEnabled(!busy && agentReady);
 		stop.setEnabled(!busy && agentReady);
@@ -331,6 +333,7 @@ final class WorkerControlFrame extends JFrame {
 	}
 
 	private void switchHost() {
+		agentTunnel.close();
 		if (activeHost != null && !activeHost.isBlank())
 			hostProfiles.put(activeHost, currentProfile());
 		String selectedHost = hostValue();
@@ -385,7 +388,7 @@ final class WorkerControlFrame extends JFrame {
 		IOException last = null;
 		for (int attempt = 0; attempt < 20; attempt++) {
 			try {
-				client.status(baseUri(), tokenValue());
+				client.status(baseUri(), tokenValue(), java.time.Duration.ofSeconds(1));
 				return;
 			} catch (IOException unavailable) {
 				last = unavailable;

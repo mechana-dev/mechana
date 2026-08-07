@@ -60,6 +60,8 @@ class SshProvisionerTest {
 		assertTrue(commands.stream().anyMatch(command -> command.getFirst().equals("scp")));
 		assertTrue(commands.stream().flatMap(List::stream).anyMatch(value -> value.contains("launchctl bootstrap")));
 		assertTrue(commands.stream().map(List::getLast)
+				.anyMatch(value -> value.contains("agent_bootstrap_attempt") && value.contains("sleep 1")));
+		assertTrue(commands.stream().map(List::getLast)
 				.anyMatch(value -> value.contains("lsof -nP -tiTCP:8790")
 						&& value.contains("*mechana-worker-host-agent.jar*")
 						&& value.contains("occupied by a non-Mechana process")));
@@ -129,6 +131,14 @@ class SshProvisionerTest {
 		assertTrue(command.contains("C:/Users/markf/.mechana/host-agent/mechana-worker.jar"));
 		assertTrue(command.contains("Stop-Process -Id $agent.ProcessId"));
 		assertTrue(command.contains("agent or worker did not stop within 10 seconds"));
+	}
+
+	@Test
+	void windowsAgentScriptRemovesLegacyInboundRule() {
+		String script = SshProvisioner.windowsScript("C:/runtime/java.exe", "C:/mechana", "C:/mechana/sandbox.exe",
+				Map.of(), 8790, "100.110.181.104");
+		assertTrue(script.contains("Remove-NetFirewallRule"));
+		assertTrue(!script.contains("New-NetFirewallRule"));
 	}
 
 	@Test

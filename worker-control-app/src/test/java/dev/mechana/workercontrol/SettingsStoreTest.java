@@ -57,6 +57,20 @@ class SettingsStoreTest {
 		assertEquals("/legacy/sandbox", migrated.sandboxRoot());
 	}
 
+	@Test
+	void migratesOldLinuxSystemDefaultsToUserWritablePaths() throws Exception {
+		Path file = temporary.resolve("settings.properties");
+		Files.writeString(file,
+				"host.0=mba\nlast-host=mba\nprofile.0.port=8790\n"
+						+ "profile.0.remote-directory=/opt/mechana/host-agent\n"
+						+ "profile.0.sandbox-root=/var/lib/mechana-sandbox\n");
+
+		SettingsStore.HostSettings migrated = new SettingsStore(file).load().profiles().get("mba");
+
+		assertEquals("~/.mechana/host-agent", migrated.remoteDirectory());
+		assertEquals("~/.mechana/sandbox", migrated.sandboxRoot());
+	}
+
 	private static SettingsStore.HostSettings profile(int port, int sshPort, String remoteDirectory,
 			String sandboxRoot) {
 		return new SettingsStore.HostSettings(port, "token-" + port, 4, AgentClient.LaunchMode.SANDBOXED,

@@ -462,7 +462,7 @@ public final class WorkerAgent {
 	}
 
 	private Thread startPresenceHeartbeat() {
-		return Thread.ofVirtual().name("mechana-worker-heartbeat-" + workerId).start(() -> {
+		return heartbeatThread("mechana-worker-heartbeat-" + workerId, () -> {
 			while (running.get() && !Thread.currentThread().isInterrupted()) {
 				try {
 					post("/api/workers/" + workerId + "/heartbeat", new LeaseRequest(workerAddress, supportedPlugins));
@@ -478,7 +478,7 @@ public final class WorkerAgent {
 
 	private Thread startLeaseHeartbeat(TaskLease lease, AtomicBoolean cancelled, AtomicBoolean finished) {
 		long intervalMillis = Math.max(250, Math.min(1_000, lease.leaseMillis() / 3));
-		return Thread.ofVirtual().name("mechana-task-heartbeat-" + lease.taskId()).start(() -> {
+		return heartbeatThread("mechana-task-heartbeat-" + lease.taskId(), () -> {
 			while (!finished.get() && !Thread.currentThread().isInterrupted()) {
 				try {
 					Response response = post(taskPath(lease, "heartbeat"), new TaskHeartbeat(lease.leaseToken()));
@@ -495,6 +495,13 @@ public final class WorkerAgent {
 				sleep(intervalMillis);
 			}
 		});
+	}
+
+	static Thread heartbeatThread(String name, Runnable task) {
+		Thread heartbeat = Thread.ofPlatform().daemon(true).name(name).unstarted(task);
+		heartbeat.setPriority(Math.min(Thread.MAX_PRIORITY, Thread.NORM_PRIORITY + 1));
+		heartbeat.start();
+		return heartbeat;
 	}
 
 	private Path downloadPlugin(TaskLease lease) throws IOException, InterruptedException {

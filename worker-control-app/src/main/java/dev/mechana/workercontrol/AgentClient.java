@@ -62,7 +62,10 @@ final class AgentClient {
 	}
 
 	Status status(URI base, String token) throws IOException, InterruptedException {
-		return send(base, token, "GET", "", "/api/v1/workers");
+		return status(base, token, Duration.ofSeconds(15));
+	}
+	Status status(URI base, String token, Duration timeout) throws IOException, InterruptedException {
+		return send(base, token, "GET", "", "/api/v1/workers", timeout);
 	}
 	Status start(URI base, String token, int count) throws IOException, InterruptedException {
 		return start(base, token, count, LaunchMode.LEGACY, "");
@@ -70,16 +73,16 @@ final class AgentClient {
 	Status start(URI base, String token, int count, LaunchMode mode, String capabilities)
 			throws IOException, InterruptedException {
 		return send(base, token, "POST", json.writeValueAsString(new StartRequest(count, mode, capabilities)),
-				"/api/v1/workers/start");
+				"/api/v1/workers/start", Duration.ofSeconds(15));
 	}
 	Status stop(URI base, String token) throws IOException, InterruptedException {
-		return send(base, token, "POST", "{}", "/api/v1/workers/stop");
+		return send(base, token, "POST", "{}", "/api/v1/workers/stop", Duration.ofSeconds(15));
 	}
 
-	private Status send(URI base, String token, String method, String body, String path)
+	private Status send(URI base, String token, String method, String body, String path, Duration timeout)
 			throws IOException, InterruptedException {
-		HttpRequest.Builder builder = HttpRequest.newBuilder(base.resolve(path)).timeout(Duration.ofSeconds(15))
-				.header("Accept", "application/json");
+		HttpRequest.Builder builder = HttpRequest.newBuilder(base.resolve(path)).timeout(timeout).header("Accept",
+				"application/json");
 		if (!token.isBlank())
 			builder.header("Authorization", "Bearer " + token);
 		if ("POST".equals(method))

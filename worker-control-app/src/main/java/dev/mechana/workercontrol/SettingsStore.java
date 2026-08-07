@@ -103,6 +103,9 @@ final class SettingsStore {
 
 	private static HostSettings readProfile(Properties p, String prefix) {
 		HostSettings defaults = defaults();
+		String remoteDirectory = migrateRemoteDirectory(
+				p.getProperty(prefix + "remote-directory", defaults.remoteDirectory()));
+		String sandboxRoot = migrateSandboxRoot(p.getProperty(prefix + "sandbox-root", defaults.sandboxRoot()));
 		return new HostSettings(Integer.parseInt(p.getProperty(prefix + "port", Integer.toString(defaults.port()))),
 				p.getProperty(prefix + "token", defaults.token()),
 				Integer.parseInt(p.getProperty(prefix + "count", Integer.toString(defaults.count()))),
@@ -113,12 +116,18 @@ final class SettingsStore {
 				p.getProperty(prefix + "identity-file", defaults.identityFile()),
 				Boolean.parseBoolean(
 						p.getProperty(prefix + "accept-new-host-key", Boolean.toString(defaults.acceptNewHostKey()))),
-				p.getProperty(prefix + "coordinator", defaults.coordinator()),
-				p.getProperty(prefix + "remote-directory", defaults.remoteDirectory()),
+				p.getProperty(prefix + "coordinator", defaults.coordinator()), remoteDirectory,
 				p.getProperty(prefix + "agent-jar", defaults.agentJar()),
-				p.getProperty(prefix + "worker-jar", defaults.workerJar()),
-				p.getProperty(prefix + "sandbox-root", defaults.sandboxRoot()),
+				p.getProperty(prefix + "worker-jar", defaults.workerJar()), sandboxRoot,
 				p.getProperty(prefix + "windows-sandbox-launcher", defaults.windowsSandboxLauncher()));
+	}
+
+	private static String migrateRemoteDirectory(String value) {
+		return "/opt/mechana/host-agent".equals(value) ? "~/.mechana/host-agent" : value;
+	}
+
+	private static String migrateSandboxRoot(String value) {
+		return "/var/lib/mechana-sandbox".equals(value) ? "~/.mechana/sandbox" : value;
 	}
 
 	private static void writeProfile(Properties p, String prefix, HostSettings profile) {

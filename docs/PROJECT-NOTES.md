@@ -965,3 +965,38 @@ Append-only record of material Mechana project changes and accepted decisions.
   modify input, read the user home, and reach the network were denied; writable
   workspace access succeeded. Distributed job `2ebe40c5-ae0b-4efc-8b43-5dc83a5bb356`
   completed all 20 tasks, including Hyperion task 4 on its first attempt.
+
+## 2026-08-06 — Keep long native renders leased under host saturation
+
+- Moved worker-presence and active-task lease heartbeats from virtual threads to
+  dedicated daemon platform threads with elevated scheduling priority. Long-running
+  native tools can saturate a host without starving the control-plane heartbeat path.
+- Changed Blender's distributed default from all available CPU threads per work unit
+  to one thread per worker. Operators can still explicitly set a larger positive
+  `threads` value, but the default no longer multiplies host-wide parallelism by the
+  number of worker processes.
+- Preserved compatibility with the server's legacy `threads=0` assignment by mapping
+  that value to the new safe one-thread distributed default.
+- Added focused tests for the dedicated heartbeat thread and Blender thread default.
+- Blender now publishes 1% immediately after native-process launch, at least 5% when
+  a frame begins, and sample-based progress when Cycles exposes sample counts. A
+  single-frame distributed work unit therefore no longer appears frozen at 0% until
+  artifact publication.
+
+## 2026-08-06 — Harden Worker Control access and cross-platform reprovisioning
+
+- Routed Worker Control status/start/stop traffic through an on-demand authenticated
+  SSH tunnel to each host agent's loopback API. Remote agents no longer need a broadly
+  reachable management port, and custom SSH ports and identities remain honored.
+- Added bounded one-second readiness probes, tunnel lifecycle cleanup on host changes,
+  and disabled host selection while an operation is active.
+- Migrated saved `/opt/mechana/host-agent` and `/var/lib/mechana-sandbox` defaults to
+  user-writable `~/.mechana` locations for non-root remote installs.
+- Added bounded macOS `launchctl bootstrap` retries to tolerate teardown races and
+  removed legacy Windows inbound host-agent firewall rules during reinstall.
+- Added focused tests for SSH forward construction, settings migration, macOS retry
+  generation, and Windows firewall-rule cleanup.
+- Verified 16 sandboxed workers across the MBA, Rocinante, Hyperion, and the Linux host
+  after correcting duplicate Linux host-agent services and routing Hyperion directly
+  to the MBA over the VM network. Host-agent restart does not yet persist and restore
+  the requested worker count; this is documented as follow-up rather than claimed.

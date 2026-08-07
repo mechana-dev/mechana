@@ -1,8 +1,25 @@
 # Current state
 
-Verified: 2026-08-04
+Verified: 2026-08-06
 
 This file reports repository evidence, not desired future status.
+
+## 2026-08-06 long-running native-task reliability
+
+- Worker-presence and task-lease heartbeats use dedicated daemon platform threads,
+  isolating lease renewal from virtual-thread scheduling during CPU-heavy native jobs.
+- Distributed Blender work units default to one render thread per worker. A positive
+  explicit `threads` parameter can override that default when an operator deliberately
+  wants more per-task parallelism.
+- Blender reports native-process startup, frame-start, and Cycles sample progress, so
+  single-frame work units no longer remain visually frozen at 0% until completion.
+- Worker Control reaches remote host-agent APIs through authenticated SSH loopback
+  forwarding instead of requiring a remotely exposed agent port. Saved system-wide
+  Linux paths are migrated to user-writable defaults, macOS bootstrap retries boundedly,
+  and Windows reinstall removes obsolete inbound agent firewall rules.
+- A host-agent process restart currently does not recreate the previously requested
+  workers automatically; the operator must press Start again. Desired-count persistence
+  remains follow-up work.
 
 ## Present in the repository
 

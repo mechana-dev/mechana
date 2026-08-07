@@ -56,6 +56,21 @@ class BlenderCommandsTest {
 	}
 
 	@Test
+	void defaultsToOneCpuThreadPerDistributedWorker() {
+		assertEquals(1, BlenderRenderPlugin.renderThreads(Map.of()));
+		assertEquals(1, BlenderRenderPlugin.renderThreads(Map.of("threads", "0")));
+		assertEquals(3, BlenderRenderPlugin.renderThreads(Map.of("threads", "3")));
+	}
+
+	@Test
+	void reportsVisibleProgressForSingleFrameAndCyclesSamples() {
+		assertEquals(5, BlenderRenderPlugin.progressForLine("Fra:7 Mem:1.0M | Syncing", 7, 7).orElseThrow());
+		assertEquals(47,
+				BlenderRenderPlugin.progressForLine("Fra:7 Mem:1.0M | Rendering 2 / 4 samples", 7, 7).orElseThrow());
+		assertTrue(BlenderRenderPlugin.progressForLine("Blender 4.5.3", 7, 7).isEmpty());
+	}
+
+	@Test
 	void confinesBlenderTemporaryFilesToAttemptScratch() {
 		ProcessBuilder builder = new ProcessBuilder("blender");
 

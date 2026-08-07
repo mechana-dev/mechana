@@ -161,8 +161,14 @@ final class SshProvisioner {
 
 	private void installWindows(Request request, String target, Path temporary, String java, String remote,
 			String launcher, Map<String, String> runtimes) throws IOException, InterruptedException {
+		String controllerAddress = ssh(request, target,
+				"powershell.exe -NoProfile -NonInteractive -Command \"($env:SSH_CONNECTION -split ' ')[0]\"").strip();
+		if (!controllerAddress.matches("[0-9A-Fa-f:.]+"))
+			throw new IOException("Could not determine the SSH controller address for the Windows firewall rule");
 		Path script = temporary.resolve("run-worker-host-agent.ps1");
-		Files.writeString(script, windowsScript(java, remote, launcher, runtimes), StandardCharsets.UTF_8);
+		Files.writeString(script,
+				windowsScript(java, remote, launcher, runtimes, request.agentPort(), controllerAddress),
+				StandardCharsets.UTF_8);
 		copy(request, target, script, remote + "/run-worker-host-agent.ps1");
 		String scriptPath = remote.replace('/', '\\') + "\\run-worker-host-agent.ps1";
 		ssh(request, target,
@@ -206,13 +212,16 @@ final class SshProvisioner {
 				+ "Write-Error 'Mechana host agent or worker did not stop within 10 seconds'; exit 1\"";
 	}
 
-	static String windowsScript(String java, String remote, String launcher, Map<String, String> runtimes) {
+	static String windowsScript(String java, String remote, String launcher, Map<String, String> runtimes,
+			int agentPort, String controllerAddress) {
 		StringBuilder arguments = new StringBuilder();
 		arguments.append(" '-Dmechana.windows.sandbox.launcher=").append(psLiteral(launcher)).append("'");
 		for (var runtime : runtimes.entrySet())
 			arguments.append(" '-Dmechana.runtime.").append(runtime.getKey()).append('=')
 					.append(psLiteral(runtime.getValue())).append("'");
-		return "$ErrorActionPreference = 'Stop'\nSet-Location '" + psLiteral(remote) + "'\n& '" + psLiteral(java) + "'"
+		return "$ErrorActionPreference = 'Stop'\n"
+				+ "Get-NetFirewallRule -DisplayName 'Mechana Worker Host Agent*' -ErrorAction SilentlyContinue | "
+				+ "Remove-NetFirewallRule\nSet-Location '" + psLiteral(remote) + "'\n& '" + psLiteral(java) + "'"
 				+ arguments + " -jar '" + psLiteral(remote + "/mechana-worker-host-agent.jar") + "' '"
 				+ psLiteral(remote + "/worker-host-agent.properties") + "' *>> '"
 				+ psLiteral(remote + "/host-agent.log") + "'\nexit $LASTEXITCODE\n";
@@ -227,8 +236,11 @@ final class SshProvisioner {
 		copy(request, target, plist, launchAgents + "/" + LABEL + ".plist");
 		ssh(request, target,
 				"launchctl bootout gui/$(id -u)/" + LABEL + " 2>/dev/null || true; "
-						+ macOsPortReleaseCommand(request.agentPort()) + "; launchctl bootstrap gui/$(id -u) "
-						+ quote(launchAgents + "/" + LABEL + ".plist"));
+						+ macOsPortReleaseCommand(request.agentPort()) + "; agent_bootstrap_attempt=0; "
+						+ "until launchctl bootstrap gui/$(id -u) " + quote(launchAgents + "/" + LABEL + ".plist")
+						+ "; do agent_bootstrap_attempt=$((agent_bootstrap_attempt + 1)); "
+						+ "if [ \"$agent_bootstrap_attempt\" -ge 5 ]; then exit 1; fi; "
+						+ "launchctl bootout gui/$(id -u)/" + LABEL + " 2>/dev/null || true; sleep 1; done");
 	}
 
 	private void installLinux(Request request, String target, Path temporary, String java, String remote, String home,

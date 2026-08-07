@@ -32,6 +32,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class WorkerTest {
+	@Test
+	void heartbeatUsesDedicatedPlatformThread() throws Exception {
+		Thread heartbeat = WorkerAgent.heartbeatThread("heartbeat-test", () -> {
+		});
+		heartbeat.join(Duration.ofSeconds(2));
+
+		assertTrue(!heartbeat.isVirtual());
+		assertTrue(heartbeat.isDaemon());
+		assertTrue(heartbeat.getPriority() > Thread.NORM_PRIORITY);
+	}
 
 	@Test
 	void recognizesSupportedTaskType() {
