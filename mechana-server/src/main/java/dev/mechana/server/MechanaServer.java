@@ -26,6 +26,8 @@ import dev.mechana.coordinator.Scheduler;
 import dev.mechana.coordinator.Scheduler.PluginLocation;
 import dev.mechana.coordinator.Scheduler.WorkSpec;
 import dev.mechana.protocol.Messages.JobStatusResponse;
+import dev.mechana.protocol.Messages.ArtifactReference;
+import dev.mechana.protocol.Messages.LauncherJob;
 import dev.mechana.protocol.Messages.JobSubmission;
 import dev.mechana.protocol.Messages.JobSubmitRequest;
 import dev.mechana.protocol.Messages.FractalJobSubmitRequest;
@@ -186,6 +188,8 @@ public final class MechanaServer implements AutoCloseable {
 				sha256(this.blenderPluginJar));
 		this.http = HttpServer.create(new InetSocketAddress(port), 0);
 		this.http.createContext("/api/jobs", new JobsHandler());
+		this.http.createContext("/api/client/capabilities", this::serveLauncherCapabilities);
+		this.http.createContext("/api/client/jobs", this::serveLauncherJobs);
 		this.http.createContext("/api/dashboard", this::serveServerDashboardStatus);
 		this.http.createContext("/api/server/restart", this::restartServer);
 		this.http.createContext("/dashboard", this::serveDashboard);
@@ -203,6 +207,51 @@ public final class MechanaServer implements AutoCloseable {
 		this.http.createContext("/api/ocr-inputs", this::serveOcrInput);
 		this.http.createContext("/api/blender-inputs", this::serveBlenderInput);
 		this.http.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
+	}
+
+	private void serveLauncherCapabilities(HttpExchange exchange) throws IOException {
+		if (!"GET".equals(exchange.getRequestMethod())) {
+			sendEmpty(exchange, 405);
+			return;
+		}
+		Map<String, Integer> counts = new HashMap<>();
+		workers.values().stream().filter(WorkerPresence::connected).flatMap(worker -> worker.capabilities().stream())
+				.forEach(capability -> counts.merge(capability, 1, Integer::sum));
+		exchange.getResponseHeaders().set("Cache-Control", "no-store");
+		sendJson(exchange, 200, JobLauncherCatalog.available(counts));
+	}
+
+	private void serveLauncherJobs(HttpExchange exchange) throws IOException {
+		if (!"GET".equals(exchange.getRequestMethod())) {
+			sendEmpty(exchange, 405);
+			return;
+		}
+		List<LauncherJob> active = scheduler.dashboards().stream().filter(job -> !isTerminal(job.stage()))
+				.map(job -> launcherJob(job, false)).toList();
+		List<LauncherJob> completed = completedJobs.snapshots().stream().map(job -> launcherJob(job, true)).toList();
+		List<LauncherJob> result = new java.util.ArrayList<>(active);
+		result.addAll(completed);
+		exchange.getResponseHeaders().set("Cache-Control", "no-store");
+		sendJson(exchange, 200, result);
+	}
+
+	private LauncherJob launcherJob(InMemoryJobMonitor.Snapshot job, boolean completed) {
+		List<String> assignments = job.workUnits().stream().filter(unit -> unit.workerAddress() != null)
+				.map(unit -> unit.workerAddress()).distinct().sorted().toList();
+		List<ArtifactReference> artifacts = List.of();
+		if (completed) {
+			try {
+				artifacts = completedJobs.artifacts(job.jobId()).stream()
+						.map(artifact -> new ArtifactReference("server-local",
+								"jobs/" + job.jobId() + "/artifacts/" + artifact.name(), artifact.size(),
+								"/api/jobs/" + job.jobId() + "/artifacts/" + artifact.name(), false))
+						.toList();
+			} catch (IOException failure) {
+				throw new java.io.UncheckedIOException(failure);
+			}
+		}
+		return new LauncherJob(job.jobId(), job.plugin(), job.stage(), job.progress(), job.completedAt(),
+				job.error() == null ? job.elapsed() : job.error(), assignments, artifacts, completed);
 	}
 
 	public void start() {

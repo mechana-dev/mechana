@@ -51,6 +51,64 @@ public final class Messages {
 		}
 	}
 
+	/** Server-provided schema used by generic job launchers. */
+	public record JobLauncherDescriptor(String capabilityId, String displayName, String submitPath,
+			List<SubmissionField> fields, OutputDescriptor output, String resourceEstimate, int availableWorkers,
+			String observedAt) {
+		public JobLauncherDescriptor {
+			Objects.requireNonNull(capabilityId, "capabilityId");
+			Objects.requireNonNull(displayName, "displayName");
+			Objects.requireNonNull(submitPath, "submitPath");
+			fields = List.copyOf(fields);
+			Objects.requireNonNull(output, "output");
+			resourceEstimate = resourceEstimate == null ? "Not reported" : resourceEstimate;
+			Objects.requireNonNull(observedAt, "observedAt");
+			if (availableWorkers < 1)
+				throw new IllegalArgumentException("availableWorkers must be positive");
+		}
+	}
+
+	public record SubmissionField(String name, String label, String type, boolean required, String defaultValue,
+			Double minimum, Double maximum, List<String> choices, String help) {
+		public SubmissionField {
+			Objects.requireNonNull(name, "name");
+			Objects.requireNonNull(label, "label");
+			Objects.requireNonNull(type, "type");
+			defaultValue = defaultValue == null ? "" : defaultValue;
+			choices = choices == null ? List.of() : List.copyOf(choices);
+			help = help == null ? "" : help;
+		}
+	}
+
+	public record OutputDescriptor(String provider, String kind, String label, boolean clientSelectable) {
+		public OutputDescriptor {
+			Objects.requireNonNull(provider, "provider");
+			Objects.requireNonNull(kind, "kind");
+			Objects.requireNonNull(label, "label");
+		}
+	}
+
+	public record ArtifactReference(String provider, String key, long size, String url, boolean locallyOwned) {
+		public ArtifactReference {
+			Objects.requireNonNull(provider, "provider");
+			Objects.requireNonNull(key, "key");
+			url = url == null ? "" : url;
+		}
+	}
+
+	public record LauncherJob(String jobId, String plugin, String status, int progress, String completedAt,
+			String summary, List<String> workerAssignments, List<ArtifactReference> artifacts, boolean purgeAllowed) {
+		public LauncherJob {
+			Objects.requireNonNull(jobId, "jobId");
+			Objects.requireNonNull(plugin, "plugin");
+			Objects.requireNonNull(status, "status");
+			completedAt = completedAt == null ? "" : completedAt;
+			summary = summary == null ? "" : summary;
+			workerAssignments = workerAssignments == null ? List.of() : List.copyOf(workerAssignments);
+			artifacts = artifacts == null ? List.of() : List.copyOf(artifacts);
+		}
+	}
+
 	public record VideoJobSubmitRequest(String sourcePath, double durationSeconds, int segmentCount,
 			double targetSizeRatio) {
 		public VideoJobSubmitRequest {
