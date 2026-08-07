@@ -30,14 +30,18 @@ import dev.mechana.protocol.Messages.TaskHeartbeat;
 import dev.mechana.protocol.Messages.TaskLease;
 import dev.mechana.protocol.Messages.WorkerRegistration;
 import dev.mechana.runtime.plugin.AttemptWorkspace;
+import dev.mechana.runtime.plugin.LinuxSandbox;
 import dev.mechana.runtime.plugin.MacOsSandbox;
 import dev.mechana.runtime.plugin.OwnedAttemptWorkspace;
+import dev.mechana.runtime.plugin.PluginSandbox;
 import dev.mechana.runtime.plugin.PluginRuntimeManager;
 import dev.mechana.runtime.plugin.ProcessSandbox;
 import dev.mechana.runtime.plugin.SandboxPolicy;
 import dev.mechana.runtime.plugin.SandboxRequest;
 import dev.mechana.runtime.plugin.SandboxResult;
+import dev.mechana.runtime.plugin.SandboxControl;
 import dev.mechana.runtime.plugin.TrustMode;
+import dev.mechana.runtime.plugin.WindowsSandbox;
 import java.io.IOException;
 import java.io.File;
 import java.net.URI;
@@ -54,6 +58,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.HexFormat;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Enumeration;
 import java.util.Objects;
 import java.util.Set;
@@ -64,6 +70,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Pull-based worker that downloads each assigned plugin into ephemeral storage.
  */
 public final class WorkerAgent {
+	private static final int DOWNLOAD_ATTEMPTS = 4;
 
 	private final ObjectMapper json = new ObjectMapper();
 	private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
@@ -83,7 +90,7 @@ public final class WorkerAgent {
 		this.server = URI.create(stripTrailingSlash(Objects.requireNonNull(server, "server").toString()));
 		this.workerId = Objects.requireNonNull(workerId, "workerId");
 		this.workerAddress = Objects.requireNonNull(workerAddress, "workerAddress");
-		this.supportedPlugins = Set.copyOf(supportedPlugins);
+		this.supportedPlugins = advertisedCapabilities(supportedPlugins);
 		reclaimAbandonedAttempts();
 	}
 
@@ -148,7 +155,7 @@ public final class WorkerAgent {
 		Path pluginFile = null;
 		try {
 			pluginFile = downloadPlugin(lease);
-			if ("fractal-render".equals(lease.pluginId())) {
+			if (sandboxedExecution()) {
 				executeSandboxed(lease, pluginFile, cancelled);
 			} else
 				try (URLClassLoader loader = new URLClassLoader(new java.net.URL[]{pluginFile.toUri().toURL()},
@@ -194,27 +201,30 @@ public final class WorkerAgent {
 			AtomicBoolean completed = new AtomicBoolean();
 			Path plugin = workspace.input().resolve("plugin.jar");
 			Files.copy(downloadedPlugin, plugin);
+			Map<String, String> parameters = prepareSandboxParameters(lease, workspace);
 			HostRequest hostRequest = new HostRequest(plugin.toString(), lease.pluginEntrypoint(), lease.pluginId(),
-					lease.pluginVersion(), lease.durationMillis(), lease.parameters(), workspace.output().toString());
+					lease.pluginVersion(), lease.durationMillis(), parameters, workspace.output().toString());
 			Path requestFrame = workspace.input().resolve("request.ndjson");
 			Files.writeString(requestFrame, json.writeValueAsString(hostRequest) + System.lineSeparator());
 			String hostClasspath = stageHostClasspath(workspace.input().resolve("runtime"));
-			Path javaBinary = Path.of(System.getProperty("java.home"), "bin", "java");
+			String javaName = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("windows")
+					? "java.exe"
+					: "java";
+			Path javaBinary = Path.of(System.getProperty("java.home"), "bin", javaName);
 			SandboxPolicy policy = new SandboxPolicy(TrustMode.SANDBOXED, false,
 					Runtime.getRuntime().availableProcessors(), Runtime.getRuntime().maxMemory(),
-					10L * 1024 * 1024 * 1024, Duration.ofHours(6), 1);
+					10L * 1024 * 1024 * 1024, Duration.ofHours(6), 16);
 			SandboxRequest request = new SandboxRequest(
 					java.util.List.of(javaBinary.toString(), "-Djava.awt.headless=true",
 							"-Djava.io.tmpdir=" + workspace.work(), "-cp", hostClasspath,
 							"dev.mechana.pluginhost.PluginHostMain"),
-					java.util.Map.of("PATH", "/usr/bin:/bin"), workspace, policy, requestFrame,
+					sandboxEnvironment(workspace), workspace, policy, requestFrame,
 					line -> handleHostEvent(line, context, completed, protocolFailure));
-			MacOsSandbox macOs = new MacOsSandbox();
-			if (!macOs.supportsCurrentHost())
-				throw new IOException("SANDBOXED fractal execution currently requires the macOS backend");
+			PluginSandbox platformSandbox = platformSandbox();
 			System.out.printf("Worker %s running task %s in %s%n", workerId, lease.taskId(),
-					macOs.capabilities(policy).backend());
-			SandboxResult result = new PluginRuntimeManager(new ProcessSandbox(), macOs).execute(request, cancelled);
+					platformSandbox.capabilities(policy).backend());
+			SandboxResult result = new PluginRuntimeManager(new ProcessSandbox(), platformSandbox).execute(request,
+					cancelled);
 			if (protocolFailure.get() != null)
 				throw new IOException(
 						"Plugin-host protocol failed: " + safeMessage(protocolFailure.get()) + diagnostic(result),
@@ -230,6 +240,143 @@ public final class WorkerAgent {
 			requireStatus(completion, 204);
 			System.out.printf("Worker %s finished sandboxed task %s successfully%n", workerId, lease.taskId());
 		}
+	}
+
+	private static Map<String, String> sandboxEnvironment(AttemptWorkspace workspace) {
+		Map<String, String> environment = new HashMap<>();
+		environment.put("PATH", Path.of(System.getProperty("java.home"), "bin").toString());
+		environment.put("HOME", workspace.work().toString());
+		environment.put("TMPDIR", workspace.work().toString());
+		environment.put("TMP", workspace.work().toString());
+		environment.put("TEMP", workspace.work().toString());
+		environment.put("USERPROFILE", workspace.work().toString());
+		for (String name : java.util.List.of("ALLUSERSPROFILE", "APPDATA", "CommonProgramFiles",
+				"CommonProgramFiles(x86)", "CommonProgramW6432", "COMPUTERNAME", "ComSpec", "DriverData",
+				"LOCALAPPDATA", "NUMBER_OF_PROCESSORS", "OS", "PATHEXT", "PROCESSOR_ARCHITECTURE",
+				"PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION", "ProgramData", "ProgramFiles",
+				"ProgramFiles(x86)", "ProgramW6432", "PUBLIC", "SystemDrive", "SystemRoot", "USERDOMAIN", "USERNAME",
+				"WINDIR")) {
+			String value = System.getenv(name);
+			if (value != null && !value.isBlank())
+				environment.put(name, value);
+		}
+		return Map.copyOf(environment);
+	}
+
+	private static PluginSandbox platformSandbox() throws IOException {
+		MacOsSandbox macOs = new MacOsSandbox();
+		if (macOs.supportsCurrentHost())
+			return macOs;
+		LinuxSandbox linux = new LinuxSandbox();
+		if (linux.supportsCurrentHost())
+			return linux;
+		WindowsSandbox windows = new WindowsSandbox();
+		if (windows.supportsCurrentHost())
+			return windows;
+		throw new IOException("No verified OS sandbox backend is available on this host");
+	}
+
+	private static Set<String> advertisedCapabilities(Set<String> plugins) {
+		if (!sandboxedExecution())
+			return Set.copyOf(plugins);
+		try {
+			SandboxPolicy policy = new SandboxPolicy(TrustMode.SANDBOXED, false, 1, 1, 1, Duration.ofSeconds(1), 1);
+			var capabilities = platformSandbox().capabilities(policy);
+			java.util.HashSet<String> advertised = new java.util.HashSet<>(plugins);
+			advertised.add("sandbox.backend." + capabilities.backend());
+			capabilities.enforced().entrySet().stream().filter(Map.Entry::getValue).map(Map.Entry::getKey)
+					.map(SandboxControl::name).map(String::toLowerCase).map(name -> "sandbox.control." + name)
+					.forEach(advertised::add);
+			return Set.copyOf(advertised);
+		} catch (IOException unavailable) {
+			throw new IllegalStateException("Sandboxed worker cannot start without a verified OS backend", unavailable);
+		}
+	}
+
+	private Map<String, String> prepareSandboxParameters(TaskLease lease, AttemptWorkspace workspace)
+			throws IOException, InterruptedException {
+		Map<String, String> parameters = new HashMap<>(lease.parameters());
+		switch (lease.pluginId()) {
+			case "video-ffmpeg" -> {
+				parameters.put("inputPath",
+						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "input.mp4"));
+				parameters.put("ffmpegCommand", requiredRuntime("ffmpeg"));
+				parameters.put("ffprobeCommand", requiredRuntime("ffprobe"));
+			}
+			case "ocr-tesseract" -> {
+				int pageCount = Integer.parseInt(parameters.get("pageCount"));
+				for (int index = 0; index < pageCount; index++)
+					parameters.put("pagePath." + index, stageRemoteInput(parameters.remove("pageUrl." + index),
+							workspace.input(), "page-%06d.png".formatted(index)));
+				parameters.put("tesseractCommand", requiredRuntime("tesseract"));
+			}
+			case "blender-render" -> {
+				parameters.put("inputPath",
+						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "scene.blend"));
+				parameters.put("blenderCommand", requiredRuntime("blender"));
+			}
+			case "sleep", "fractal-render" -> {
+				// Pure-Java plugins need no staged input or native runtime grant.
+			}
+			default -> throw new IOException("Plugin is not approved for sandboxed execution: " + lease.pluginId());
+		}
+		return Map.copyOf(parameters);
+	}
+
+	private String stageRemoteInput(String url, Path input, String fileName) throws IOException, InterruptedException {
+		if (url == null || url.isBlank())
+			throw new IOException("Sandbox input URL is missing");
+		Path destination = input.resolve(fileName);
+		Files.write(destination, downloadBytes(http, resolveCoordinatorUri(server, url), Duration.ofMinutes(20),
+				"Sandbox input download"));
+		return destination.toAbsolutePath().normalize().toString();
+	}
+
+	static byte[] downloadBytes(HttpClient client, URI uri, Duration timeout, String description)
+			throws IOException, InterruptedException {
+		IOException lastFailure = null;
+		for (int attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
+			try {
+				HttpRequest request = HttpRequest.newBuilder(uri).timeout(timeout).GET().build();
+				HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+				if (response.statusCode() == 200)
+					return response.body();
+				if (response.statusCode() < 500 && response.statusCode() != 408 && response.statusCode() != 429)
+					throw new IOException(description + " returned HTTP " + response.statusCode());
+				lastFailure = new IOException(description + " returned HTTP " + response.statusCode());
+			} catch (IOException failure) {
+				lastFailure = failure;
+			}
+			if (attempt < DOWNLOAD_ATTEMPTS)
+				Thread.sleep(250L << (attempt - 1));
+		}
+		throw new IOException(description + " failed after " + DOWNLOAD_ATTEMPTS + " attempts against "
+				+ uri.getScheme() + "://" + uri.getAuthority() + ": " + safeMessage(lastFailure), lastFailure);
+	}
+
+	static URI resolveCoordinatorUri(URI coordinator, String supplied) {
+		URI candidate = URI.create(supplied);
+		String host = candidate.getHost();
+		if (host == null || !(host.equalsIgnoreCase("localhost") || host.equals("127.0.0.1") || host.equals("::1")))
+			return candidate;
+		String path = candidate.getRawPath();
+		if (candidate.getRawQuery() != null)
+			path += "?" + candidate.getRawQuery();
+		return coordinator.resolve(path);
+	}
+
+	private static String requiredRuntime(String name) throws IOException {
+		String configured = System.getProperty("mechana.runtime." + name, "").strip();
+		if (configured.isEmpty())
+			throw new IOException("Sandboxed " + name + " requires -Dmechana.runtime." + name + "=/absolute/path");
+		Path executable = Path.of(configured).toAbsolutePath().normalize();
+		if (!Files.isExecutable(executable))
+			throw new IOException("Configured sandbox runtime is not executable: " + executable);
+		return executable.toString();
+	}
+
+	private static boolean sandboxedExecution() {
+		return "sandboxed".equalsIgnoreCase(System.getProperty("mechana.execution.mode", "legacy"));
 	}
 
 	private static String stageHostClasspath(Path runtimeDirectory) throws IOException {
@@ -308,11 +455,14 @@ public final class WorkerAgent {
 	}
 
 	private static Path sandboxRoot() {
-		return Path.of(System.getProperty("mechana.sandbox.root", "/private/tmp/mechana-sandbox"));
+		return Path.of(System.getProperty("mechana.sandbox.root",
+				System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac")
+						? "/private/tmp/mechana-sandbox"
+						: Path.of(System.getProperty("java.io.tmpdir"), "mechana-sandbox").toString()));
 	}
 
 	private Thread startPresenceHeartbeat() {
-		return Thread.ofVirtual().name("mechana-worker-heartbeat-" + workerId).start(() -> {
+		return heartbeatThread("mechana-worker-heartbeat-" + workerId, () -> {
 			while (running.get() && !Thread.currentThread().isInterrupted()) {
 				try {
 					post("/api/workers/" + workerId + "/heartbeat", new LeaseRequest(workerAddress, supportedPlugins));
@@ -328,7 +478,7 @@ public final class WorkerAgent {
 
 	private Thread startLeaseHeartbeat(TaskLease lease, AtomicBoolean cancelled, AtomicBoolean finished) {
 		long intervalMillis = Math.max(250, Math.min(1_000, lease.leaseMillis() / 3));
-		return Thread.ofVirtual().name("mechana-task-heartbeat-" + lease.taskId()).start(() -> {
+		return heartbeatThread("mechana-task-heartbeat-" + lease.taskId(), () -> {
 			while (!finished.get() && !Thread.currentThread().isInterrupted()) {
 				try {
 					Response response = post(taskPath(lease, "heartbeat"), new TaskHeartbeat(lease.leaseToken()));
@@ -347,19 +497,22 @@ public final class WorkerAgent {
 		});
 	}
 
+	static Thread heartbeatThread(String name, Runnable task) {
+		Thread heartbeat = Thread.ofPlatform().daemon(true).name(name).unstarted(task);
+		heartbeat.setPriority(Math.min(Thread.MAX_PRIORITY, Thread.NORM_PRIORITY + 1));
+		heartbeat.start();
+		return heartbeat;
+	}
+
 	private Path downloadPlugin(TaskLease lease) throws IOException, InterruptedException {
-		HttpRequest request = HttpRequest.newBuilder(URI.create(lease.pluginUrl())).timeout(Duration.ofSeconds(30))
-				.GET().build();
-		HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
-		if (response.statusCode() != 200) {
-			throw new IOException("Plugin download returned HTTP " + response.statusCode());
-		}
-		String actualChecksum = sha256(response.body());
+		byte[] plugin = downloadBytes(http, resolveCoordinatorUri(server, lease.pluginUrl()), Duration.ofSeconds(30),
+				"Plugin download");
+		String actualChecksum = sha256(plugin);
 		if (!actualChecksum.equalsIgnoreCase(lease.pluginSha256())) {
 			throw new IOException("Plugin checksum did not match assignment");
 		}
 		Path temporaryJar = Files.createTempFile("mechana-plugin-", ".jar");
-		Files.write(temporaryJar, response.body());
+		Files.write(temporaryJar, plugin);
 		return temporaryJar;
 	}
 

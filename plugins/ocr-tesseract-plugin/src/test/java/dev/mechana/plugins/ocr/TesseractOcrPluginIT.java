@@ -41,6 +41,18 @@ class TesseractOcrPluginIT {
 	Path temporary;
 
 	@Test
+	void stagesWorkerProvidedPageWithoutNetworkAccess() throws Exception {
+		Path source = temporary.resolve("staged-page.png");
+		Path destination = temporary.resolve("work/page.png");
+		Files.writeString(source, "page-image");
+		Files.createDirectories(destination.getParent());
+
+		TesseractOcrPlugin.stageInput(Map.of("pagePath.0", source.toString()), 0, destination);
+
+		assertTrue(Files.mismatch(source, destination) == -1);
+	}
+
+	@Test
 	void recognizesAWorkerDownloadedPage() throws Exception {
 		Assumptions.assumeTrue(new TesseractRuntimeProbe().inspect("tesseract", "eng").usable(),
 				"Tesseract with English traineddata is required");

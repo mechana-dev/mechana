@@ -806,6 +806,109 @@ Append-only record of material Mechana project changes and accepted decisions.
   MBA Codex containment rejects nested profiles, so adversarial tests skip here.
 - Split concrete plugin migration into sequential PR B, starting with sleep.
 
+## 2026-08-05 12:00:00 EDT — Migrate concrete plugins to the macOS sandbox runtime
+
+- Routed sleep, FFmpeg video, fractal rendering, Tesseract OCR, and Blender
+  rendering through the separate plugin host when a worker is launched in
+  explicit sandboxed mode; legacy mode remains available and is clearly labeled.
+- Moved video chunks, OCR pages, and Blender scenes into worker-owned input
+  staging before sandbox launch so plugin execution retains network denial.
+- Required absolute operator-declared FFmpeg, FFprobe, Tesseract, and Blender
+  executable paths. Sandboxed workers receive only the declared runtime grants;
+  missing or non-executable paths fail closed before plugin launch.
+- Preserved the existing task parameters and legacy download behavior for
+  non-sandboxed workers while adding workspace-local input parameters for the
+  sandbox host.
+- Kept the macOS guarantee matrix honest: home reads, plugin network access, and
+  writes outside work/output/logs are denied after a successful live probe;
+  workspace-only system reads and hard CPU, memory, scratch, process-count, and
+  descendant-tree guarantees remain unavailable.
+
+## 2026-08-05 05:31:22 EDT — Verify remaining sandbox plugin adapters
+
+- Added focused tests proving the FFmpeg, Tesseract, and Blender plugin adapters
+  consume worker-staged local inputs without performing plugin-side network
+  downloads. Sleep remains pure Java and requires no input adapter.
+- Corrected architecture, plugin-model, and current-state text that still described
+  the four remaining plugin migrations as pending after their implementation.
+- Verified the full 18-module reactor with Java 25.0.4 and Maven 3.9.16 on macOS
+  26.5.2 arm64. All four live macOS sandbox integration checks passed, along with
+  unit tests, Spotless, and SpotBugs.
+
+## 2026-08-05 05:45:00 EDT — Provision native runtimes for all plugins
+
+- Extended SSH reinstall to discover FFmpeg, FFprobe, Tesseract, and Blender on
+  each macOS or Linux target using the command path and standard installation
+  locations.
+- Deployment now fails early with the exact missing prerequisite when the selected
+  sandbox capability set requires an unavailable tool.
+- Generated launchd and systemd definitions persist verified absolute runtime
+  paths as JVM properties, ensuring sandboxed workers inherit deliberate native
+  runtime grants without depending on an interactive shell environment.
+
+## 2026-08-05 06:05:00 EDT — Remove plugin JARs from server arguments
+
+- Simplified server startup to `[port] [public-server-url] [data-directory]` and
+  automatically registered all current plugin artifacts from standard build
+  outputs.
+- Simplified dashboard-driven server restart to preserve only those generic server
+  settings; plugin-specific paths no longer leak into the process command line.
+- Retained optional `mechana.plugin.<id>.jar` JVM properties for packaged layouts
+  whose plugin artifacts do not use repository build-output locations.
+
+## 2026-08-05 06:45:00 EDT — Bound native-plugin retries and disable sandboxed Blender
+
+- Diagnosed a distributed Blender job whose Blender 4.5.3 processes repeatedly
+  exited with status 139 under the experimental macOS `sandbox-exec` backend.
+- Added a platform-owned three-attempt ceiling for worker failures and expired
+  leases. Exhaustion now fails the job and fences all unfinished work units instead
+  of indefinitely respawning a crashing native runtime.
+- Removed `blender-render` from the macOS sandbox worker allowlist and added an
+  explicit operator error directing Blender workloads to legacy workers. Blender
+  still executes as a separate cancellable native child there, but no OS sandbox
+  guarantee is claimed.
+- Added coordinator and host-agent regression coverage for retry exhaustion and
+  sandboxed-Blender rejection.
+
+## 2026-08-05 13:20:00 EDT — Restore Blender in the verified MBA sandbox profile
+
+- Traced Blender's sandbox-only status-139 crash to Metal device discovery in
+  `MTLDevice`; Blender performs this startup path even for explicit CPU Cycles.
+- Added the narrow sandbox `iokit-open` operation required for device enumeration
+  and redirected Blender `TMPDIR`, `TMP`, and `TEMP` into attempt scratch.
+- Proved actual sandbox execution with a one-frame CPU Cycles render at 160×90,
+  then restored `blender-render` to the host-agent sandbox allowlist.
+- Retained the three-attempt scheduler ceiling so a future native regression fails
+  the job without creating an unbounded crash loop.
+
+## 2026-08-06 02:15:00 EDT — Support sandboxed Blender on Intel macOS 12
+
+- Verified the corrected sandbox profile across eight workers: twelve frame batches
+  completed on the Apple-silicon MBA while Blender 4.5.12 exited with status 139 on
+  the Intel Mac Mini running macOS 12.7.6.
+- Reproduced the Mini failure with a standalone restricted `sandbox-exec` probe and
+  proved that adding only local IPC access allows headless Blender startup.
+- Added `(allow ipc*)` to the macOS profile. This permits local synchronization and
+  shared-memory IPC but does not grant network or filesystem access.
+
+## 2026-08-06 02:35:00 EDT — Harden remote plugin and staged-input downloads
+
+- Reproduced an eight-page OCR smoke test where all MBA pages completed but all
+  Rocinante attempts failed with `ConnectException` before Tesseract execution.
+- Added four bounded download attempts with exponential backoff for plugin JARs and
+  worker-staged native inputs. Retryable HTTP 408, 429, and 5xx responses use the same
+  path; permanent 4xx responses still fail immediately.
+- Download failures now identify whether plugin or sandbox-input transfer failed,
+  include the attempt ceiling and coordinator authority, and retain the original
+  exception as the cause without logging opaque input tokens.
+- Added a worker regression test proving recovery after two transient server failures.
+- Improved diagnostics then exposed the persistent cause: a coordinator restarted
+  without its public-URL argument advertised plugin downloads at `localhost`, even
+  though remote workers registered through the configured coordinator hostname.
+- Workers now rebase only coordinator-issued loopback download URLs onto their
+  configured coordinator origin. Non-loopback and external URLs remain unchanged;
+  the behavior covers plugin JARs and staged OCR, video, and Blender inputs.
+
 ## 2026-08-06 07:12:24 EDT — Update the public homepage
 
 - Reworked the GitHub Pages homepage around the current description of Mechana as
@@ -818,3 +921,82 @@ Append-only record of material Mechana project changes and accepted decisions.
   the dark brand treatment, and updated responsive navigation and project links.
 - Kept planned capabilities explicitly labeled and avoided changing runtime code
   or architectural contracts.
+
+## 2026-08-06 07:50:00 EDT — Add the portable Linux sandbox backend
+
+- Extended the existing plugin runtime manager with a fail-closed Linux backend;
+  all five current plugins continue to use the same separate plugin-host protocol.
+- Added live Bubblewrap discovery and namespace probing plus honest worker
+  advertisements for the active backend and each enforced control.
+- Added Linux tests for workspace access, forbidden host writes, hidden home
+  access, network-namespace policy, timeout/cancellation infrastructure, and
+  capability reporting.
+- Kept the implementation distro-neutral and service-manager-neutral. Bubblewrap
+  is the runtime dependency; package installation remains an operator concern.
+- Captured Ubuntu 24.04, kernel 6.8, x86-64, Java 25, cgroup v2, enabled kernel
+  user namespaces, and Ubuntu AppArmor's additional unprivileged-user-namespace
+  restriction on `srv959600`.
+- Installed Bubblewrap 0.9.0 as the only new worker runtime dependency. Built all
+  Java artifacts on the development machine and deployed them to the target; the
+  Linux worker does not require Maven or another build tool.
+- The prebuilt host probe passed workspace access, forbidden filesystem access,
+  private temporary storage, child-process crash isolation, timeout, cancellation,
+  cleanup, and post-failure recovery in the same root-owned service context as the
+  existing agent. Two sandboxed Linux workers registered their actual guarantee
+  set. Job `61c44154-443f-4009-9898-46b261cdcf56` completed four Linux sleep work
+  units on attempt one; fractal job `ec7770e0-9743-4fdf-b8fa-8a4012694ae3`
+  completed one first-attempt image on each Linux worker and assembled the full
+  ten-image artifact collection.
+- CPU, RAM, scratch-byte, process-count, cgroup, seccomp, dedicated-identity, and
+  bounded-log enforcement remain explicitly unclaimed.
+# 2026-08-06 — Implement and validate the Windows sandbox backend
+
+- Added the Windows `PluginSandbox` backend behind the existing runtime manager.
+  A self-contained native launcher creates an AppContainer process and assigns it
+  to a Job Object; plugins remain outside the worker JVM.
+- Enforced read-only `input`, writable `work`/`output`/`logs`, home denial,
+  default network denial, CPU rate, process memory, active-process count,
+  timeout/cancellation, and kill-on-close descendant cleanup. Scratch-byte and
+  log-byte quotas remain planned.
+- Extended Worker Control SSH deployment to Windows OpenSSH, per-host Windows
+  launcher settings, runtime discovery, a per-user Scheduled Task, and a private
+  Java runtime beneath the configured Mechana directory.
+- Validated Hyperion (Windows ARM64 build 26200, Java 25.0.4): direct attempts to
+  modify input, read the user home, and reach the network were denied; writable
+  workspace access succeeded. Distributed job `2ebe40c5-ae0b-4efc-8b43-5dc83a5bb356`
+  completed all 20 tasks, including Hyperion task 4 on its first attempt.
+
+## 2026-08-06 — Keep long native renders leased under host saturation
+
+- Moved worker-presence and active-task lease heartbeats from virtual threads to
+  dedicated daemon platform threads with elevated scheduling priority. Long-running
+  native tools can saturate a host without starving the control-plane heartbeat path.
+- Changed Blender's distributed default from all available CPU threads per work unit
+  to one thread per worker. Operators can still explicitly set a larger positive
+  `threads` value, but the default no longer multiplies host-wide parallelism by the
+  number of worker processes.
+- Preserved compatibility with the server's legacy `threads=0` assignment by mapping
+  that value to the new safe one-thread distributed default.
+- Added focused tests for the dedicated heartbeat thread and Blender thread default.
+- Blender now publishes 1% immediately after native-process launch, at least 5% when
+  a frame begins, and sample-based progress when Cycles exposes sample counts. A
+  single-frame distributed work unit therefore no longer appears frozen at 0% until
+  artifact publication.
+
+## 2026-08-06 — Harden Worker Control access and cross-platform reprovisioning
+
+- Routed Worker Control status/start/stop traffic through an on-demand authenticated
+  SSH tunnel to each host agent's loopback API. Remote agents no longer need a broadly
+  reachable management port, and custom SSH ports and identities remain honored.
+- Added bounded one-second readiness probes, tunnel lifecycle cleanup on host changes,
+  and disabled host selection while an operation is active.
+- Migrated saved `/opt/mechana/host-agent` and `/var/lib/mechana-sandbox` defaults to
+  user-writable `~/.mechana` locations for non-root remote installs.
+- Added bounded macOS `launchctl bootstrap` retries to tolerate teardown races and
+  removed legacy Windows inbound host-agent firewall rules during reinstall.
+- Added focused tests for SSH forward construction, settings migration, macOS retry
+  generation, and Windows firewall-rule cleanup.
+- Verified 16 sandboxed workers across the MBA, Rocinante, Hyperion, and the Linux host
+  after correcting duplicate Linux host-agent services and routing Hyperion directly
+  to the MBA over the VM network. Host-agent restart does not yet persist and restore
+  the requested worker count; this is documented as follow-up rather than claimed.

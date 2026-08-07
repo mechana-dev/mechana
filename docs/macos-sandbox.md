@@ -17,8 +17,8 @@ App Sandbox. App Sandbox is designed around signed, entitled application bundles
 it is not a direct dynamic policy mechanism for arbitrary downloaded plugin JARs.
 This backend may disappear in a future macOS release.
 
-Use an operator-controlled temporary root such as
-`/private/tmp/mechana-sandbox`. Attempts have this fixed layout:
+Use an operator-controlled root such as `~/.mechana/sandbox` beneath the worker
+account's home directory. Attempts have this fixed layout:
 
 ```text
 <root>/<job>/<attempt>/
@@ -30,9 +30,9 @@ Use an operator-controlled temporary root such as
 
 The generated profile permits broad system/runtime reads because a narrow dynamic
 allowlist aborts even basic signed tools on Tahoe. It explicitly denies reads
-beneath the user's home directory, permits writes only in `work/`, `output/`, and
-`logs/`, and grants network only when policy allows it. The sandbox root must be
-outside the user's home. `HOME` and `TMPDIR` point to `work/`. This is not full
+beneath the user's home directory except for the explicit attempt workspace,
+permits writes only in `work/`, `output/`, and `logs/`, and grants network only
+when policy allows it. `HOME` and `TMPDIR` point to `work/`. This is not full
 workspace-only read isolation, so `SANDBOXED` scheduling remains fail-closed.
 
 Run outside an already sandboxed parent process:

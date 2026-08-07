@@ -35,6 +35,7 @@ import java.util.UUID;
  * recovery.
  */
 public final class Scheduler {
+	private static final int MAX_TASK_ATTEMPTS = 3;
 
 	public static final String SLEEP_PLUGIN_ID = "sleep";
 	public static final String SLEEP_PLUGIN_VERSION = "1.0.0";
@@ -206,7 +207,7 @@ public final class Scheduler {
 		if (!ownsLease(task, workerId, leaseToken)) {
 			return false;
 		}
-		requeue(task, "worker reported failure");
+		retryOrFail(task, "worker reported failure");
 		touch(workerId);
 		return true;
 	}
@@ -355,7 +356,7 @@ public final class Scheduler {
 		for (Job job : jobs.values()) {
 			for (Task task : job.tasks) {
 				if (task.state == TaskState.RUNNING && task.leaseExpiresAt <= currentTime) {
-					requeue(task, "lease expired");
+					retryOrFail(task, "lease expired");
 					expired++;
 				}
 			}
@@ -417,6 +418,28 @@ public final class Scheduler {
 			job.monitor.onStage("QUEUED");
 	}
 
+	private void retryOrFail(Task task, String reason) {
+		if (task.attempt < MAX_TASK_ATTEMPTS) {
+			requeue(task, reason);
+			return;
+		}
+		Job job = jobs.get(task.jobId);
+		task.state = TaskState.FAILED;
+		task.progress = 0;
+		task.leaseToken = null;
+		task.leaseExpiresAt = 0;
+		job.monitor.onWorkUnitFailed(task.id, reason + " after " + task.attempt + " attempts");
+		for (Task candidate : job.tasks) {
+			if (candidate != task && candidate.state != TaskState.SUCCEEDED) {
+				candidate.state = TaskState.CANCELLED;
+				candidate.leaseToken = null;
+				candidate.leaseExpiresAt = 0;
+			}
+		}
+		job.monitor.fail(new IllegalStateException(
+				"Work unit " + task.id + " failed after " + task.attempt + " attempts: " + reason));
+	}
+
 	private static boolean isTerminal(String stage) {
 		return "SUCCEEDED".equals(stage) || "FAILED".equals(stage) || "CANCELLED".equals(stage);
 	}
@@ -450,7 +473,7 @@ public final class Scheduler {
 	}
 
 	private enum TaskState {
-		QUEUED, RUNNING, PAUSED, SUCCEEDED, CANCELLED
+		QUEUED, RUNNING, PAUSED, SUCCEEDED, FAILED, CANCELLED
 	}
 
 	private static final class Task {

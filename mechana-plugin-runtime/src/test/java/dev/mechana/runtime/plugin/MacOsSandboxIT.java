@@ -71,6 +71,9 @@ class MacOsSandboxIT {
 
 	@Test
 	void generatedProfileIsAcceptedBySandboxExec() throws Exception {
+		String profile = sandbox.profile(new SandboxRequest(List.of("/usr/bin/true"), Map.of(), workspace, policy()));
+		assertTrue(profile.contains("(allow iokit-open)"));
+		assertTrue(profile.contains("(allow ipc*)"));
 		SandboxResult result = execute(List.of("/usr/bin/true"));
 		assertEquals(0, result.exitCode(), () -> diagnostics(result));
 	}

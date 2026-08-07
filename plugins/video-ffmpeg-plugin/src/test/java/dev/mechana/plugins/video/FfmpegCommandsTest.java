@@ -18,11 +18,29 @@ package dev.mechana.plugins.video;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class FfmpegCommandsTest {
+	@TempDir
+	Path temporary;
+
+	@Test
+	void stagesWorkerProvidedInputWithoutNetworkAccess() throws Exception {
+		Path source = temporary.resolve("staged.mp4");
+		Path destination = temporary.resolve("work/input.mp4");
+		Files.writeString(source, "video-chunk");
+		Files.createDirectories(destination.getParent());
+
+		DistributedVideoSegmentPlugin.stageInput(Map.of("inputPath", source.toString()), destination, null);
+
+		assertEquals("video-chunk", Files.readString(destination));
+	}
+
 	@Test
 	void buildsVisuallyLosslessSegmentWithoutShellInterpolation() {
 		var commands = new FfmpegCommands("/tools/ffmpeg", "/tools/ffprobe");

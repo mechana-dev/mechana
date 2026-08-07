@@ -24,16 +24,20 @@ import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
 
 final class WorkerControlFrame extends JFrame {
 	private static final long serialVersionUID = 1L;
 	private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
+	private static final String SANDBOXED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render";
 	private final transient AgentClient client;
 	private final transient SettingsStore store;
 	private final transient SshProvisioner provisioner;
+	private final transient SshAgentTunnel agentTunnel = new SshAgentTunnel();
 	private final JComboBox<String> host = new JComboBox<>();
 	private final JSpinner port = new JSpinner(new SpinnerNumberModel(8790, 1, 65535, 1));
 	private final JPasswordField token = new JPasswordField(16);
@@ -45,10 +49,12 @@ final class WorkerControlFrame extends JFrame {
 	private final JTextField identityFile = new JTextField(18);
 	private final JCheckBox acceptNewHostKey = new JCheckBox("Accept new host key");
 	private final JTextField coordinator = new JTextField("http://127.0.0.1:8787", 20);
-	private final JTextField remoteDirectory = new JTextField(".mechana/host-agent", 18);
+	private final JTextField remoteDirectory = new JTextField("~/.mechana/host-agent", 18);
 	private final JTextField agentJar = new JTextField("worker-host-agent/target/mechana-worker-host-agent.jar", 24);
 	private final JTextField workerJar = new JTextField("mechana-worker/target/mechana-worker.jar", 24);
-	private final JTextField sandboxRoot = new JTextField("/private/tmp/mechana-sandbox", 22);
+	private final JTextField sandboxRoot = new JTextField("~/.mechana/sandbox", 22);
+	private final JTextField windowsSandboxLauncher = new JTextField(
+			"windows-sandbox-launcher/bin/Release/net10.0-windows/win-arm64/publish/mechana-windows-sandbox.exe", 28);
 	private final JLabel state = new JLabel("Not checked");
 	private final JTextArea workers = new JTextArea(9, 52);
 	private final JButton refresh = new JButton("Refresh");
@@ -58,6 +64,8 @@ final class WorkerControlFrame extends JFrame {
 	private final JButton restartAgent = new JButton("Restart agent via SSH");
 	private final JButton stopAgent = new JButton("Stop remote agent via SSH");
 	private boolean changingHostList;
+	private final Map<String, SettingsStore.HostSettings> hostProfiles = new LinkedHashMap<>();
+	private String activeHost;
 	private boolean agentReady;
 	private boolean busy;
 	private long requestGeneration;
@@ -119,6 +127,8 @@ final class WorkerControlFrame extends JFrame {
 		artifacts.add(agentJar);
 		artifacts.add(new JLabel("Worker JAR"));
 		artifacts.add(workerJar);
+		artifacts.add(new JLabel("Windows sandbox EXE"));
+		artifacts.add(windowsSandboxLauncher);
 		artifacts.add(deploy);
 		artifacts.add(restartAgent);
 		artifacts.add(stopAgent);
@@ -130,16 +140,27 @@ final class WorkerControlFrame extends JFrame {
 		add(new JScrollPane(workers), BorderLayout.CENTER);
 		refresh.addActionListener(event -> refreshStatus());
 		host.addActionListener(event -> {
-			if (!changingHostList)
+			if (!changingHostList) {
+				switchHost();
 				refreshStatus();
+			}
 		});
-		launchMode.addActionListener(event -> applyModeDefaults());
+		launchMode.addActionListener(event -> {
+			if (!changingHostList)
+				applyModeDefaults();
+		});
 		start.addActionListener(event -> run("Starting", () -> client.start(baseUri(), tokenValue(),
 				(Integer) count.getValue(), selectedMode(), capabilities.getText().strip()), Availability.KEEP));
 		stop.addActionListener(event -> run("Stopping", () -> client.stop(baseUri(), tokenValue()), Availability.KEEP));
 		deploy.addActionListener(event -> {
 			ensureToken();
 			run("Reinstalling", () -> {
+				try {
+					client.stop(baseUri(), tokenValue());
+				} catch (IOException ignored) {
+					// A first install or unreachable agent has no managed workers to stop through
+					// HTTP.
+				}
 				provisioner.deploy(provisionRequest());
 				waitForAgent();
 				return client.start(baseUri(), tokenValue(), (Integer) count.getValue(), selectedMode(),
@@ -211,7 +232,7 @@ final class WorkerControlFrame extends JFrame {
 				+ status.runningCount() + " running / " + status.requestedCount() + " requested");
 		if (status.launchMode() != null) {
 			launchMode.setSelectedItem(status.launchMode());
-			capabilities.setText(status.capabilities());
+			setCapabilities(status.capabilities());
 		}
 		StringBuilder text = new StringBuilder();
 		if (status.launchMode() != null) {
@@ -237,8 +258,8 @@ final class WorkerControlFrame extends JFrame {
 			state.setText(agentUnavailable ? "AGENT UNAVAILABLE" : "ERROR");
 		workers.setText(cause.getMessage());
 	}
-	private URI baseUri() {
-		return URI.create("http://" + hostValue() + ":" + port.getValue());
+	private URI baseUri() throws IOException, InterruptedException {
+		return agentTunnel.connect(provisionRequest());
 	}
 	private String hostValue() {
 		return String.valueOf(host.getEditor().getItem()).trim();
@@ -252,13 +273,18 @@ final class WorkerControlFrame extends JFrame {
 	private void applyModeDefaults() {
 		boolean sandboxed = selectedMode() == AgentClient.LaunchMode.SANDBOXED;
 		if (sandboxed)
-			capabilities.setText("fractal-render");
+			setCapabilities("fractal-render");
+	}
+	private void setCapabilities(String value) {
+		capabilities.setText(value);
+		capabilities.setCaretPosition(0);
 	}
 	private void setBusy(boolean busy) {
 		this.busy = busy;
 		updateControls();
 	}
 	private void updateControls() {
+		host.setEnabled(!busy);
 		refresh.setEnabled(!busy);
 		start.setEnabled(!busy && agentReady);
 		stop.setEnabled(!busy && agentReady);
@@ -272,22 +298,10 @@ final class WorkerControlFrame extends JFrame {
 		try {
 			SettingsStore.Settings s = store.load();
 			s.hosts().forEach(host::addItem);
+			hostProfiles.putAll(s.profiles());
 			host.setSelectedItem(s.lastHost());
-			port.setValue(s.port());
-			token.setText(s.token());
-			count.setValue(s.count());
-			launchMode.setSelectedItem(s.launchMode());
-			capabilities.setText(s.capabilities());
-			sshUser.setText(s.sshUser());
-			sshPort.setValue(s.sshPort());
-			identityFile.setText(s.identityFile());
-			acceptNewHostKey.setSelected(s.acceptNewHostKey());
-			coordinator.setText(s.coordinator());
-			remoteDirectory.setText(s.remoteDirectory());
-			agentJar.setText(s.agentJar());
-			workerJar.setText(s.workerJar());
-			sandboxRoot.setText(s.sandboxRoot());
-			applyModeDefaults();
+			activeHost = s.lastHost();
+			applyProfile(hostProfiles.getOrDefault(activeHost, SettingsStore.defaults()));
 		} catch (Exception failure) {
 			workers.setText("Could not load settings: " + failure.getMessage());
 		} finally {
@@ -296,6 +310,8 @@ final class WorkerControlFrame extends JFrame {
 	}
 	private void remember() {
 		try {
+			if (activeHost != null && !activeHost.isBlank())
+				hostProfiles.put(activeHost, currentProfile());
 			ArrayList<String> hosts = new ArrayList<>();
 			for (int i = 0; i < host.getItemCount(); i++)
 				hosts.add(host.getItemAt(i));
@@ -308,14 +324,54 @@ final class WorkerControlFrame extends JFrame {
 					changingHostList = false;
 				}
 			}
-			store.save(new SettingsStore.Settings(hosts, hostValue(), (Integer) port.getValue(), tokenValue(),
-					(Integer) count.getValue(), selectedMode(), capabilities.getText().strip(),
-					sshUser.getText().strip(), (Integer) sshPort.getValue(), identityFile.getText().strip(),
-					acceptNewHostKey.isSelected(), coordinator.getText().strip(), remoteDirectory.getText().strip(),
-					agentJar.getText().strip(), workerJar.getText().strip(), sandboxRoot.getText().strip()));
+			hostProfiles.put(hostValue(), currentProfile());
+			activeHost = hostValue();
+			store.save(new SettingsStore.Settings(hosts, activeHost, Map.copyOf(hostProfiles)));
 		} catch (IOException failure) {
 			workers.setText("Could not save settings: " + failure.getMessage());
 		}
+	}
+
+	private void switchHost() {
+		agentTunnel.close();
+		if (activeHost != null && !activeHost.isBlank())
+			hostProfiles.put(activeHost, currentProfile());
+		String selectedHost = hostValue();
+		SettingsStore.HostSettings profile = hostProfiles.computeIfAbsent(selectedHost, ignored -> currentProfile());
+		activeHost = selectedHost;
+		changingHostList = true;
+		try {
+			applyProfile(profile);
+		} finally {
+			changingHostList = false;
+		}
+		remember();
+	}
+
+	private SettingsStore.HostSettings currentProfile() {
+		return new SettingsStore.HostSettings((Integer) port.getValue(), tokenValue(), (Integer) count.getValue(),
+				selectedMode(), capabilities.getText().strip(), sshUser.getText().strip(), (Integer) sshPort.getValue(),
+				identityFile.getText().strip(), acceptNewHostKey.isSelected(), coordinator.getText().strip(),
+				remoteDirectory.getText().strip(), agentJar.getText().strip(), workerJar.getText().strip(),
+				sandboxRoot.getText().strip(), windowsSandboxLauncher.getText().strip());
+	}
+
+	private void applyProfile(SettingsStore.HostSettings profile) {
+		port.setValue(profile.port());
+		token.setText(profile.token());
+		count.setValue(profile.count());
+		launchMode.setSelectedItem(profile.launchMode());
+		setCapabilities(profile.capabilities());
+		sshUser.setText(profile.sshUser());
+		sshPort.setValue(profile.sshPort());
+		identityFile.setText(profile.identityFile());
+		acceptNewHostKey.setSelected(profile.acceptNewHostKey());
+		coordinator.setText(profile.coordinator());
+		remoteDirectory.setText(profile.remoteDirectory());
+		agentJar.setText(profile.agentJar());
+		workerJar.setText(profile.workerJar());
+		sandboxRoot.setText(profile.sandboxRoot());
+		windowsSandboxLauncher.setText(profile.windowsSandboxLauncher());
 	}
 
 	private SshProvisioner.Request provisionRequest() {
@@ -324,15 +380,15 @@ final class WorkerControlFrame extends JFrame {
 				identity.isBlank() ? null : Path.of(identity), acceptNewHostKey.isSelected(),
 				Path.of(agentJar.getText().strip()), Path.of(workerJar.getText().strip()),
 				remoteDirectory.getText().strip(), coordinator.getText().strip(), (Integer) port.getValue(),
-				tokenValue(), "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render", "fractal-render",
-				sandboxRoot.getText().strip());
+				tokenValue(), SANDBOXED_PLUGINS, SANDBOXED_PLUGINS, sandboxRoot.getText().strip(),
+				Path.of(windowsSandboxLauncher.getText().strip()));
 	}
 
 	private void waitForAgent() throws IOException, InterruptedException {
 		IOException last = null;
 		for (int attempt = 0; attempt < 20; attempt++) {
 			try {
-				client.status(baseUri(), tokenValue());
+				client.status(baseUri(), tokenValue(), java.time.Duration.ofSeconds(1));
 				return;
 			} catch (IOException unavailable) {
 				last = unavailable;

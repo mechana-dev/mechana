@@ -24,13 +24,18 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Properties;
 
 final class SettingsStore {
-	record Settings(List<String> hosts, String lastHost, int port, String token, int count,
-			AgentClient.LaunchMode launchMode, String capabilities, String sshUser, int sshPort, String identityFile,
-			boolean acceptNewHostKey, String coordinator, String remoteDirectory, String agentJar, String workerJar,
-			String sandboxRoot) {
+	record HostSettings(int port, String token, int count, AgentClient.LaunchMode launchMode, String capabilities,
+			String sshUser, int sshPort, String identityFile, boolean acceptNewHostKey, String coordinator,
+			String remoteDirectory, String agentJar, String workerJar, String sandboxRoot,
+			String windowsSandboxLauncher) implements java.io.Serializable {
+		private static final long serialVersionUID = 1L;
+	}
+	record Settings(List<String> hosts, String lastHost, Map<String, HostSettings> profiles) {
 	}
 	private final Path file;
 	SettingsStore(Path file) {
@@ -54,19 +59,19 @@ final class SettingsStore {
 			if (!host.isBlank())
 				hosts.add(host);
 		}
-		return new Settings(List.copyOf(hosts), p.getProperty("last-host", "localhost"),
-				Integer.parseInt(p.getProperty("port", "8790")), p.getProperty("token", ""),
-				Integer.parseInt(p.getProperty("count", "1")),
-				AgentClient.LaunchMode.valueOf(p.getProperty("launch-mode", "SANDBOXED")),
-				p.getProperty("capabilities", "fractal-render"),
-				p.getProperty("ssh-user", System.getProperty("user.name")),
-				Integer.parseInt(p.getProperty("ssh-port", "22")), p.getProperty("identity-file", ""),
-				Boolean.parseBoolean(p.getProperty("accept-new-host-key", "false")),
-				p.getProperty("coordinator", "http://127.0.0.1:8787"),
-				p.getProperty("remote-directory", ".mechana/host-agent"),
-				p.getProperty("agent-jar", "worker-host-agent/target/mechana-worker-host-agent.jar"),
-				p.getProperty("worker-jar", "mechana-worker/target/mechana-worker.jar"),
-				p.getProperty("sandbox-root", "/private/tmp/mechana-sandbox"));
+		String lastHost = p.getProperty("last-host", "localhost");
+		if (!hosts.contains(lastHost))
+			hosts.add(lastHost);
+		HostSettings legacy = readProfile(p, "");
+		Map<String, HostSettings> profiles = new LinkedHashMap<>();
+		for (int i = 0; i < hosts.size(); i++) {
+			String prefix = "profile." + i + ".";
+			if (p.containsKey(prefix + "port"))
+				profiles.put(hosts.get(i), readProfile(p, prefix));
+			else if (hosts.get(i).equals(lastHost))
+				profiles.put(hosts.get(i), legacy);
+		}
+		return new Settings(List.copyOf(hosts), lastHost, Map.copyOf(profiles));
 	}
 
 	void save(Settings settings) throws IOException {
@@ -75,25 +80,71 @@ final class SettingsStore {
 		for (int i = 0; i < hosts.size(); i++)
 			p.setProperty("host." + i, hosts.get(i));
 		p.setProperty("last-host", settings.lastHost());
-		p.setProperty("port", Integer.toString(settings.port()));
-		p.setProperty("token", settings.token());
-		p.setProperty("count", Integer.toString(settings.count()));
-		p.setProperty("launch-mode", settings.launchMode().name());
-		p.setProperty("capabilities", settings.capabilities());
-		p.setProperty("ssh-user", settings.sshUser());
-		p.setProperty("ssh-port", Integer.toString(settings.sshPort()));
-		p.setProperty("identity-file", settings.identityFile());
-		p.setProperty("accept-new-host-key", Boolean.toString(settings.acceptNewHostKey()));
-		p.setProperty("coordinator", settings.coordinator());
-		p.setProperty("remote-directory", settings.remoteDirectory());
-		p.setProperty("agent-jar", settings.agentJar());
-		p.setProperty("worker-jar", settings.workerJar());
-		p.setProperty("sandbox-root", settings.sandboxRoot());
+		for (int i = 0; i < hosts.size(); i++) {
+			HostSettings profile = settings.profiles().get(hosts.get(i));
+			if (profile != null)
+				writeProfile(p, "profile." + i + ".", profile);
+		}
 		Path parent = file.getParent();
 		if (parent != null)
 			Files.createDirectories(parent);
 		try (OutputStream output = Files.newOutputStream(file)) {
 			p.store(output, "Mechana worker control settings; protect this file because it contains the agent token");
 		}
+	}
+
+	static HostSettings defaults() {
+		return new HostSettings(8790, "", 1, AgentClient.LaunchMode.SANDBOXED, "fractal-render",
+				System.getProperty("user.name"), 22, "", false, "http://127.0.0.1:8787", "~/.mechana/host-agent",
+				"worker-host-agent/target/mechana-worker-host-agent.jar", "mechana-worker/target/mechana-worker.jar",
+				"~/.mechana/sandbox",
+				"windows-sandbox-launcher/bin/Release/net10.0-windows/win-arm64/publish/mechana-windows-sandbox.exe");
+	}
+
+	private static HostSettings readProfile(Properties p, String prefix) {
+		HostSettings defaults = defaults();
+		String remoteDirectory = migrateRemoteDirectory(
+				p.getProperty(prefix + "remote-directory", defaults.remoteDirectory()));
+		String sandboxRoot = migrateSandboxRoot(p.getProperty(prefix + "sandbox-root", defaults.sandboxRoot()));
+		return new HostSettings(Integer.parseInt(p.getProperty(prefix + "port", Integer.toString(defaults.port()))),
+				p.getProperty(prefix + "token", defaults.token()),
+				Integer.parseInt(p.getProperty(prefix + "count", Integer.toString(defaults.count()))),
+				AgentClient.LaunchMode.valueOf(p.getProperty(prefix + "launch-mode", defaults.launchMode().name())),
+				p.getProperty(prefix + "capabilities", defaults.capabilities()),
+				p.getProperty(prefix + "ssh-user", defaults.sshUser()),
+				Integer.parseInt(p.getProperty(prefix + "ssh-port", Integer.toString(defaults.sshPort()))),
+				p.getProperty(prefix + "identity-file", defaults.identityFile()),
+				Boolean.parseBoolean(
+						p.getProperty(prefix + "accept-new-host-key", Boolean.toString(defaults.acceptNewHostKey()))),
+				p.getProperty(prefix + "coordinator", defaults.coordinator()), remoteDirectory,
+				p.getProperty(prefix + "agent-jar", defaults.agentJar()),
+				p.getProperty(prefix + "worker-jar", defaults.workerJar()), sandboxRoot,
+				p.getProperty(prefix + "windows-sandbox-launcher", defaults.windowsSandboxLauncher()));
+	}
+
+	private static String migrateRemoteDirectory(String value) {
+		return "/opt/mechana/host-agent".equals(value) ? "~/.mechana/host-agent" : value;
+	}
+
+	private static String migrateSandboxRoot(String value) {
+		return "/var/lib/mechana-sandbox".equals(value) ? "~/.mechana/sandbox" : value;
+	}
+
+	private static void writeProfile(Properties p, String prefix, HostSettings profile) {
+		p.setProperty(prefix + "port", Integer.toString(profile.port()));
+		p.setProperty(prefix + "token", profile.token());
+		p.setProperty(prefix + "count", Integer.toString(profile.count()));
+		p.setProperty(prefix + "launch-mode", profile.launchMode().name());
+		p.setProperty(prefix + "capabilities", profile.capabilities());
+		p.setProperty(prefix + "ssh-user", profile.sshUser());
+		p.setProperty(prefix + "ssh-port", Integer.toString(profile.sshPort()));
+		p.setProperty(prefix + "identity-file", profile.identityFile());
+		p.setProperty(prefix + "accept-new-host-key", Boolean.toString(profile.acceptNewHostKey()));
+		p.setProperty(prefix + "coordinator", profile.coordinator());
+		p.setProperty(prefix + "remote-directory", profile.remoteDirectory());
+		p.setProperty(prefix + "agent-jar", profile.agentJar());
+		p.setProperty(prefix + "worker-jar", profile.workerJar());
+		p.setProperty(prefix + "sandbox-root", profile.sandboxRoot());
+		p.setProperty(prefix + "windows-sandbox-launcher", profile.windowsSandboxLauncher());
 	}
 }

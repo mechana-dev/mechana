@@ -78,23 +78,32 @@ detected with controls locked; an endpoint that does not answer is unavailable.
 Select a count, execution mode, and comma-separated plugin list, then press **Start**
 to add the deficit up to that count.
 
-On the MBA, choose **SANDBOXED** and `fractal-render`. The agent verifies that the
-host is macOS, the requested plugin is listed in `sandboxed-capabilities`, and the
-sandbox root is outside the user's home directory. It launches each child with the
-configured `mechana.sandbox.root` system property. The status panel reports the
+Choose **SANDBOXED** and one or more listed plugins. The agent verifies that the
+host is macOS or Linux and the requested plugin is listed in
+`sandboxed-capabilities`. It launches each child with the
+configured `mechana.sandbox.root` system property. Native plugins also require the
+agent JVM to be started with explicit absolute `mechana.runtime.ffmpeg`,
+`mechana.runtime.ffprobe`, `mechana.runtime.tesseract`, or
+`mechana.runtime.blender` system properties as applicable; the agent copies only
+those declared grants to sandboxed workers. **Reinstall + start via SSH** discovers
+and persists these paths automatically. Manual agent launches must still provide
+the properties explicitly. The status panel reports the
 actual mode, plugins, and sandbox root used by the running group. Stop all workers
 before changing mode or plugin selection.
 
 Choose **LEGACY** only for plugins that have not yet migrated to the sandbox host.
 The agent limits those selections to `capabilities`; this label intentionally does
 not imply OS isolation. **Stop all** gracefully stops all tracked children and
-forces remaining processes down after the configured timeout. Known hosts and the
-last settings are stored at `~/.mechana/worker-control.properties` (under the user
-profile on Windows).
+forces remaining processes down after the configured timeout. Known hosts and a
+separate complete settings profile for each host are stored at
+`~/.mechana/worker-control.properties` (under the user profile on Windows). Changing
+the selected host restores its last agent port/token, worker selection, SSH options,
+coordinator, remote directory, artifact paths, and sandbox root. Older global settings
+are migrated to the previously selected host on first load.
 
 ## Provision a new host over SSH
 
-The desktop app can deploy Mechana to a macOS or Linux account that already has:
+The desktop app can deploy Mechana to a macOS, Linux, or Windows account that already has:
 
 - working OpenSSH access from the controller machine;
 - Java 25 available in the non-interactive SSH `PATH`;
@@ -115,15 +124,27 @@ sandbox root. Leave **Identity** blank to use the normal SSH agent/config, or se
 an explicit private-key path. Host-key verification is strict by default; select
 **Accept new host key** only after independently verifying the target.
 
+Relative remote and sandbox directories are resolved beneath the SSH account's
+actual home directory. The portable defaults are `~/.mechana/host-agent` and
+`~/.mechana/sandbox`; the equivalent forms without `~/` are also accepted. They
+avoid root access and global filesystem locations.
+
 **Reinstall + start via SSH** performs this sequence:
 
-1. connects with batch-mode `ssh` and detects `Darwin` or `Linux`;
-2. discovers the remote home and Java executable;
-3. uploads the host-agent JAR, worker JAR, and generated token-protected config;
-4. installs and starts `dev.mechana.worker-host-agent` as a per-user launchd job
-   on macOS or systemd user service on Linux;
-5. waits for the authenticated agent API; and
-6. starts the requested number of workers with the selected mode and plugins.
+1. connects with batch-mode `ssh` and detects macOS, Linux, or Windows;
+2. discovers the remote home, Java executable, and native plugin runtimes;
+3. verifies every runtime required by the configured sandbox plugin set and fails
+   with the missing prerequisite instead of deploying workers that cannot run it;
+4. uploads the host-agent JAR, worker JAR, and generated token-protected config;
+5. installs the verified runtime paths and starts `dev.mechana.worker-host-agent` as a per-user launchd job
+   on macOS, a systemd user service on Linux, or a per-user Scheduled Task on Windows;
+6. waits for the authenticated agent API; and
+7. starts the requested number of workers with the selected mode and plugins.
+
+Discovery covers the normal executable `PATH`, Apple Silicon and Intel Homebrew,
+the standard macOS Blender application bundle, `/usr/bin`, `/usr/local/bin`, and
+the Linux Blender snap path. The generated launchd or systemd definition contains
+absolute paths, so it does not depend on an interactive shell's `PATH`.
 
 On macOS, reinstall also checks the configured agent HTTP port after unloading the
 launchd job. A stale same-user process is terminated only when its command identifies
@@ -151,7 +172,7 @@ them, reloads the service, and starts the requested workers.
 
 This is "from scratch" for Mechana files and service registration; it does not
 install Java, configure SSH itself, change firewalls, enable Linux lingering, or
-support Windows OpenSSH service installation yet.
+install or configure the Windows OpenSSH service.
 
 ## Security and operational limits
 
@@ -163,7 +184,9 @@ token rotation, OS keychain storage, roles, audit logging, or host identity proo
 It does not find or kill arbitrary Java processes or adopt children after an agent
 restart. SSH provisioning installs a per-user launchd or systemd unit, but not a
 Windows service or a system-wide/root service.
-Sandbox mode is currently macOS-only and `fractal-render` is the only migrated
-concrete plugin. The agent's implementation allowlist cannot be expanded through
-configuration alone; a later plugin migration must update code and tests before
-that plugin can be launched as sandboxed.
+Sandbox mode supports macOS Seatbelt, Linux bubblewrap, and Windows AppContainer
+plus Job Objects. All five concrete
+plugins are migrated to the external plugin host. Linux requires a working
+`bwrap` installation and supported kernel namespaces; see
+[Linux worker setup](linux-worker.md) for enforced controls and limitations.
+See [Windows worker setup](windows-worker.md) for Windows controls and limitations.

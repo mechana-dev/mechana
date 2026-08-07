@@ -30,7 +30,8 @@ import java.util.Set;
 import java.util.UUID;
 
 final class WorkerManager {
-	private static final Set<String> IMPLEMENTED_SANDBOX_PLUGINS = Set.of("fractal-render");
+	private static final Set<String> IMPLEMENTED_SANDBOX_PLUGINS = Set.of("sleep", "video-ffmpeg", "fractal-render",
+			"ocr-tesseract", "blender-render");
 	record WorkerStatus(String id, long pid, Instant startedAt, boolean alive) {
 	}
 	record LaunchRequest(int count, WorkerLaunchMode mode, String capabilities) {
@@ -113,14 +114,31 @@ final class WorkerManager {
 	private List<String> command(WorkerLaunchMode mode, String capabilities, String id) {
 		List<String> command = new ArrayList<>();
 		command.add(config.javaExecutable().toString());
-		if (mode == WorkerLaunchMode.SANDBOXED)
+		if (mode == WorkerLaunchMode.SANDBOXED) {
 			command.add("-Dmechana.sandbox.root=" + config.sandboxRoot().toAbsolutePath().normalize());
+			command.add("-Dmechana.execution.mode=sandboxed");
+			copyRuntimeProperty(command, "ffmpeg");
+			copyRuntimeProperty(command, "ffprobe");
+			copyRuntimeProperty(command, "tesseract");
+			copyRuntimeProperty(command, "blender");
+			copyPathProperty(command, "mechana.windows.sandbox.launcher");
+		}
 		command.add("-jar");
 		command.add(config.workerJar().toAbsolutePath().normalize().toString());
 		command.add(config.coordinator().toString());
 		command.add(capabilities);
 		command.add(id);
 		return List.copyOf(command);
+	}
+
+	private static void copyRuntimeProperty(List<String> command, String name) {
+		copyPathProperty(command, "mechana.runtime." + name);
+	}
+
+	private static void copyPathProperty(List<String> command, String property) {
+		String value = System.getProperty(property, "").strip();
+		if (!value.isEmpty())
+			command.add("-D" + property + "=" + Path.of(value).toAbsolutePath().normalize());
 	}
 
 	private String validatedCapabilities(WorkerLaunchMode mode, String requested) {
@@ -132,11 +150,9 @@ final class WorkerManager {
 		if (selected.isEmpty() || !allowed.containsAll(selected))
 			throw new IllegalArgumentException("Requested plugins are not allowed for " + mode + ": " + selected);
 		if (mode == WorkerLaunchMode.SANDBOXED) {
-			if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac"))
-				throw new IllegalArgumentException("Sandboxed workers are currently supported only on macOS");
-			Path home = Path.of(System.getProperty("user.home")).toAbsolutePath().normalize();
-			if (config.sandboxRoot().toAbsolutePath().normalize().startsWith(home))
-				throw new IllegalArgumentException("Sandbox root must be outside the user home directory");
+			String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+			if (!os.contains("mac") && !os.contains("linux") && !os.contains("windows"))
+				throw new IllegalArgumentException("Sandboxed workers currently require macOS, Linux, or Windows");
 		}
 		return String.join(",", selected);
 	}

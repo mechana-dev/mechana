@@ -59,8 +59,8 @@ public record AgentConfig(String bindAddress, int port, String token, URI coordi
 				Duration.ofMillis(Long.parseLong(p.getProperty("stop-timeout-ms", "10000"))),
 				normalizeMachineName(p.getProperty("machine-name", localMachineName())),
 				Boolean.parseBoolean(p.getProperty("allow-unauthenticated", "false")),
-				Path.of(p.getProperty("sandbox-root", defaultSandboxRoot())),
-				p.getProperty("sandboxed-capabilities", "fractal-render"));
+				Path.of(p.getProperty("sandbox-root", defaultSandboxRoot())), p.getProperty("sandboxed-capabilities",
+						"sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render"));
 	}
 
 	private static String localMachineName() {

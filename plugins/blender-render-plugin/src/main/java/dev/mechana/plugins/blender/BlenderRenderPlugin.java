@@ -33,13 +33,18 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /** Renders one contiguous frame batch with headless Blender/Cycles. */
 public final class BlenderRenderPlugin implements TaskPlugin {
 	private static final PluginDescriptor DESCRIPTOR = new PluginDescriptor("blender-render", "1.0.0");
+	private static final Pattern FRAME = Pattern.compile("^Fra:(\\d+)");
+	private static final Pattern SAMPLE = Pattern.compile("Rendering (\\d+) / (\\d+) samples");
 
 	@Override
 	public PluginDescriptor descriptor() {
@@ -56,14 +61,13 @@ public final class BlenderRenderPlugin implements TaskPlugin {
 		try {
 			scratch = Files.createTempDirectory("mechana-blender-");
 			Path scene = scratch.resolve("scene.blend");
-			download(required(p, "inputUrl"), scene);
+			stageInput(p, scene);
 			Path frames = Files.createDirectories(scratch.resolve("frames"));
 			String executable = p.getOrDefault("blenderCommand",
 					System.getenv().getOrDefault("MECHANA_BLENDER", "blender"));
 			List<String> command = new BlenderCommands(executable).render(scene, frames.resolve("frame_######"), first,
-					last, integer(p, "width"), integer(p, "height"), integer(p, "samples"),
-					Integer.parseInt(p.getOrDefault("threads", "0")));
-			run(command, first, last, context);
+					last, integer(p, "width"), integer(p, "height"), integer(p, "samples"), renderThreads(p));
+			run(command, first, last, context, scratch);
 			validateFrames(frames, first, last);
 			Path archive = scratch.resolve("frames-%05d.zip".formatted(batch));
 			zipFrames(frames, archive);
@@ -79,22 +83,33 @@ public final class BlenderRenderPlugin implements TaskPlugin {
 		}
 	}
 
-	private static void run(List<String> command, int first, int last, TaskContext context)
+	static int renderThreads(Map<String, String> parameters) {
+		int threads = Integer.parseInt(parameters.getOrDefault("threads", "1"));
+		if (threads == 0)
+			return 1;
+		if (threads < 0)
+			throw new IllegalArgumentException("threads must not be negative");
+		return threads;
+	}
+
+	static void stageInput(Map<String, String> parameters, Path destination) throws IOException, InterruptedException {
+		String local = parameters.get("inputPath");
+		if (local != null) {
+			Files.copy(Path.of(local), destination);
+			return;
+		}
+		download(required(parameters, "inputUrl"), destination);
+	}
+
+	private static void run(List<String> command, int first, int last, TaskContext context, Path scratch)
 			throws IOException, InterruptedException {
-		Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+		ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true);
+		configureTemporaryDirectory(builder, scratch);
+		Process process = builder.start();
+		context.reportProgress(1);
 		Thread output = Thread.ofVirtual().start(() -> {
 			try (var lines = process.inputReader().lines()) {
-				lines.forEach(line -> {
-					if (line.startsWith("Fra:")) {
-						int end = line.indexOf(' ', 4);
-						try {
-							int frame = Integer.parseInt(line.substring(4, end < 0 ? line.length() : end));
-							context.reportProgress(Math.clamp((frame - first) * 95 / (last - first + 1), 0, 95));
-						} catch (NumberFormatException ignored) {
-							// Ignore non-frame status lines.
-						}
-					}
-				});
+				lines.forEach(line -> progressForLine(line, first, last).ifPresent(context::reportProgress));
 			}
 		});
 		long deadline = System.nanoTime() + Duration.ofHours(6).toNanos();
@@ -109,6 +124,31 @@ public final class BlenderRenderPlugin implements TaskPlugin {
 		output.join();
 		if (process.exitValue() != 0)
 			throw new IOException("Blender exited with status " + process.exitValue());
+	}
+
+	static OptionalInt progressForLine(String line, int first, int last) {
+		Matcher frameMatch = FRAME.matcher(line);
+		if (!frameMatch.find())
+			return OptionalInt.empty();
+		int frame = Integer.parseInt(frameMatch.group(1));
+		int frameCount = last - first + 1;
+		int frameBase = Math.clamp(5 + (frame - first) * 90 / frameCount, 5, 90);
+		Matcher sampleMatch = SAMPLE.matcher(line);
+		if (!sampleMatch.find())
+			return OptionalInt.of(frameBase);
+		int sample = Integer.parseInt(sampleMatch.group(1));
+		int samples = Integer.parseInt(sampleMatch.group(2));
+		if (samples < 1)
+			return OptionalInt.of(frameBase);
+		int withinFrame = Math.clamp(sample * 85 / samples / frameCount, 0, 85 / frameCount);
+		return OptionalInt.of(Math.clamp(frameBase + withinFrame, 5, 95));
+	}
+
+	static void configureTemporaryDirectory(ProcessBuilder builder, Path scratch) {
+		String value = scratch.toAbsolutePath().normalize().toString();
+		builder.environment().put("TMPDIR", value);
+		builder.environment().put("TMP", value);
+		builder.environment().put("TEMP", value);
 	}
 
 	private static void validateFrames(Path directory, int first, int last) throws IOException {

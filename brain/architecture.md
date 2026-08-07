@@ -119,7 +119,10 @@ filesystem and resource model, manifest proposal, author contract, native-runtim
 isolation, and certification direction. Future guarantees may not be inferred
 from current plugin loading.
 
-The first implementation foundation lives in `mechana-plugin-runtime` and
-`plugin-host`. It uses one-request NDJSON over standard input/output because the
-current work-unit contract is request/response-shaped and does not need a network
-listener inside the attempt. Worker integration and plugin migration remain next.
+The implementation foundation lives in `mechana-plugin-runtime` and `plugin-host`.
+It uses one-request NDJSON over standard input/output because the current work-unit
+contract is request/response-shaped and does not need a network listener inside
+the attempt. Explicitly sandboxed macOS and Linux workers route every current
+concrete plugin through this boundary, stage network inputs before launch, and
+require absolute operator-declared native executable paths where applicable.
+Windows uses the same boundary through its AppContainer and Job Object backend.

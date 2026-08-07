@@ -24,6 +24,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -59,10 +60,15 @@ class SshProvisionerTest {
 		assertTrue(commands.stream().anyMatch(command -> command.getFirst().equals("scp")));
 		assertTrue(commands.stream().flatMap(List::stream).anyMatch(value -> value.contains("launchctl bootstrap")));
 		assertTrue(commands.stream().map(List::getLast)
+				.anyMatch(value -> value.contains("agent_bootstrap_attempt") && value.contains("sleep 1")));
+		assertTrue(commands.stream().map(List::getLast)
 				.anyMatch(value -> value.contains("lsof -nP -tiTCP:8790")
 						&& value.contains("*mechana-worker-host-agent.jar*")
 						&& value.contains("occupied by a non-Mechana process")));
-		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("sandbox-root=/private/tmp/mechana")));
+		assertTrue(
+				uploadedText.stream().anyMatch(value -> value.contains("sandbox-root=/Users/remote/.mechana/sandbox")));
+		assertTrue(commands.stream().map(List::getLast)
+				.anyMatch(value -> value.contains("'/Users/remote/.mechana/sandbox'")));
 		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("dev.mechana.worker-host-agent")));
 		assertTrue(commands.stream().flatMap(List::stream).anyMatch(value -> value.equals("BatchMode=yes")));
 		assertTrue(commands.stream().filter(command -> command.getFirst().equals("ssh"))
@@ -86,8 +92,25 @@ class SshProvisionerTest {
 
 	@Test
 	void serviceTemplatesContainRestartAndEscapedMacValues() {
-		assertTrue(SshProvisioner.linuxService("/usr/bin/java", "/home/mechana").contains("Restart=on-failure"));
-		assertTrue(SshProvisioner.macOsPlist("/Java & Tools/java", "/Users/a<b").contains("/Java &amp; Tools/java"));
+		Map<String, String> runtimes = Map.of("ffmpeg", "/opt/homebrew/bin/ffmpeg", "blender",
+				"/Applications/Blender.app/Contents/MacOS/Blender");
+		String linux = SshProvisioner.linuxService("/usr/bin/java", "/home/mechana", runtimes);
+		String mac = SshProvisioner.macOsPlist("/Java & Tools/java", "/Users/a<b", runtimes);
+		assertTrue(linux.contains("Restart=on-failure"));
+		assertTrue(linux.contains("-Dmechana.runtime.ffmpeg=/opt/homebrew/bin/ffmpeg"));
+		assertTrue(linux.contains("Blender.app/Contents/MacOS/Blender"));
+		assertTrue(mac.contains("/Java &amp; Tools/java"));
+		assertTrue(mac.contains("-Dmechana.runtime.ffmpeg=/opt/homebrew/bin/ffmpeg"));
+		assertTrue(mac.contains("-Dmechana.runtime.blender=/Applications/Blender.app/Contents/MacOS/Blender"));
+	}
+
+	@Test
+	void discoversHomebrewAndApplicationRuntimesOnMacOs() {
+		String ffmpeg = SshProvisioner.runtimeDiscoveryCommand(SshProvisioner.RemoteOs.MACOS, "ffmpeg");
+		String blender = SshProvisioner.runtimeDiscoveryCommand(SshProvisioner.RemoteOs.MACOS, "blender");
+		assertTrue(ffmpeg.contains("command -v ffmpeg"));
+		assertTrue(ffmpeg.contains("/opt/homebrew/bin/ffmpeg"));
+		assertTrue(blender.contains("/Applications/Blender.app/Contents/MacOS/Blender"));
 	}
 
 	@Test
@@ -98,6 +121,24 @@ class SshProvisionerTest {
 		assertTrue(command.contains("*mechana-worker-host-agent.jar*"));
 		assertTrue(command.contains("Port 21012 is occupied by a non-Mechana process"));
 		assertEquals("", SshProvisioner.runCommand(List.of("/bin/sh", "-n", "-c", command), Duration.ofSeconds(5)));
+	}
+
+	@Test
+	void windowsAgentCleanupTargetsOnlyTheConfiguredMechanaJar() {
+		String command = SshProvisioner.windowsAgentStopCommand("C:/Users/markf/.mechana/host-agent", false);
+		assertTrue(command.contains("Name = 'java.exe'"));
+		assertTrue(command.contains("C:/Users/markf/.mechana/host-agent/mechana-worker-host-agent.jar"));
+		assertTrue(command.contains("C:/Users/markf/.mechana/host-agent/mechana-worker.jar"));
+		assertTrue(command.contains("Stop-Process -Id $agent.ProcessId"));
+		assertTrue(command.contains("agent or worker did not stop within 10 seconds"));
+	}
+
+	@Test
+	void windowsAgentScriptRemovesLegacyInboundRule() {
+		String script = SshProvisioner.windowsScript("C:/runtime/java.exe", "C:/mechana", "C:/mechana/sandbox.exe",
+				Map.of(), 8790, "100.110.181.104");
+		assertTrue(script.contains("Remove-NetFirewallRule"));
+		assertTrue(!script.contains("New-NetFirewallRule"));
 	}
 
 	@Test
@@ -141,8 +182,8 @@ class SshProvisionerTest {
 
 	private SshProvisioner.Request request(Path agent, Path worker) {
 		return new SshProvisioner.Request("mba.example", "mark", 2222, null, false, agent, worker,
-				".mechana/host-agent", "http://coordinator:8787", 8790, "secret", "sleep,fractal-render",
-				"fractal-render", "/private/tmp/mechana");
+				"~/.mechana/host-agent", "http://coordinator:8787", 8790, "secret", "sleep,fractal-render",
+				"fractal-render", "~/.mechana/sandbox", temporary.resolve("windows-sandbox.exe"));
 	}
 
 	private static boolean hasOption(List<String> command, String option, String value) {

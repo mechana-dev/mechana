@@ -75,10 +75,13 @@ hang, leak, or forced termination must not require restarting the worker.
 Mechana promises a common policy and launch API, not identical operating-system
 implementations or identical guarantees.
 
-- **Linux:** likely namespaces, cgroups, seccomp, dedicated identities, restricted
-  mounts, capabilities, and an appropriate mandatory-access-control layer.
-- **Windows:** likely Job Objects, restricted tokens or AppContainer where
-  suitable, ACLs, and Windows network policy.
+- **Linux:** initially implemented with Bubblewrap-managed user, mount, PID, IPC,
+  UTS, and network namespaces plus restricted mounts. Cgroups, seccomp filtering,
+  dedicated identities, and mandatory-access-control integration remain
+  directional and are not advertised.
+- **Windows:** implemented with AppContainer identity and default-deny filesystem/network
+  access, workspace ACL grants, and a Job Object for CPU, memory, process-count,
+  and process-tree lifecycle limits.
 - **macOS:** the strongest maintainable combination of process identity,
   filesystem permissions, resource controls, network policy, and virtualization
   when host controls cannot provide the required guarantee.
@@ -248,12 +251,37 @@ plugin marketplace are **Deferred**.
 - **Deferred:** production sandbox implementation, general host-path access,
   runtime distribution/signing, certification infrastructure, and marketplace.
 
-The first implementation foundation defines common contracts, managed child
-process lifecycle, a fixed attempt workspace, fail-closed capability selection,
-and a one-request plugin host. The macOS backend is experimental because
+The implementation defines common contracts, managed child-process lifecycle, a
+fixed attempt workspace, fail-closed capability selection, and a one-request
+plugin host. All current concrete plugins can cross this boundary on sandboxed
+macOS workers; network inputs are staged by the worker and native executables are
+granted only through explicit absolute runtime properties. The profile grants
+I/O Kit device enumeration because Blender performs Metal device discovery even
+for CPU Cycles. It also permits local IPC because Intel Blender 4.5 uses IPC-backed
+synchronization during startup on macOS 12. Neither rule grants network or filesystem
+access or changes the reported home-directory and workspace-write controls. The macOS backend is experimental because
 `sandbox-exec` is explicitly deprecated by Apple. Tahoe requires broad runtime
 reads even for basic system tools, so the backend claims workspace write
 restriction and user-home read denial but not workspace-only read isolation.
 It reports network denial only after a live probe; CPU, memory, scratch-size, process-count,
 dedicated identity, bounded-log-size, and guaranteed descendant-tree controls
 remain unimplemented. See the [macOS guide](../docs/macos-sandbox.md).
+
+The Linux backend discovers `bwrap` through `PATH`, performs a live namespace
+probe, and fails closed when the executable or required kernel policy is
+unavailable. It exposes read-only system/runtime trees, read-only attempt input,
+writable work/output/logs, isolated `/tmp`, minimal `/dev`, a new `/proc`, and a
+new network namespace for network-denied policy. It reports filesystem and write
+restriction, home denial, network denial, timeout, and Bubblewrap parent-death
+enforcement. CPU, RAM, scratch-byte, process-count, cgroup, seccomp, log-size, and
+dedicated-identity controls remain unimplemented. See the
+[Linux guide](../docs/linux-worker.md).
+
+The Windows backend uses a self-contained native launcher built for the target
+Windows architecture. It grants read-only access to the worker-owned private Java
+runtime, read/write access only to `work`, `output`, and `logs`, and read-only
+access to `input`. AppContainer provides network and home-directory denial. A Job
+Object enforces per-process memory, CPU rate, active-process count, and
+kill-on-close. Timeout and cancellation terminate the launcher, which closes the
+Job Object and its descendants. Scratch-byte quotas and log-size quotas are not
+yet enforced. See the [Windows guide](../docs/windows-worker.md).

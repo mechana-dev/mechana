@@ -77,8 +77,12 @@ result validator modular, but does not yet implement a generic core plugin API.
 The initial separate host adapts the existing `TaskPlugin` contract without
 changing computation semantics. One NDJSON request selects a verified JAR and
 entrypoint; events carry progress, artifact staging, completion, and failure.
-Forced cancellation terminates the host process. The distributed
-`fractal-render` path is the first migrated plugin: its existing computation runs
-unchanged in the host while the worker translates progress and artifacts back to
-the lease-fenced server protocol. Cooperative protocol cancellation and migration
-of sleep, video, OCR, and Blender remain pending.
+Forced cancellation terminates the host process. All five current distributed
+plugin paths—sleep, FFmpeg video, fractal rendering, Tesseract OCR, and Blender
+rendering—can run in the host when a worker is launched in explicit sandboxed
+mode. The worker stages remote inputs before launch, while native plugins require
+operator-declared absolute executable paths. Legacy execution remains available.
+On Linux the existing host contract is executed through the bubblewrap backend;
+on Windows it is executed through the AppContainer/Job Object backend;
+plugin implementations remain platform-neutral and contain only computation logic.
+Cooperative protocol cancellation remains pending.
