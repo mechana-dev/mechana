@@ -22,13 +22,19 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 
 final class SettingsStore {
+	static final String ALL_SUPPORTED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render";
+	private static final int CURRENT_VERSION = 2;
+	private static final Map<String, SshDefaults> KNOWN_HOSTS = Map.of("marks-macbook-air-m4",
+			new SshDefaults("markvita", 22), "rocinante", new SshDefaults("markvita", 21012), "srv959600",
+			new SshDefaults("root", 22), "hyperion", new SshDefaults("markf", 22));
+
 	record HostSettings(int port, String token, int count, AgentClient.LaunchMode launchMode, String capabilities,
 			String sshUser, int sshPort, String identityFile, boolean acceptNewHostKey, String coordinator,
 			String remoteDirectory, String agentJar, String workerJar, String sandboxRoot,
@@ -62,20 +68,24 @@ final class SettingsStore {
 		String lastHost = p.getProperty("last-host", "localhost");
 		if (!hosts.contains(lastHost))
 			hosts.add(lastHost);
-		HostSettings legacy = readProfile(p, "");
+		KNOWN_HOSTS.keySet().stream().sorted().filter(host -> !hosts.contains(host)).forEach(hosts::add);
+		HostSettings legacy = readProfile(p, "", defaults());
 		Map<String, HostSettings> profiles = new LinkedHashMap<>();
 		for (int i = 0; i < hosts.size(); i++) {
 			String prefix = "profile." + i + ".";
 			if (p.containsKey(prefix + "port"))
-				profiles.put(hosts.get(i), readProfile(p, prefix));
+				profiles.put(hosts.get(i), readProfile(p, prefix, defaultsFor(hosts.get(i))));
 			else if (hosts.get(i).equals(lastHost))
-				profiles.put(hosts.get(i), legacy);
+				profiles.put(hosts.get(i), migrateLegacyProfile(hosts.get(i), legacy));
+			else
+				profiles.put(hosts.get(i), defaultsFor(hosts.get(i)));
 		}
 		return new Settings(List.copyOf(hosts), lastHost, Map.copyOf(profiles));
 	}
 
 	void save(Settings settings) throws IOException {
 		Properties p = new Properties();
+		p.setProperty("settings-version", Integer.toString(CURRENT_VERSION));
 		List<String> hosts = new ArrayList<>(new LinkedHashSet<>(settings.hosts()));
 		for (int i = 0; i < hosts.size(); i++)
 			p.setProperty("host." + i, hosts.get(i));
@@ -94,15 +104,22 @@ final class SettingsStore {
 	}
 
 	static HostSettings defaults() {
-		return new HostSettings(8790, "", 1, AgentClient.LaunchMode.SANDBOXED, "fractal-render",
+		return new HostSettings(8790, "", 1, AgentClient.LaunchMode.SANDBOXED, ALL_SUPPORTED_PLUGINS,
 				System.getProperty("user.name"), 22, "", false, "http://127.0.0.1:8787", "~/.mechana/host-agent",
 				"worker-host-agent/target/mechana-worker-host-agent.jar", "mechana-worker/target/mechana-worker.jar",
 				"~/.mechana/sandbox",
 				"windows-sandbox-launcher/bin/Release/net10.0-windows/win-arm64/publish/mechana-windows-sandbox.exe");
 	}
 
-	private static HostSettings readProfile(Properties p, String prefix) {
+	static HostSettings defaultsFor(String host) {
 		HostSettings defaults = defaults();
+		SshDefaults ssh = KNOWN_HOSTS.get(host);
+		if (ssh == null)
+			return defaults;
+		return withSshAndCapabilities(defaults, ssh.user(), ssh.port(), ALL_SUPPORTED_PLUGINS);
+	}
+
+	private static HostSettings readProfile(Properties p, String prefix, HostSettings defaults) {
 		String remoteDirectory = migrateRemoteDirectory(
 				p.getProperty(prefix + "remote-directory", defaults.remoteDirectory()));
 		String sandboxRoot = migrateSandboxRoot(p.getProperty(prefix + "sandbox-root", defaults.sandboxRoot()));
@@ -120,6 +137,19 @@ final class SettingsStore {
 				p.getProperty(prefix + "agent-jar", defaults.agentJar()),
 				p.getProperty(prefix + "worker-jar", defaults.workerJar()), sandboxRoot,
 				p.getProperty(prefix + "windows-sandbox-launcher", defaults.windowsSandboxLauncher()));
+	}
+
+	private static HostSettings migrateLegacyProfile(String host, HostSettings legacy) {
+		SshDefaults ssh = KNOWN_HOSTS.get(host);
+		return ssh == null ? legacy : withSshAndCapabilities(legacy, ssh.user(), ssh.port(), ALL_SUPPORTED_PLUGINS);
+	}
+
+	private static HostSettings withSshAndCapabilities(HostSettings profile, String sshUser, int sshPort,
+			String capabilities) {
+		return new HostSettings(profile.port(), profile.token(), profile.count(), profile.launchMode(), capabilities,
+				sshUser, sshPort, profile.identityFile(), profile.acceptNewHostKey(), profile.coordinator(),
+				profile.remoteDirectory(), profile.agentJar(), profile.workerJar(), profile.sandboxRoot(),
+				profile.windowsSandboxLauncher());
 	}
 
 	private static String migrateRemoteDirectory(String value) {
@@ -146,5 +176,8 @@ final class SettingsStore {
 		p.setProperty(prefix + "worker-jar", profile.workerJar());
 		p.setProperty(prefix + "sandbox-root", profile.sandboxRoot());
 		p.setProperty(prefix + "windows-sandbox-launcher", profile.windowsSandboxLauncher());
+	}
+
+	private record SshDefaults(String user, int port) {
 	}
 }

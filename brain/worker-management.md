@@ -1,6 +1,6 @@
 # Worker management
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-07
 
 Worker management is an operational layer around workers, not part of plugin
 semantics or scheduler placement. Its purpose is to make contributed compute
@@ -60,3 +60,11 @@ The current host agent controls process count, not the full accepted CPU, RAM,
 scratch, cache, plugin allowlist, network, or sandbox policy. Those remain roadmap
 items and must not be presented as implemented guarantees. See
 [`WORKER-CONTROL.md`](../docs/WORKER-CONTROL.md) for current setup.
+
+Worker Control stores a complete profile per hostname and restores it when the
+operator changes hosts. Legacy global settings migrate to the previously selected
+host, while missing profiles receive defaults without replacing a later saved
+customization. The known development hosts are pre-populated with their established
+SSH usernames and ports and the complete supported plugin capability set; SSH
+authentication continues to rely on existing keys and batch-mode OpenSSH rather
+than password storage.

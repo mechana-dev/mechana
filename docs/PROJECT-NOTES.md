@@ -1000,3 +1000,14 @@ Append-only record of material Mechana project changes and accepted decisions.
   after correcting duplicate Linux host-agent services and routing Hyperion directly
   to the MBA over the VM network. Host-agent restart does not yet persist and restore
   the requested worker count; this is documented as follow-up rather than claimed.
+
+## 2026-08-07 — Seed development-fleet Worker Control profiles
+
+- Added migration-safe defaults for the MBA, Rocinante, Linux, and Hyperion test
+  hosts, including each host's established SSH username and port.
+- Defaulted new host profiles and the plugin field to the complete current set:
+  sleep, FFmpeg video, fractal rendering, Tesseract OCR, and Blender rendering.
+- Preserved existing per-host customizations and other legacy fields while migrating
+  global settings into independent versioned profiles on the next save.
+- Added focused settings migration, customization-preservation, and host-switching
+  regression tests. No SSH password storage or password authentication was added.

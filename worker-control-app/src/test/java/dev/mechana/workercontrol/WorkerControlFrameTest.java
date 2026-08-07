@@ -18,6 +18,8 @@ package dev.mechana.workercontrol;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.HashMap;
+import java.util.Map;
 import javax.swing.JFormattedTextField;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
@@ -35,5 +37,20 @@ class WorkerControlFrameTest {
 			text.set(field.getText());
 		});
 		assertEquals("21012", text.get());
+	}
+
+	@Test
+	void switchingHostsRestoresSavedProfileAndSeedsUnknownSelection() {
+		SettingsStore.HostSettings customized = new SettingsStore.HostSettings(8790, "token", 3,
+				AgentClient.LaunchMode.SANDBOXED, "sleep", "custom", 2222, "", false, "http://127.0.0.1:8787",
+				"~/.mechana/host-agent", "agent.jar", "worker.jar", "~/.mechana/sandbox", "sandbox.exe");
+		Map<String, SettingsStore.HostSettings> profiles = new HashMap<>();
+		profiles.put("hyperion", customized);
+
+		assertEquals(customized, WorkerControlFrame.profileForSelectedHost(profiles, "hyperion"));
+		SettingsStore.HostSettings rocinante = WorkerControlFrame.profileForSelectedHost(profiles, "rocinante");
+		assertEquals("markvita", rocinante.sshUser());
+		assertEquals(21012, rocinante.sshPort());
+		assertEquals(SettingsStore.ALL_SUPPORTED_PLUGINS, rocinante.capabilities());
 	}
 }
