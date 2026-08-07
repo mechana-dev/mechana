@@ -267,8 +267,11 @@ under a transient AppContainer and Job Object. Hyperion passed the adversarial
 enforcement probe, including Java security initialization, plus real sleep,
 fractal, Tesseract OCR, FFmpeg compression, and Blender render jobs on attempt one
 with Java 25.0.4, Tesseract 5.4.0, FFmpeg 8.1.1, and Blender 4.5.3 LTS. Native
-runtime directories receive temporary read/execute Package SID ACLs and bounded
-per-plugin process counts; the final audit found no residual ACLs or workspaces.
+runtime directories receive temporary read/execute Package SID ACLs. Cross-process
+filesystem ACL changes are serialized so concurrent AppContainer attempts cannot
+overwrite each other's runtime grants. After an attempt exits, the launcher resets
+that private workspace's ACLs before Java cleanup, including protected temporary
+directories created by Blender. Per-plugin process counts remain bounded.
 The backend still reports full filesystem read restriction as absent.
 
 The status-classified [sandbox architecture](sandbox.md) separates accepted

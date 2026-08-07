@@ -1133,3 +1133,19 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Updated `brain/current-state.md` with the checked-in Mac launcher suite, the
   Blender orbit sample defaults, and the server dashboard's verified Windows
   sandbox label; implementation limits remain separated from future direction.
+
+## 2026-08-07 12:42:36 EDT — Fix concurrent Windows sandbox runtime access
+
+- Diagnosed Blender job `9c8a97ae-aaee-423d-b69e-14cdc5950c12`: both Hyperion
+  workers intermittently lost access to the shared private Java and Blender
+  runtimes while concurrent AppContainer attempts edited their Package SID ACLs.
+- Serialized filesystem ACL grant/removal operations with a named cross-process
+  mutex. The lock covers only each short ACL mutation, so sandboxed render
+  processes still execute concurrently.
+- Reset each private attempt workspace ACL after the AppContainer exits and before
+  worker-side deletion. This handles Blender-created protected temporary
+  directories without broadening runtime or host filesystem access.
+- Added focused launcher-resource regression tests. A live eight-frame/eight-task
+  Blender job launched both fixed Hyperion workers concurrently without the prior
+  Java-security or Blender `Access is denied` startup failures and assembled its
+  final movie successfully.

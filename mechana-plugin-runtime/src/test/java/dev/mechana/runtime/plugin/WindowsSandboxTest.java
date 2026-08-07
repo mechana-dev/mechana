@@ -18,6 +18,8 @@ package dev.mechana.runtime.plugin;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.nio.charset.StandardCharsets;
@@ -78,5 +80,30 @@ class WindowsSandboxTest {
 		if (!System.getProperty("os.name").toLowerCase().contains("windows"))
 			assertTrue(sandbox.capabilities(policy).enforced().entrySet().stream().filter(Map.Entry::getValue)
 					.allMatch(entry -> entry.getKey() == SandboxControl.TIMEOUT));
+	}
+
+	@Test
+	void serializesSharedFilesystemAclChangesAcrossLauncherProcesses() throws IOException {
+		try (InputStream input = WindowsSandbox.class
+				.getResourceAsStream("/dev/mechana/runtime/plugin/windows-sandbox-launcher.ps1")) {
+			assertTrue(input != null);
+			String launcher = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+			assertTrue(launcher.contains("Mechana.AppContainer.FilesystemAcl"));
+			assertTrue(launcher.indexOf("Invoke-WithFilesystemAclLock {") < launcher.indexOf("/grant"));
+			assertTrue(launcher.lastIndexOf("Invoke-WithFilesystemAclLock {") < launcher.indexOf("/remove"));
+		}
+	}
+
+	@Test
+	void resetsAttemptWorkspaceAclBeforeRemovingTemporaryRuntimeGrants() throws IOException {
+		try (InputStream input = WindowsSandbox.class
+				.getResourceAsStream("/dev/mechana/runtime/plugin/windows-sandbox-launcher.ps1")) {
+			assertTrue(input != null);
+			String launcher = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+			assertTrue(
+					launcher.contains("$start.Arguments = '\"' + $Path.Replace('\"', '\\\"') + '\" /reset /T /C /Q'"));
+			assertTrue(launcher.lastIndexOf("Reset-WorkspaceAccess $Workspace") < launcher
+					.lastIndexOf("foreach ($path in $temporaryGrants) { Remove-AppContainerAccess $path $sid }"));
+		}
 	}
 }
