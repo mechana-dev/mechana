@@ -250,7 +250,10 @@ final class SshProvisioner {
 		String serviceDirectory = home + "/.config/systemd/user";
 		ssh(request, target, "mkdir -p " + quote(serviceDirectory));
 		copy(request, target, service, serviceDirectory + "/" + LABEL + ".service");
-		ssh(request, target, "systemctl --user daemon-reload; systemctl --user enable --now " + LABEL + ".service");
+		ssh(request, target,
+				linuxLegacySystemServiceCleanupCommand() + "; " + linuxPortReleaseCommand(request.agentPort())
+						+ "; systemctl --user daemon-reload; systemctl --user enable " + LABEL
+						+ ".service; systemctl --user restart " + LABEL + ".service");
 	}
 
 	private String ssh(Request request, String target, String remoteCommand) throws IOException, InterruptedException {
@@ -297,7 +300,7 @@ final class SshProvisioner {
 	private static void writeConfig(Path file, Request request, String java, String remote, String sandboxRoot)
 			throws IOException {
 		Properties properties = new Properties();
-		properties.setProperty("bind-address", "0.0.0.0");
+		properties.setProperty("bind-address", "127.0.0.1");
 		properties.setProperty("port", Integer.toString(request.agentPort()));
 		properties.setProperty("token", request.token());
 		properties.setProperty("machine-name", request.host());
@@ -419,11 +422,29 @@ final class SshProvisioner {
 				+ "esac; agent_pid=$(lsof -nP -tiTCP:" + port + " -sTCP:LISTEN 2>/dev/null | head -n 1); done";
 	}
 
+	static String linuxPortReleaseCommand(int port) {
+		String listener = "ss -ltnp 'sport = :" + port
+				+ "' 2>/dev/null | sed -n 's/.*pid=\\([0-9]*\\).*/\\1/p' | head -n 1";
+		return "agent_pid=$(" + listener + "); while [ -n \"$agent_pid\" ]; do "
+				+ "agent_command=$(ps -p \"$agent_pid\" -o command=); case \"$agent_command\" in "
+				+ "*mechana-worker-host-agent.jar*) kill \"$agent_pid\" 2>/dev/null || true; agent_wait=0; "
+				+ "while kill -0 \"$agent_pid\" 2>/dev/null && [ \"$agent_wait\" -lt 50 ]; do sleep 0.1; "
+				+ "agent_wait=$((agent_wait + 1)); done; kill -9 \"$agent_pid\" 2>/dev/null || true ;; "
+				+ "*) echo \"Port " + port
+				+ " is occupied by a non-Mechana process: $agent_command\" >&2; exit 1 ;; esac; agent_pid=$(" + listener
+				+ "); done";
+	}
+
+	static String linuxLegacySystemServiceCleanupCommand() {
+		return "if [ \"$(id -u)\" = 0 ] && systemctl cat mechana-worker-host-agent.service 2>/dev/null "
+				+ "| grep -Fq '/opt/mechana/host-agent/mechana-worker-host-agent.jar'; then "
+				+ "systemctl disable --now mechana-worker-host-agent.service; fi";
+	}
+
 	private static void validate(Request request) throws IOException {
 		validateConnection(request);
-		if (request.host().isBlank() || request.sshUser().isBlank() || request.token().isBlank()
-				|| request.coordinator().isBlank())
-			throw new IllegalArgumentException("Host, SSH user, token, and coordinator are required");
+		if (request.host().isBlank() || request.sshUser().isBlank() || request.coordinator().isBlank())
+			throw new IllegalArgumentException("Host, SSH user, and coordinator are required");
 		if (!safeRemotePath(request.remoteDirectory()))
 			throw new IllegalArgumentException("Remote directory must not contain spaces or '..'");
 		if (!safeRemotePath(request.sandboxRoot()))

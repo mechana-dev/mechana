@@ -67,6 +67,7 @@ class SshProvisionerTest {
 						&& value.contains("occupied by a non-Mechana process")));
 		assertTrue(
 				uploadedText.stream().anyMatch(value -> value.contains("sandbox-root=/Users/remote/.mechana/sandbox")));
+		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("bind-address=127.0.0.1")));
 		assertTrue(commands.stream().map(List::getLast)
 				.anyMatch(value -> value.contains("'/Users/remote/.mechana/sandbox'")));
 		assertTrue(uploadedText.stream().anyMatch(value -> value.contains("dev.mechana.worker-host-agent")));
@@ -83,11 +84,80 @@ class SshProvisionerTest {
 	}
 
 	@Test
+	void permitsBlankDevelopmentTokenForLoopbackAgent() throws Exception {
+		Path agent = Files.writeString(temporary.resolve("agent.jar"), "agent");
+		Path worker = Files.writeString(temporary.resolve("worker.jar"), "worker");
+		List<String> uploadedText = new ArrayList<>();
+		SshProvisioner provisioner = new SshProvisioner((command, timeout) -> {
+			if (command.getFirst().equals("scp")) {
+				Path source = Path.of(command.get(command.size() - 2));
+				if (!source.equals(agent) && !source.equals(worker))
+					uploadedText.add(Files.readString(source));
+				return "";
+			}
+			return switch (command.getLast()) {
+				case "uname -s" -> "Darwin\n";
+				case "pwd" -> "/Users/remote\n";
+				case "command -v java" -> "/usr/bin/java\n";
+				default -> "";
+			};
+		});
+
+		provisioner.deploy(request(agent, worker, ""));
+
+		assertTrue(uploadedText.stream()
+				.anyMatch(value -> value.contains("bind-address=127.0.0.1") && value.contains("token=")));
+	}
+
+	@Test
 	void rejectsUnsupportedSshPlatform() throws Exception {
 		Path agent = Files.writeString(temporary.resolve("agent.jar"), "agent");
 		Path worker = Files.writeString(temporary.resolve("worker.jar"), "worker");
 		SshProvisioner provisioner = new SshProvisioner((command, timeout) -> "Windows_NT\n");
 		assertThrows(java.io.IOException.class, () -> provisioner.deploy(request(agent, worker)));
+	}
+
+	@Test
+	void linuxReinstallRestartsAlreadyRunningAgent() throws Exception {
+		Path agent = Files.writeString(temporary.resolve("agent.jar"), "agent");
+		Path worker = Files.writeString(temporary.resolve("worker.jar"), "worker");
+		List<List<String>> commands = new ArrayList<>();
+		SshProvisioner provisioner = new SshProvisioner((command, timeout) -> {
+			commands.add(List.copyOf(command));
+			return switch (command.getLast()) {
+				case "uname -s" -> "Linux\n";
+				case "pwd" -> "/root\n";
+				case "command -v java" -> "/usr/bin/java\n";
+				default -> "";
+			};
+		});
+
+		provisioner.deploy(request(agent, worker, ""));
+
+		assertTrue(commands.stream().map(List::getLast).anyMatch(value -> value.contains("systemctl --user enable ")
+				&& value.contains("systemctl --user restart dev.mechana.worker-host-agent.service")
+				&& value.contains("systemctl disable --now mechana-worker-host-agent.service")
+				&& value.contains("/opt/mechana/host-agent/mechana-worker-host-agent.jar")
+				&& value.contains("ss -ltnp 'sport = :8790'") && value.contains("*mechana-worker-host-agent.jar*")));
+	}
+
+	@Test
+	void legacyLinuxSystemServiceCleanupIsRootOnlyAndPathRestricted() {
+		String command = SshProvisioner.linuxLegacySystemServiceCleanupCommand();
+		assertTrue(command.contains("[ \"$(id -u)\" = 0 ]"));
+		assertTrue(command.contains("systemctl cat mechana-worker-host-agent.service"));
+		assertTrue(command.contains("grep -Fq '/opt/mechana/host-agent/mechana-worker-host-agent.jar'"));
+		assertTrue(command.contains("systemctl disable --now mechana-worker-host-agent.service"));
+	}
+
+	@Test
+	void linuxStaleAgentCleanupRejectsUnrelatedListener() throws Exception {
+		String command = SshProvisioner.linuxPortReleaseCommand(8790);
+		assertTrue(command.contains("ss -ltnp 'sport = :8790'"));
+		assertTrue(command.contains("ps -p \"$agent_pid\" -o command="));
+		assertTrue(command.contains("*mechana-worker-host-agent.jar*"));
+		assertTrue(command.contains("Port 8790 is occupied by a non-Mechana process"));
+		assertEquals("", SshProvisioner.runCommand(List.of("/bin/sh", "-n", "-c", command), Duration.ofSeconds(5)));
 	}
 
 	@Test
@@ -181,8 +251,12 @@ class SshProvisionerTest {
 	}
 
 	private SshProvisioner.Request request(Path agent, Path worker) {
+		return request(agent, worker, "secret");
+	}
+
+	private SshProvisioner.Request request(Path agent, Path worker, String token) {
 		return new SshProvisioner.Request("mba.example", "mark", 2222, null, false, agent, worker,
-				"~/.mechana/host-agent", "http://coordinator:8787", 8790, "secret", "sleep,fractal-render",
+				"~/.mechana/host-agent", "http://coordinator:8787", 8790, token, "sleep,fractal-render",
 				"fractal-render", "~/.mechana/sandbox", temporary.resolve("windows-sandbox.exe"));
 	}
 

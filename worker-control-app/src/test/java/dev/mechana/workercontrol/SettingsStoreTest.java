@@ -16,6 +16,7 @@
 package dev.mechana.workercontrol;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -58,6 +59,68 @@ class SettingsStoreTest {
 	}
 
 	@Test
+	void seedsKnownHostsWithTheirSshAndFullPluginDefaults() throws Exception {
+		SettingsStore.Settings loaded = new SettingsStore(temporary.resolve("settings.properties")).load();
+
+		assertKnownProfile(loaded, "marks-macbook-air-m4", "markvita", 22);
+		assertKnownProfile(loaded, "rocinante", "markvita", 21012);
+		assertKnownProfile(loaded, "srv959600", "root", 22);
+		assertKnownProfile(loaded, "hyperion", "markf", 22);
+	}
+
+	@Test
+	void migratesLegacyKnownHostToKnownDefaultsWhilePreservingOtherFields() throws Exception {
+		Path file = temporary.resolve("settings.properties");
+		Files.writeString(file, "host.0=rocinante\nlast-host=rocinante\nport=9911\ntoken=secret\ncount=7\n"
+				+ "ssh-user=old-global-user\nssh-port=22\ncapabilities=fractal-render\ncoordinator=http\\://mba\\:8787\n");
+
+		SettingsStore.HostSettings migrated = new SettingsStore(file).load().profiles().get("rocinante");
+
+		assertEquals(9911, migrated.port());
+		assertEquals("secret", migrated.token());
+		assertEquals(7, migrated.count());
+		assertEquals(SettingsStore.FLEET_COORDINATOR, migrated.coordinator());
+		assertEquals("markvita", migrated.sshUser());
+		assertEquals(21012, migrated.sshPort());
+		assertEquals(SettingsStore.ALL_SUPPORTED_PLUGINS, migrated.capabilities());
+	}
+
+	@Test
+	void preservesExplicitPerHostCustomizationsOnLaterLoads() throws Exception {
+		Path file = temporary.resolve("settings.properties");
+		Files.writeString(file, "settings-version=2\nhost.0=hyperion\nlast-host=hyperion\nprofile.0.port=8790\n"
+				+ "profile.0.ssh-user=custom-user\nprofile.0.ssh-port=2222\nprofile.0.capabilities=sleep\n");
+
+		SettingsStore.HostSettings loaded = new SettingsStore(file).load().profiles().get("hyperion");
+
+		assertEquals("custom-user", loaded.sshUser());
+		assertEquals(2222, loaded.sshPort());
+		assertEquals("sleep", loaded.capabilities());
+	}
+
+	@Test
+	void migratesKnownVersionTwoProfilesAwayFromLocalhostCoordinator() throws Exception {
+		Path file = temporary.resolve("settings.properties");
+		Files.writeString(file, "settings-version=2\nhost.0=srv959600\nlast-host=srv959600\nprofile.0.port=8790\n"
+				+ "profile.0.coordinator=http\\://127.0.0.1\\:8787\n");
+
+		SettingsStore.HostSettings loaded = new SettingsStore(file).load().profiles().get("srv959600");
+
+		assertEquals(SettingsStore.FLEET_COORDINATOR, loaded.coordinator());
+	}
+
+	@Test
+	void preservesExplicitCoordinatorCustomizationAfterMigration() throws Exception {
+		Path file = temporary.resolve("settings.properties");
+		Files.writeString(file, "settings-version=3\nhost.0=hyperion\nlast-host=hyperion\nprofile.0.port=8790\n"
+				+ "profile.0.coordinator=http\\://custom-coordinator\\:8787\n");
+
+		SettingsStore.HostSettings loaded = new SettingsStore(file).load().profiles().get("hyperion");
+
+		assertEquals("http://custom-coordinator:8787", loaded.coordinator());
+	}
+
+	@Test
 	void migratesOldLinuxSystemDefaultsToUserWritablePaths() throws Exception {
 		Path file = temporary.resolve("settings.properties");
 		Files.writeString(file,
@@ -76,5 +139,14 @@ class SettingsStoreTest {
 		return new SettingsStore.HostSettings(port, "token-" + port, 4, AgentClient.LaunchMode.SANDBOXED,
 				"sleep,fractal-render", "root", sshPort, "/keys/id", true, "http://coordinator:8787", remoteDirectory,
 				"/local/agent.jar", "/local/worker.jar", sandboxRoot, "/local/windows-sandbox.exe");
+	}
+
+	private static void assertKnownProfile(SettingsStore.Settings settings, String host, String user, int sshPort) {
+		assertTrue(settings.hosts().contains(host));
+		SettingsStore.HostSettings profile = settings.profiles().get(host);
+		assertEquals(user, profile.sshUser());
+		assertEquals(sshPort, profile.sshPort());
+		assertEquals(SettingsStore.ALL_SUPPORTED_PLUGINS, profile.capabilities());
+		assertEquals(SettingsStore.FLEET_COORDINATOR, profile.coordinator());
 	}
 }

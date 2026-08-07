@@ -1000,3 +1000,28 @@ Append-only record of material Mechana project changes and accepted decisions.
   after correcting duplicate Linux host-agent services and routing Hyperion directly
   to the MBA over the VM network. Host-agent restart does not yet persist and restore
   the requested worker count; this is documented as follow-up rather than claimed.
+
+## 2026-08-07 — Seed development-fleet Worker Control profiles
+
+- Added migration-safe defaults for the MBA, Rocinante, Linux, and Hyperion test
+  hosts, including each host's established SSH username and port and the shared
+  `http://marks-macbook-air-m4:8787` coordinator URL.
+- Defaulted new host profiles and the plugin field to the complete current set:
+  sleep, FFmpeg video, fractal rendering, Tesseract OCR, and Blender rendering.
+- Preserved existing per-host customizations and other legacy fields while migrating
+  global settings into independent versioned profiles on the next save.
+- Added focused settings migration, customization-preservation, and host-switching
+  regression tests. No SSH password storage or password authentication was added.
+- Made the bearer token optional for SSH-tunneled development management. Blank
+  tokens now remain blank, and generated agents bind only to remote loopback;
+  nonblank tokens continue to enable bearer authentication.
+- Linux reinstall now explicitly restarts an already-running systemd user service
+  so rewritten token and coordinator settings take effect immediately.
+- Linux reinstall also removes a verified stale Mechana agent holding the selected
+  port, including legacy `/opt` deployments, while refusing to kill an unrelated
+  listener.
+- Root-targeted Linux reinstall disables the specifically verified legacy
+  `/etc/systemd/system/mechana-worker-host-agent.service` supervisor before port
+  cleanup so the obsolete `/opt` agent cannot respawn.
+- Moved the remote SSH action buttons to a dedicated row so Worker Control packs
+  into a narrower window without shrinking its path fields.

@@ -50,6 +50,9 @@ This file reports repository evidence, not desired future status.
   existing Java 25 runtime and SSH trust; it does not install prerequisites, use
   sudo, modify firewalls, or enable Linux lingering. Windows persistence uses a
   per-user Scheduled Task and a worker-owned private Java runtime.
+- SSH-provisioned agents bind only to remote loopback and are reached through the
+  controller's authenticated SSH tunnel. Their bearer token is optional for
+  development; a nonblank saved token retains the additional HTTP authentication.
 - The controller treats authenticated agent status as authoritative: it mirrors
   live workers, counts, mode, and plugins and disables worker actions until the
   selected agent responds. It distinguishes an unreachable endpoint from a
@@ -59,6 +62,11 @@ This file reports repository evidence, not desired future status.
   FFmpeg, FFprobe, Tesseract, and Blender through standard macOS/Linux locations,
   fails before deployment when the configured plugin set lacks a required tool,
   and persists verified absolute paths in the launchd/systemd definition.
+- Worker Control persists connection, SSH, launch, plugin, and deployment settings
+  independently for each host. Its four development-fleet host profiles are seeded
+  with the established SSH users and ports and all five currently supported plugin
+  capabilities and the MBA coordinator URL; saved per-host customizations remain
+  authoritative.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/

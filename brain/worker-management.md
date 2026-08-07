@@ -1,6 +1,6 @@
 # Worker management
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-07
 
 Worker management is an operational layer around workers, not part of plugin
 semantics or scheduler placement. Its purpose is to make contributed compute
@@ -56,7 +56,21 @@ workers. These modes are suitable only for an appropriately firewalled trusted
 LAN/tailnet. TLS, OS credential storage, token rotation, roles, audit logging,
 service installers, and durable adoption remain production work.
 
+Worker Control's SSH provisioning path binds the agent to remote loopback and
+reaches it through an authenticated SSH tunnel. A blank Token field is therefore
+allowed as a development convenience on this path; a nonblank token retains
+bearer authentication in addition to the tunnel.
+
 The current host agent controls process count, not the full accepted CPU, RAM,
 scratch, cache, plugin allowlist, network, or sandbox policy. Those remain roadmap
 items and must not be presented as implemented guarantees. See
 [`WORKER-CONTROL.md`](../docs/WORKER-CONTROL.md) for current setup.
+
+Worker Control stores a complete profile per hostname and restores it when the
+operator changes hosts. Legacy global settings migrate to the previously selected
+host, while missing profiles receive defaults without replacing a later saved
+customization. The known development hosts are pre-populated with their established
+SSH usernames and ports, the complete supported plugin capability set, and the
+shared MBA coordinator URL rather than per-worker localhost; SSH authentication
+continues to rely on existing keys and batch-mode OpenSSH rather than password
+storage.

@@ -21,9 +21,7 @@ import java.awt.FlowLayout;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
-import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,8 +30,7 @@ import javax.swing.*;
 
 final class WorkerControlFrame extends JFrame {
 	private static final long serialVersionUID = 1L;
-	private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
-	private static final String SANDBOXED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render";
+	private static final String SANDBOXED_PLUGINS = SettingsStore.ALL_SUPPORTED_PLUGINS;
 	private final transient AgentClient client;
 	private final transient SettingsStore store;
 	private final transient SshProvisioner provisioner;
@@ -43,7 +40,7 @@ final class WorkerControlFrame extends JFrame {
 	private final JPasswordField token = new JPasswordField(16);
 	private final JSpinner count = new JSpinner(new SpinnerNumberModel(1, 0, 128, 1));
 	private final JComboBox<AgentClient.LaunchMode> launchMode = new JComboBox<>(AgentClient.LaunchMode.values());
-	private final JTextField capabilities = new JTextField("fractal-render", 28);
+	private final JTextField capabilities = new JTextField(SettingsStore.ALL_SUPPORTED_PLUGINS, 28);
 	private final JTextField sshUser = new JTextField(System.getProperty("user.name"), 10);
 	private final JSpinner sshPort = new JSpinner(new SpinnerNumberModel(22, 1, 65535, 1));
 	private final JTextField identityFile = new JTextField(18);
@@ -84,6 +81,7 @@ final class WorkerControlFrame extends JFrame {
 		host.setEditable(true);
 		workers.setEditable(false);
 		capabilities.setToolTipText("Comma-separated plugin capabilities allowed by the selected host agent");
+		token.setToolTipText("Optional for development; blank uses the SSH tunnel without bearer authentication");
 		workers.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12));
 		JPanel connection = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		connection.add(new JLabel("Host"));
@@ -129,12 +127,14 @@ final class WorkerControlFrame extends JFrame {
 		artifacts.add(workerJar);
 		artifacts.add(new JLabel("Windows sandbox EXE"));
 		artifacts.add(windowsSandboxLauncher);
-		artifacts.add(deploy);
-		artifacts.add(restartAgent);
-		artifacts.add(stopAgent);
+		JPanel remoteActions = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		remoteActions.add(deploy);
+		remoteActions.add(restartAgent);
+		remoteActions.add(stopAgent);
 		provisioning.add(ssh);
 		provisioning.add(paths);
 		provisioning.add(artifacts);
+		provisioning.add(remoteActions);
 		top.add(provisioning, BorderLayout.SOUTH);
 		add(top, BorderLayout.NORTH);
 		add(new JScrollPane(workers), BorderLayout.CENTER);
@@ -153,7 +153,6 @@ final class WorkerControlFrame extends JFrame {
 				(Integer) count.getValue(), selectedMode(), capabilities.getText().strip()), Availability.KEEP));
 		stop.addActionListener(event -> run("Stopping", () -> client.stop(baseUri(), tokenValue()), Availability.KEEP));
 		deploy.addActionListener(event -> {
-			ensureToken();
 			run("Reinstalling", () -> {
 				try {
 					client.stop(baseUri(), tokenValue());
@@ -273,7 +272,7 @@ final class WorkerControlFrame extends JFrame {
 	private void applyModeDefaults() {
 		boolean sandboxed = selectedMode() == AgentClient.LaunchMode.SANDBOXED;
 		if (sandboxed)
-			setCapabilities("fractal-render");
+			setCapabilities(SettingsStore.ALL_SUPPORTED_PLUGINS);
 	}
 	private void setCapabilities(String value) {
 		capabilities.setText(value);
@@ -337,7 +336,7 @@ final class WorkerControlFrame extends JFrame {
 		if (activeHost != null && !activeHost.isBlank())
 			hostProfiles.put(activeHost, currentProfile());
 		String selectedHost = hostValue();
-		SettingsStore.HostSettings profile = hostProfiles.computeIfAbsent(selectedHost, ignored -> currentProfile());
+		SettingsStore.HostSettings profile = profileForSelectedHost(hostProfiles, selectedHost);
 		activeHost = selectedHost;
 		changingHostList = true;
 		try {
@@ -346,6 +345,11 @@ final class WorkerControlFrame extends JFrame {
 			changingHostList = false;
 		}
 		remember();
+	}
+
+	static SettingsStore.HostSettings profileForSelectedHost(Map<String, SettingsStore.HostSettings> profiles,
+			String host) {
+		return profiles.computeIfAbsent(host, SettingsStore::defaultsFor);
 	}
 
 	private SettingsStore.HostSettings currentProfile() {
@@ -396,14 +400,6 @@ final class WorkerControlFrame extends JFrame {
 			}
 		}
 		throw new IOException("Installed agent did not become reachable: " + last.getMessage(), last);
-	}
-
-	private void ensureToken() {
-		if (tokenValue().isBlank()) {
-			byte[] random = new byte[32];
-			TOKEN_RANDOM.nextBytes(random);
-			token.setText(Base64.getUrlEncoder().withoutPadding().encodeToString(random));
-		}
 	}
 
 	static void usePlainIntegerFormat(JSpinner spinner) {
