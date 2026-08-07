@@ -1115,3 +1115,7 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Made abandoned sandbox workspace deletion propagate filesystem traversal
   failures as checked cleanup errors, preventing inaccessible stale Windows
   AppContainer scratch from crashing replacement workers during startup.
+- Standardized Client Job Launcher capability presentation and task selection:
+  dropdown entries no longer show worker counts, every plugin uses
+  `Tasks (0 = fleet)`, and zero now means one task per compatible connected
+  worker rather than a plugin-specific multiplier or rejection.

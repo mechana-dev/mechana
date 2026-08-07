@@ -44,12 +44,12 @@ final class JobLauncherCatalog {
 		OutputDescriptor serverFiles = new OutputDescriptor("server-local", "directory", "Server job artifacts", false);
 		return List.of(
 				descriptor("sleep", "Sleep", "/api/jobs", serverFiles, "One worker slot per task",
-						integer("taskCount", "Tasks", "4", 1, 10000),
+						integer("taskCount", "Tasks (0 = fleet)", "0", 0, 10000),
 						integer("durationMillis", "Duration (ms)", "1000", 1, 86400000)),
 				descriptor("video-ffmpeg", "FFmpeg video", "/api/jobs/video", serverFiles,
 						"FFmpeg runtime and scratch proportional to the source", file("sourcePath", "Input video"),
 						decimal("durationSeconds", "Duration (seconds)", "60", 0.01, 86400),
-						integer("segmentCount", "Segments", "8", 1, 10000),
+						integer("segmentCount", "Tasks (0 = fleet)", "0", 0, 10000),
 						decimal("targetSizeRatio", "Target size ratio", "0.75", 0.01, 0.99)),
 				descriptor("fractal-render", "Fractal render", "/api/jobs/fractal", serverFiles,
 						"Pure Java; memory scales with image dimensions",
@@ -70,8 +70,9 @@ final class JobLauncherCatalog {
 						file("sourcePath", "Packed .blend file", "samples/blender/mechana-camera-orbit-2s.blend"),
 						integer("firstFrame", "First frame", "1", 0, 1000000),
 						integer("lastFrame", "Last frame", "48", 0, 1000000),
-						integer("taskCount", "Tasks", "8", 1, 100000), integer("width", "Width", "640", 64, 8192),
-						integer("height", "Height", "360", 64, 8192), integer("samples", "Samples", "32", 1, 4096),
+						integer("taskCount", "Tasks (0 = fleet)", "0", 0, 100000),
+						integer("width", "Width", "640", 64, 8192), integer("height", "Height", "360", 64, 8192),
+						integer("samples", "Samples", "32", 1, 4096),
 						integer("fps", "Frames per second", "24", 1, 240)));
 	}
 

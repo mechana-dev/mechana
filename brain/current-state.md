@@ -41,6 +41,9 @@ This file reports repository evidence, not desired future status.
   currently come from a server-side
   composition catalog rather than plugin manifests; file fields are server-readable
   paths rather than uploads, and remote authenticated operation is not established.
+- Launcher capability labels omit transient worker counts. All five submission
+  forms expose `Tasks (0 = fleet)` consistently; zero resolves server-side to one
+  task per currently compatible worker, capped by the job's finite work units.
 - The host-agent API and Swing controller can start a worker group in explicit
   `SANDBOXED` or `LEGACY` mode with a selected plugin capability set. Sandboxed
   launch is available on macOS, Linux, and Windows and uses an agent-configured root

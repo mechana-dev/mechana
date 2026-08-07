@@ -272,9 +272,7 @@ final class ClientJobLauncherFrame extends JFrame {
 		@Override
 		public java.awt.Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected,
 				boolean focus) {
-			String label = value instanceof JobLauncherDescriptor descriptor
-					? descriptor.displayName() + " (" + descriptor.availableWorkers() + " workers)"
-					: "";
+			String label = value instanceof JobLauncherDescriptor descriptor ? descriptor.displayName() : "";
 			return super.getListCellRendererComponent(list, label, index, selected, focus);
 		}
 	}

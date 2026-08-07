@@ -43,4 +43,19 @@ class JobLauncherCatalogTest {
 		assertEquals("640", defaults.get("width"));
 		assertEquals("360", defaults.get("height"));
 	}
+
+	@Test
+	void everyCapabilityUsesTheSameFleetAwareTasksConvention() {
+		var descriptors = JobLauncherCatalog.available(
+				Map.of("sleep", 1, "video-ffmpeg", 1, "fractal-render", 1, "ocr-tesseract", 1, "blender-render", 1));
+		assertEquals(5, descriptors.size());
+		for (var descriptor : descriptors) {
+			var tasks = descriptor.fields().stream()
+					.filter(field -> field.name().equals("taskCount") || field.name().equals("segmentCount"))
+					.findFirst().orElseThrow();
+			assertEquals("Tasks (0 = fleet)", tasks.label());
+			assertEquals("0", tasks.defaultValue());
+			assertEquals(0d, tasks.minimum());
+		}
+	}
 }
