@@ -1071,3 +1071,13 @@ Append-only record of material Mechana project changes and accepted decisions.
   cleanup so the obsolete `/opt` agent cannot respawn.
 - Moved the remote SSH action buttons to a dedicated row so Worker Control packs
   into a narrower window without shrinking its path fields.
+
+## 2026-08-07 04:30:00 EDT
+
+Added the generic Client Job Launcher foundation: schedulable-capability discovery,
+descriptor-rendered forms for the five current plugins, generic submission,
+live/completed job monitoring, abort, provider-aware server-local artifacts, and
+owned-history purge. The new Swing module follows Worker Control conventions.
+Plugin-manifest descriptors, uploads, authentication, client-local storage, and
+cloud providers remain future direction; see `brain/current-state.md` and
+`docs/client-job-launcher.md`.

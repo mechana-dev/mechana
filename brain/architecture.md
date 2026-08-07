@@ -101,6 +101,11 @@ transport must adapt the same domain boundaries rather than redefine them.
   exposes an HTTP/JSON API that is authenticated by default. The Swing Worker Control App is an API
   client; it never turns a hostname into an implicit shell command and neither
   module is a dependency of the scheduler, worker, or plugin infrastructure.
+- User job lifecycle is a separate client boundary. The Client Job Launcher
+  consumes server-provided submission descriptors and scheduling availability;
+  it does not manage workers or embed plugin computation semantics. Its initial
+  Swing implementation follows Worker Control conventions and adapts the existing
+  HTTP endpoints while the future plugin manifest becomes authoritative.
 
 See [plugins](plugin-model.md), [artifacts](artifacts.md), and
 [storage](storage.md) and [scheduler](scheduler.md) for the contracts implied by

@@ -113,3 +113,10 @@ workers nor manage caches.
 See [artifacts](artifacts.md), [architecture](architecture.md), and
 [scheduler](scheduler.md). Implementation facts remain in
 [current state](current-state.md).
+# Client launcher integration
+
+The launcher treats output selection and completed artifacts as provider-aware.
+`server-local` remains the implemented default. Provider-specific browsing,
+authorization, client-local transfer, Google Drive, and S3 are future provider
+work; the generic launcher contract preserves a provider/key identity and an
+ownership flag so purge and open actions need not assume server storage.

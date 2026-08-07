@@ -69,3 +69,10 @@ The Blender slice uses a server-local packed `.blend` as immutable input,
 server-mediated HTTP copies as task inputs, lease-fenced ZIP batches as partition
 outputs, and a validated MP4 as the retained final artifact. The input is currently
 downloaded once per work unit rather than addressed and cached once per worker.
+# Launcher presentation
+
+Client job history presents artifacts as provider, stable key, size, and an
+optional provider action URL. UI code must not reconstruct local filesystem paths
+from an artifact identity. The first implementation reports durable completed-job
+files as `server-local` references; client-local and cloud references remain
+directional.
