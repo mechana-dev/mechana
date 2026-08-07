@@ -118,6 +118,27 @@ class SshProvisionerTest {
 	}
 
 	@Test
+	void linuxReinstallRestartsAlreadyRunningAgent() throws Exception {
+		Path agent = Files.writeString(temporary.resolve("agent.jar"), "agent");
+		Path worker = Files.writeString(temporary.resolve("worker.jar"), "worker");
+		List<List<String>> commands = new ArrayList<>();
+		SshProvisioner provisioner = new SshProvisioner((command, timeout) -> {
+			commands.add(List.copyOf(command));
+			return switch (command.getLast()) {
+				case "uname -s" -> "Linux\n";
+				case "pwd" -> "/root\n";
+				case "command -v java" -> "/usr/bin/java\n";
+				default -> "";
+			};
+		});
+
+		provisioner.deploy(request(agent, worker, ""));
+
+		assertTrue(commands.stream().map(List::getLast).anyMatch(value -> value.contains("systemctl --user enable ")
+				&& value.contains("systemctl --user restart dev.mechana.worker-host-agent.service")));
+	}
+
+	@Test
 	void serviceTemplatesContainRestartAndEscapedMacValues() {
 		Map<String, String> runtimes = Map.of("ffmpeg", "/opt/homebrew/bin/ffmpeg", "blender",
 				"/Applications/Blender.app/Contents/MacOS/Blender");

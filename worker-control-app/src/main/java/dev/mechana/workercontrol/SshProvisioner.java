@@ -250,7 +250,8 @@ final class SshProvisioner {
 		String serviceDirectory = home + "/.config/systemd/user";
 		ssh(request, target, "mkdir -p " + quote(serviceDirectory));
 		copy(request, target, service, serviceDirectory + "/" + LABEL + ".service");
-		ssh(request, target, "systemctl --user daemon-reload; systemctl --user enable --now " + LABEL + ".service");
+		ssh(request, target, "systemctl --user daemon-reload; systemctl --user enable " + LABEL
+				+ ".service; systemctl --user restart " + LABEL + ".service");
 	}
 
 	private String ssh(Request request, String target, String remoteCommand) throws IOException, InterruptedException {

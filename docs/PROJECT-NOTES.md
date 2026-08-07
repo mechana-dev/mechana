@@ -1015,3 +1015,5 @@ Append-only record of material Mechana project changes and accepted decisions.
 - Made the bearer token optional for SSH-tunneled development management. Blank
   tokens now remain blank, and generated agents bind only to remote loopback;
   nonblank tokens continue to enable bearer authentication.
+- Linux reinstall now explicitly restarts an already-running systemd user service
+  so rewritten token and coordinator settings take effect immediately.
