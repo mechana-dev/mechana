@@ -1122,3 +1122,14 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Made descriptor forms vertically scrollable so longer plugin forms cannot be
   clipped by the jobs-history divider, and moved Blender's Tasks control directly
   below its source picker.
+
+## 2026-08-07 12:25:15 EDT — Consolidate launcher and Windows recovery work for review
+
+- Audited all six branch commits against `origin/main` before publication and
+  confirmed that the PR contains Windows reprovisioning recovery, removal of the
+  obsolete external sandbox launcher dependency, the animated Blender sample,
+  all three macOS shortcuts, fleet-consistent task selection, and scrollable
+  descriptor forms.
+- Updated `brain/current-state.md` with the checked-in Mac launcher suite, the
+  Blender orbit sample defaults, and the server dashboard's verified Windows
+  sandbox label; implementation limits remain separated from future direction.

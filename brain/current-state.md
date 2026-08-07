@@ -46,6 +46,9 @@ This file reports repository evidence, not desired future status.
   task per currently compatible worker, capped by the job's finite work units.
   Descriptor forms scroll independently so every field remains reachable when
   the history divider leaves a short submission area.
+- The Blender launcher defaults to a packed, lightweight two-second orbit sample
+  at `samples/blender/mechana-camera-orbit-2s.blend`: frames 1–48 at 24 fps with
+  continuous camera motion and development-sized 640×360/32-sample settings.
 - The host-agent API and Swing controller can start a worker group in explicit
   `SANDBOXED` or `LEGACY` mode with a selected plugin capability set. Sandboxed
   launch is available on macOS, Linux, and Windows and uses an agent-configured root
@@ -92,6 +95,11 @@ This file reports repository evidence, not desired future status.
   fails before deployment when a requested native capability has not been staged,
   rather than advertising a capability whose system-installed executable the
   AppContainer will reject.
+- The server dashboard presents the verified `windows-appcontainer-job` backend
+  as `Windows sandbox`, parallel to its macOS and Linux sandbox labels.
+- Version-controlled macOS launchers under `scripts/macos` start or reveal the
+  local server dashboard, Worker Control, and Client Job Launcher. The installer
+  copies those `.command` shortcuts to the current user's Desktop.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/
