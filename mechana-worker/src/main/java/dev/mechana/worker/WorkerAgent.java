@@ -59,6 +59,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Enumeration;
 import java.util.Objects;
@@ -207,19 +208,17 @@ public final class WorkerAgent {
 			Path requestFrame = workspace.input().resolve("request.ndjson");
 			Files.writeString(requestFrame, json.writeValueAsString(hostRequest) + System.lineSeparator());
 			String hostClasspath = stageHostClasspath(workspace.input().resolve("runtime"));
-			String javaName = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("windows")
-					? "java.exe"
-					: "java";
-			Path javaBinary = Path.of(System.getProperty("java.home"), "bin", javaName);
+			Path javaBinary = Path.of(System.getProperty("java.home"), "bin", "java");
 			SandboxPolicy policy = new SandboxPolicy(TrustMode.SANDBOXED, false,
 					Runtime.getRuntime().availableProcessors(), Runtime.getRuntime().maxMemory(),
-					10L * 1024 * 1024 * 1024, Duration.ofHours(6), 16);
+					10L * 1024 * 1024 * 1024, Duration.ofHours(6), sandboxMaxProcesses(lease.pluginId()));
 			SandboxRequest request = new SandboxRequest(
 					java.util.List.of(javaBinary.toString(), "-Djava.awt.headless=true",
 							"-Djava.io.tmpdir=" + workspace.work(), "-cp", hostClasspath,
 							"dev.mechana.pluginhost.PluginHostMain"),
 					sandboxEnvironment(workspace), workspace, policy, requestFrame,
-					line -> handleHostEvent(line, context, completed, protocolFailure));
+					line -> handleHostEvent(line, context, completed, protocolFailure),
+					sandboxRuntimePaths(lease.pluginId()));
 			PluginSandbox platformSandbox = platformSandbox();
 			System.out.printf("Worker %s running task %s in %s%n", workerId, lease.taskId(),
 					platformSandbox.capabilities(policy).backend());
@@ -242,6 +241,19 @@ public final class WorkerAgent {
 		}
 	}
 
+	private static PluginSandbox platformSandbox() throws IOException {
+		MacOsSandbox macOs = new MacOsSandbox();
+		if (macOs.supportsCurrentHost())
+			return macOs;
+		LinuxSandbox linux = new LinuxSandbox();
+		if (linux.supportsCurrentHost())
+			return linux;
+		WindowsSandbox windows = new WindowsSandbox();
+		if (windows.supportsCurrentHost())
+			return windows;
+		throw new IOException("No verified OS sandbox backend is available on this host");
+	}
+
 	private static Map<String, String> sandboxEnvironment(AttemptWorkspace workspace) {
 		Map<String, String> environment = new HashMap<>();
 		environment.put("PATH", Path.of(System.getProperty("java.home"), "bin").toString());
@@ -255,25 +267,15 @@ public final class WorkerAgent {
 				"LOCALAPPDATA", "NUMBER_OF_PROCESSORS", "OS", "PATHEXT", "PROCESSOR_ARCHITECTURE",
 				"PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION", "ProgramData", "ProgramFiles",
 				"ProgramFiles(x86)", "ProgramW6432", "PUBLIC", "SystemDrive", "SystemRoot", "USERDOMAIN", "USERNAME",
-				"WINDIR")) {
-			String value = System.getenv(name);
-			if (value != null && !value.isBlank())
-				environment.put(name, value);
-		}
+				"WINDIR"))
+			copyEnvironment(environment, name);
 		return Map.copyOf(environment);
 	}
 
-	private static PluginSandbox platformSandbox() throws IOException {
-		MacOsSandbox macOs = new MacOsSandbox();
-		if (macOs.supportsCurrentHost())
-			return macOs;
-		LinuxSandbox linux = new LinuxSandbox();
-		if (linux.supportsCurrentHost())
-			return linux;
-		WindowsSandbox windows = new WindowsSandbox();
-		if (windows.supportsCurrentHost())
-			return windows;
-		throw new IOException("No verified OS sandbox backend is available on this host");
+	private static void copyEnvironment(Map<String, String> target, String name) {
+		String value = System.getenv(name);
+		if (value != null && !value.isBlank())
+			target.put(name, value);
 	}
 
 	private static Set<String> advertisedCapabilities(Set<String> plugins) {
@@ -375,6 +377,29 @@ public final class WorkerAgent {
 		return executable.toString();
 	}
 
+	private static List<Path> sandboxRuntimePaths(String pluginId) throws IOException {
+		return switch (pluginId) {
+			case "video-ffmpeg" -> List.of(requiredRuntimePath("ffmpeg"), requiredRuntimePath("ffprobe"));
+			case "ocr-tesseract" -> List.of(requiredRuntimePath("tesseract"));
+			case "blender-render" -> List.of(requiredRuntimePath("blender"));
+			case "sleep", "fractal-render" -> List.of();
+			default -> throw new IOException("Plugin is not approved for sandboxed execution: " + pluginId);
+		};
+	}
+
+	private static int sandboxMaxProcesses(String pluginId) throws IOException {
+		return switch (pluginId) {
+			case "sleep", "fractal-render" -> 1;
+			case "video-ffmpeg", "ocr-tesseract" -> 4;
+			case "blender-render" -> 16;
+			default -> throw new IOException("Plugin is not approved for sandboxed execution: " + pluginId);
+		};
+	}
+
+	private static Path requiredRuntimePath(String name) throws IOException {
+		return Path.of(requiredRuntime(name)).getParent();
+	}
+
 	private static boolean sandboxedExecution() {
 		return "sandboxed".equalsIgnoreCase(System.getProperty("mechana.execution.mode", "legacy"));
 	}
@@ -455,10 +480,16 @@ public final class WorkerAgent {
 	}
 
 	private static Path sandboxRoot() {
-		return Path.of(System.getProperty("mechana.sandbox.root",
-				System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac")
-						? "/private/tmp/mechana-sandbox"
-						: Path.of(System.getProperty("java.io.tmpdir"), "mechana-sandbox").toString()));
+		String os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+		String defaultRoot;
+		if (os.contains("mac"))
+			defaultRoot = "/private/tmp/mechana-sandbox";
+		else if (os.contains("windows"))
+			defaultRoot = Path.of(System.getenv().getOrDefault("ProgramData", "C:\\ProgramData"), "Mechana", "sandbox")
+					.toString();
+		else
+			defaultRoot = Path.of(System.getProperty("java.io.tmpdir"), "mechana-sandbox").toString();
+		return Path.of(System.getProperty("mechana.sandbox.root", defaultRoot));
 	}
 
 	private Thread startPresenceHeartbeat() {

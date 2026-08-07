@@ -64,6 +64,52 @@
   templates. Java installation, SSH bootstrap, firewalls, Linux lingering,
   Windows services, and system-wide/root installation remain out of scope.
 
+## 2026-08-06 14:05:00 EDT — Validate the Windows AppContainer sandbox foundation
+
+- Added a Windows backend using a transient AppContainer Package SID, scoped NTFS
+  ACLs, inherited-handle allowlisting, and a Job Object with memory, CPU-rate,
+  process-count, and kill-on-close controls.
+- Installed and selected a private Java 25 runtime under
+  `C:\ProgramData\Mechana\runtime\java-25`; the enhanced Hyperion probe verified
+  workspace writes, outside-write and home-read denial, live network denial,
+  Java security initialization, timeout, cancellation, crash recovery, and the
+  declared resource controls.
+- Confirmed coordinator-to-worker-to-AppContainer-to-plugin-host execution with
+  fractal job `bb773a9a-80d4-4fce-b4d3-6100e3b7c186`, which succeeded on attempt
+  one. Full filesystem read invisibility and native Windows plugin certification
+  are not claimed.
+
+## 2026-08-06 14:39:00 EDT — Certify all current plugins on Hyperion
+
+- Staged the existing FFmpeg 8.1.1, Tesseract 5.4.0, and Blender 4.5.3 LTS
+  installations under `C:\ProgramData\Mechana\runtime` so AppContainer grants do
+  not weaken user-home denial or expose broad installation trees.
+- Added explicit read-only native-runtime paths to `SandboxRequest`; the Windows
+  launcher grants their directories read/execute access to the transient Package
+  SID and removes every grant after the attempt.
+- Replaced the single hardcoded Job Object process limit with bounded plugin
+  profiles: one process for Java-only work, four for FFmpeg/Tesseract, and sixteen
+  for Blender. The original OCR test correctly failed at the one-process limit;
+  the corrected job succeeded on attempt one.
+- Verified executable probes and real distributed jobs for sleep
+  (`604b8e29-77ca-4cf2-818c-6f3a5963b9dd`), fractal
+  (`2de64c00-7eb0-4068-bc36-ba6d94b7fde2`), OCR
+  (`3029b1b0-43c3-4f00-ba11-0876a9e51093`), FFmpeg
+  (`e22e011f-ddf5-40c5-b2aa-547764dd5222`), and Blender
+  (`5af68039-8115-4527-aa3f-9a5ea9f06478`). All final certification jobs
+  succeeded on attempt one in sandboxed mode.
+- Audited all private runtime ACLs after completion: no transient AppContainer
+  Package SID remained. Attempt workspaces were cleaned and stale probe artifacts
+  were removed.
+
+## 2026-08-06 14:48:00 EDT — Keep Windows worker plugin display compact
+
+- Filtered internal `sandbox.backend.*` and `sandbox.control.*` capability markers
+  from the dashboard's Plugins column, matching the concise plugin-only display
+  used for workers before the Windows capability matrix was introduced.
+- Preserved the complete capability set in the dashboard API and scheduler state;
+  this is a presentation-only change.
+
 ## 2026-08-05 02:25:00 EDT — Control sandboxed workers from the desktop app
 
 - Extended the host-agent start API with explicit `SANDBOXED` and `LEGACY`

@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-06
 
 This sequence expresses intent, not completion. Check
 [current state](current-state.md) before reporting progress. Architecture Baseline
@@ -13,7 +13,10 @@ explicit superseding decision.
    layout, managed lifecycle, experimental macOS adapter, host, and tests.
 2. **PR B — plugin migration:** connect the worker, migrate sleep then fractal,
    OCR/Tesseract, FFmpeg, and Blender, and declare native tools explicitly.
-3. **Later backends:** independently implement and verify Linux, then Windows.
+3. **Platform backends:** Linux Bubblewrap and the Windows AppContainer/Job
+   Object foundation are implemented. All five current plugin paths are certified
+   on Hyperion for the recorded Windows runtime versions; complete Windows host
+   agent deployment automation and broaden native-runtime test profiles next.
    No support is claimed before adversarial tests run.
 
 ## Next — Parallel Plugin Execution Framework

@@ -226,6 +226,16 @@ The accepted plugin model is now documented as a complete computational contract
 in [plugin model](plugin-model.md). This documentation decision does not change the
 implementation facts above: the generic plan/work-unit/assemble API and its full
 platform ownership boundary are not established by current repository evidence.
-The status-classified [sandbox architecture](sandbox.md) likewise records design
-constraints only; none of its planned isolation guarantees are established by
-this repository today.
+The Windows sandbox runs the separate Java plugin host and declared native tools
+under a transient AppContainer and Job Object. Hyperion passed the adversarial
+enforcement probe, including Java security initialization, plus real sleep,
+fractal, Tesseract OCR, FFmpeg compression, and Blender render jobs on attempt one
+with Java 25.0.4, Tesseract 5.4.0, FFmpeg 8.1.1, and Blender 4.5.3 LTS. Native
+runtime directories receive temporary read/execute Package SID ACLs and bounded
+per-plugin process counts; the final audit found no residual ACLs or workspaces.
+The backend still reports full filesystem read restriction as absent.
+
+The status-classified [sandbox architecture](sandbox.md) separates accepted
+constraints from implemented evidence. It does not elevate the Windows foundation
+into certification of full filesystem invisibility, GPU isolation, undeclared
+native dependencies, or untested runtime versions and plugin features.

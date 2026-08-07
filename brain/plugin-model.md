@@ -1,6 +1,6 @@
 # Plugin model
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-06
 
 ## Accepted contract
 
@@ -86,3 +86,9 @@ On Linux the existing host contract is executed through the bubblewrap backend;
 on Windows it is executed through the AppContainer/Job Object backend;
 plugin implementations remain platform-neutral and contain only computation logic.
 Cooperative protocol cancellation remains pending.
+
+Windows uses the same host protocol behind an AppContainer and Job Object
+backend. Sleep, fractal, FFmpeg, Tesseract, and Blender are verified on Hyperion
+for the runtime versions recorded in the [Windows worker guide](../docs/windows-worker.md).
+Native runtime certification is versioned evidence, not a blanket approval of
+future versions, add-ons, codecs, languages, or GPU paths.

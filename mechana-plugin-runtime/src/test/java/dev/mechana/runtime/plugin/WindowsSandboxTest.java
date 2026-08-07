@@ -15,28 +15,68 @@
  */
 package dev.mechana.runtime.plugin;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class WindowsSandboxTest {
+	@TempDir
+	Path temporary;
+
 	@Test
-	void constructsLauncherCommandWithWorkspaceAndJobLimits() {
-		AttemptWorkspace workspace = new AttemptWorkspace(Path.of("C:/sandbox/job/attempt"), Path.of("C:/input"),
-				Path.of("C:/work"), Path.of("C:/output"), Path.of("C:/logs"));
-		SandboxPolicy policy = new SandboxPolicy(TrustMode.SANDBOXED, false, 2, 512_000_000, 1_000_000,
-				Duration.ofSeconds(30), 8);
-		List<String> command = new WindowsSandbox()
-				.command(new SandboxRequest(List.of("java.exe", "-version"), Map.of(), workspace, policy));
-		assertTrue(command.contains("--workspace"));
-		assertTrue(command.contains("512000000"));
-		assertTrue(command.contains("--processes"));
-		assertTrue(command.contains("8"));
-		assertEquals(List.of("java.exe", "-version"), command.subList(command.indexOf("--") + 1, command.size()));
+	void buildsAppContainerLauncherWithResourceLimits() throws Exception {
+		AttemptWorkspace workspace = AttemptWorkspace.create(temporary, "job", "attempt");
+		SandboxPolicy policy = new SandboxPolicy(TrustMode.SANDBOXED, false, 2, 512L * 1024 * 1024, 1024,
+				Duration.ofSeconds(5), 3);
+		List<String> command = new WindowsSandbox().launcherCommand(Path.of("launcher.ps1"), workspace, policy,
+				List.of("C:\\Java\\bin\\java", "-version"));
+		assertTrue(command.contains("-MemoryBytes"));
+		assertTrue(command.contains(Long.toString(policy.memoryBytes())));
+		assertTrue(command.contains("-CpuCount"));
+		assertTrue(command.contains("2"));
+		assertTrue(command.contains("-MaxProcesses"));
+		assertTrue(command.contains("3"));
+		String encoded = command.get(command.indexOf("-ChildCommandBase64") + 1);
+		String decoded = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+		assertTrue(decoded.endsWith("runtime" + java.io.File.separator + "java-25" + java.io.File.separator + "bin"
+				+ java.io.File.separator + "java.exe\0-version"));
+	}
+
+	@Test
+	void passesExplicitNativeRuntimeRootsToLauncher() throws Exception {
+		AttemptWorkspace workspace = AttemptWorkspace.create(temporary, "job", "attempt");
+		SandboxPolicy policy = new SandboxPolicy(TrustMode.SANDBOXED, false, 1, 1024, 1024, Duration.ofSeconds(5), 1);
+		Path nativeRuntime = Path.of(System.getenv().getOrDefault("ProgramData", "C:\\ProgramData"), "Mechana",
+				"runtime", "ffmpeg");
+		List<String> command = new WindowsSandbox().launcherCommand(Path.of("launcher.ps1"), workspace, policy,
+				List.of("cmd.exe"), List.of(nativeRuntime));
+		String encoded = command.get(command.indexOf("-RuntimePathsBase64") + 1);
+		assertTrue(new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8)
+				.endsWith("runtime" + java.io.File.separator + "ffmpeg"));
+	}
+
+	@Test
+	void rejectsUnimplementedNetworkGrant() throws Exception {
+		AttemptWorkspace workspace = AttemptWorkspace.create(temporary, "job", "attempt");
+		SandboxPolicy policy = new SandboxPolicy(TrustMode.SANDBOXED, true, 1, 1024, 1024, Duration.ofSeconds(5), 1);
+		assertThrows(IllegalArgumentException.class, () -> new WindowsSandbox().launcherCommand(Path.of("launcher.ps1"),
+				workspace, policy, List.of("cmd.exe")));
+	}
+
+	@Test
+	void reportsNothingWhenNotVerifiedOnThisHost() {
+		WindowsSandbox sandbox = new WindowsSandbox();
+		SandboxPolicy policy = new SandboxPolicy(TrustMode.SANDBOXED, false, 1, 1024, 1024, Duration.ofSeconds(5), 1);
+		if (!System.getProperty("os.name").toLowerCase().contains("windows"))
+			assertTrue(sandbox.capabilities(policy).enforced().entrySet().stream().filter(Map.Entry::getValue)
+					.allMatch(entry -> entry.getKey() == SandboxControl.TIMEOUT));
 	}
 }
