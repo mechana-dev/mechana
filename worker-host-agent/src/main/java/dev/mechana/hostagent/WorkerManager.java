@@ -121,7 +121,6 @@ final class WorkerManager {
 			copyRuntimeProperty(command, "ffprobe");
 			copyRuntimeProperty(command, "tesseract");
 			copyRuntimeProperty(command, "blender");
-			copyPathProperty(command, "mechana.windows.sandbox.launcher");
 		}
 		command.add("-jar");
 		command.add(config.workerJar().toAbsolutePath().normalize().toString());

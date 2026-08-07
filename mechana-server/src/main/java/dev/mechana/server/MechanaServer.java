@@ -307,8 +307,9 @@ public final class MechanaServer implements AutoCloseable {
 				}
 				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs".equals(path)) {
 					JobSubmitRequest request = read(exchange, JobSubmitRequest.class);
+					int taskCount = request.taskCount() > 0 ? request.taskCount() : compatibleWorkerCount("sleep");
 					List<Long> durations = request.taskDurationsMillis().isEmpty()
-							? java.util.Collections.nCopies(request.taskCount(), request.durationMillis())
+							? java.util.Collections.nCopies(taskCount, request.durationMillis())
 							: request.taskDurationsMillis();
 					String jobId = scheduler.submit(durations);
 					System.out.printf("Client %s submitted job %s: tasks=%d, duration=%dms%n",
@@ -398,6 +399,18 @@ public final class MechanaServer implements AutoCloseable {
 					System.out.printf("Client %s requested status for job %s%n", exchange.getRemoteAddress(), jobId);
 					logJobStatus(status);
 					sendJson(exchange, 200, status);
+					return;
+				}
+				if ("DELETE".equals(exchange.getRequestMethod()) && "/api/jobs/completed".equals(path)) {
+					requireLoopback(exchange);
+					List<String> jobIds = completedJobs.snapshots().stream().map(InMemoryJobMonitor.Snapshot::jobId)
+							.toList();
+					for (String jobId : jobIds) {
+						completedJobs.purge(jobId);
+						scheduler.purgeCompleted(jobId);
+					}
+					System.out.printf("Purged all completed jobs (%d)%n", jobIds.size());
+					sendEmpty(exchange, 204);
 					return;
 				}
 				if ("DELETE".equals(exchange.getRequestMethod()) && path.startsWith("/api/jobs/")) {
@@ -669,6 +682,7 @@ public final class MechanaServer implements AutoCloseable {
 		Files.createDirectories(scratch.resolve("segments"));
 		Files.createDirectories(scratch.resolve("inputs"));
 		try {
+			int taskCount = request.segmentCount() > 0 ? request.segmentCount() : compatibleWorkerCount("video-ffmpeg");
 			ExternalProcessRunner runner = new ExternalProcessRunner();
 			runner.run(
 					List.of("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", source.toString(), "-t",
@@ -680,10 +694,10 @@ public final class MechanaServer implements AutoCloseable {
 			VideoTypes.MediaInfo info = probe.inspect(input, Duration.ofMinutes(5));
 			VideoTypes.Options options = new VideoTypes.Options(VideoTypes.Container.MKV,
 					VideoTypes.QualityMode.VISUALLY_LOSSLESS, 28, "slow",
-					Duration.ofMillis(Math.max(1, Math.round(info.durationSeconds() * 1000 / request.segmentCount()))),
-					request.segmentCount(), Duration.ofHours(2));
+					Duration.ofMillis(Math.max(1, Math.round(info.durationSeconds() * 1000 / taskCount))), taskCount,
+					Duration.ofHours(2));
 			VideoTypes.Plan plan = exactSegmentPlan(info, options, probe.keyframes(input, options.processTimeout()),
-					scratch, request.segmentCount());
+					scratch, taskCount);
 			long bitrate = targetVideoBitrate(info, request.targetSizeRatio());
 			List<String> inputTokens = new java.util.ArrayList<>(plan.segments().size());
 			List<WorkSpec> work = new java.util.ArrayList<>(plan.segments().size());
@@ -724,11 +738,9 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private String submitFractal(FractalJobSubmitRequest request) throws IOException {
-		long compatibleWorkers = workers.values().stream().filter(WorkerPresence::connected)
-				.filter(worker -> worker.capabilities().contains(FRACTAL_PLUGIN_ID)).count();
 		int taskCount = request.taskCount() > 0
 				? request.taskCount()
-				: Math.min(request.imageCount(), Math.max(1, Math.toIntExact(compatibleWorkers * 2)));
+				: Math.min(request.imageCount(), compatibleWorkerCount(FRACTAL_PLUGIN_ID));
 		Path scratch = workRoot.resolve(UUID.randomUUID().toString());
 		Files.createDirectories(scratch.resolve("batches"));
 		boolean retained = false;
@@ -793,11 +805,9 @@ public final class MechanaServer implements AutoCloseable {
 					throw new IOException("PNG writer is unavailable");
 				rendered.add(page);
 			}
-			long compatibleWorkers = workers.values().stream().filter(WorkerPresence::connected)
-					.filter(worker -> worker.capabilities().contains(OCR_PLUGIN_ID)).count();
 			int taskCount = request.taskCount() > 0
 					? Math.min(request.taskCount(), pageCount)
-					: Math.min(pageCount, Math.max(1, Math.toIntExact(compatibleWorkers * 2)));
+					: Math.min(pageCount, compatibleWorkerCount(OCR_PLUGIN_ID));
 			List<WorkSpec> work = new java.util.ArrayList<>(taskCount);
 			int base = pageCount / taskCount;
 			int remainder = pageCount % taskCount;
@@ -849,8 +859,12 @@ public final class MechanaServer implements AutoCloseable {
 		blenderInputs.put(token, source);
 		boolean retained = false;
 		try {
+			int taskCount = request.taskCount() > 0
+					? request.taskCount()
+					: Math.min(request.lastFrame() - request.firstFrame() + 1,
+							compatibleWorkerCount(BLENDER_PLUGIN_ID));
 			List<FramePlanner.Batch> batches = new FramePlanner().plan(request.firstFrame(), request.lastFrame(),
-					request.taskCount());
+					taskCount);
 			List<WorkSpec> work = batches.stream()
 					.map(batch -> new WorkSpec(batch.frameCount(),
 							Map.of("inputUrl", publicUrl + "/api/blender-inputs/" + token, "batchIndex",
@@ -877,6 +891,11 @@ public final class MechanaServer implements AutoCloseable {
 				deleteTree(scratch);
 			}
 		}
+	}
+
+	private int compatibleWorkerCount(String capability) {
+		return Math.max(1, Math.toIntExact(workers.values().stream().filter(WorkerPresence::connected)
+				.filter(worker -> worker.capabilities().contains(capability)).count()));
 	}
 
 	private static VideoTypes.Plan exactSegmentPlan(VideoTypes.MediaInfo input, VideoTypes.Options options,

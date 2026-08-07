@@ -110,6 +110,9 @@ class MechanaServerDashboardTest {
 			assertTrue(page.body().contains("capabilityDetails"));
 			assertTrue(page.body().contains("FFmpeg video"));
 			assertTrue(page.body().contains("Linux sandbox"));
+			assertTrue(page.body().contains("Windows sandbox"));
+			assertTrue(page.body().contains("Purge all"));
+			assertTrue(page.body().contains("/api/jobs/completed"));
 			assertEquals(200, status.statusCode());
 			assertTrue(status.body().contains("\"serverPid\":"));
 			assertTrue(status.body().contains("\"serverDate\":"));
@@ -285,6 +288,15 @@ class MechanaServerDashboardTest {
 					.body();
 			assertTrue(detail.contains("\"abortable\":false"));
 			assertTrue(detail.contains("\"completed\":true"));
+			HttpResponse<Void> purged = client.send(
+					HttpRequest.newBuilder(base.resolve("/api/jobs/completed")).DELETE().build(),
+					HttpResponse.BodyHandlers.discarding());
+			assertEquals(204, purged.statusCode());
+			String afterPurge = client.send(HttpRequest.newBuilder(base.resolve("/api/dashboard")).build(),
+					HttpResponse.BodyHandlers.ofString()).body();
+			assertTrue(afterPurge.contains("\"activeJobs\":0"));
+			assertTrue(afterPurge.contains("\"completedJobs\":0"));
+			assertTrue(Files.notExists(temporary.resolve("jobs").resolve(jobId)));
 		}
 	}
 

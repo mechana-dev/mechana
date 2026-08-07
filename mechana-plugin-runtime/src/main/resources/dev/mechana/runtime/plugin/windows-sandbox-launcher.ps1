@@ -31,11 +31,58 @@ if ($RuntimePathsBase64) {
 }
 if ($Command.Count -eq 0) { throw 'Windows sandbox child command is missing' }
 
+$FilesystemAclMutex = [Threading.Mutex]::new($false, 'Mechana.AppContainer.FilesystemAcl')
+
+function Invoke-WithFilesystemAclLock([scriptblock]$Action) {
+    $lockTaken = $false
+    try {
+        try {
+            $lockTaken = $FilesystemAclMutex.WaitOne()
+        } catch [Threading.AbandonedMutexException] {
+            $lockTaken = $true
+        }
+        & $Action
+    } finally {
+        if ($lockTaken) { $FilesystemAclMutex.ReleaseMutex() }
+    }
+}
+
 function Grant-AppContainerAccess([string]$Path, [string]$Rights, [string]$Sid) {
-    $aclPath = if ($Path.EndsWith('\')) { $Path + '.' } else { $Path }
+    Invoke-WithFilesystemAclLock {
+        $aclPath = if ($Path.EndsWith('\')) { $Path + '.' } else { $Path }
+        $start = [Diagnostics.ProcessStartInfo]::new()
+        $start.FileName = "$env:SystemRoot\System32\icacls.exe"
+        $start.Arguments = '"' + $aclPath.Replace('"', '\"') + '" /grant "*' + $Sid + ':' + $Rights + '" /C'
+        $start.UseShellExecute = $false
+        $start.CreateNoWindow = $true
+        $start.RedirectStandardOutput = $true
+        $start.RedirectStandardError = $true
+        $process = [Diagnostics.Process]::Start($start)
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) { throw "icacls failed for $Path with exit $($process.ExitCode): $stdout $stderr" }
+    }
+}
+
+function Remove-AppContainerAccess([string]$Path, [string]$Sid) {
+    Invoke-WithFilesystemAclLock {
+        $aclPath = if ($Path.EndsWith('\')) { $Path + '.' } else { $Path }
+        $start = [Diagnostics.ProcessStartInfo]::new()
+        $start.FileName = "$env:SystemRoot\System32\icacls.exe"
+        $start.Arguments = '"' + $aclPath.Replace('"', '\"') + '" /remove "*' + $Sid + '" /C /Q'
+        $start.UseShellExecute = $false
+        $start.CreateNoWindow = $true
+        $process = [Diagnostics.Process]::Start($start)
+        $process.WaitForExit()
+    }
+}
+
+function Reset-WorkspaceAccess([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return }
     $start = [Diagnostics.ProcessStartInfo]::new()
     $start.FileName = "$env:SystemRoot\System32\icacls.exe"
-    $start.Arguments = '"' + $aclPath.Replace('"', '\"') + '" /grant "*' + $Sid + ':' + $Rights + '" /C'
+    $start.Arguments = '"' + $Path.Replace('"', '\"') + '" /reset /T /C /Q'
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
     $start.RedirectStandardOutput = $true
@@ -44,18 +91,9 @@ function Grant-AppContainerAccess([string]$Path, [string]$Rights, [string]$Sid) 
     $stdout = $process.StandardOutput.ReadToEnd()
     $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
-    if ($process.ExitCode -ne 0) { throw "icacls failed for $Path with exit $($process.ExitCode): $stdout $stderr" }
-}
-
-function Remove-AppContainerAccess([string]$Path, [string]$Sid) {
-    $aclPath = if ($Path.EndsWith('\')) { $Path + '.' } else { $Path }
-    $start = [Diagnostics.ProcessStartInfo]::new()
-    $start.FileName = "$env:SystemRoot\System32\icacls.exe"
-    $start.Arguments = '"' + $aclPath.Replace('"', '\"') + '" /remove "*' + $Sid + '" /C /Q'
-    $start.UseShellExecute = $false
-    $start.CreateNoWindow = $true
-    $process = [Diagnostics.Process]::Start($start)
-    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) {
+        throw "icacls workspace reset failed for $Path with exit $($process.ExitCode): $stdout $stderr"
+    }
 }
 
 $source = @'
@@ -333,6 +371,7 @@ try {
     }
     exit [MechanaWindowsSandbox]::Launch($profile, $Workspace, $MemoryBytes, $CpuCount, $MaxProcesses, $Command)
 } finally {
+    Reset-WorkspaceAccess $Workspace
     if ($sid) {
         foreach ($path in $temporaryGrants) { Remove-AppContainerAccess $path $sid }
     }

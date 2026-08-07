@@ -72,6 +72,10 @@ final class LauncherClient {
 		mutate(HttpRequest.newBuilder(server.resolve("/api/jobs/" + jobId)).DELETE().build());
 	}
 
+	void purgeAll(URI server) throws IOException, InterruptedException {
+		mutate(HttpRequest.newBuilder(server.resolve("/api/jobs/completed")).DELETE().build());
+	}
+
 	private <T> T read(URI uri, TypeReference<T> type) throws IOException, InterruptedException {
 		HttpResponse<byte[]> response = http.send(HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(10)).build(),
 				HttpResponse.BodyHandlers.ofByteArray());

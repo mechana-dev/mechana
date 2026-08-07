@@ -23,6 +23,7 @@ import dev.mechana.protocol.Messages.SubmissionField;
 import java.util.List;
 import java.util.UUID;
 import java.util.prefs.Preferences;
+import javax.swing.JScrollPane;
 import org.junit.jupiter.api.Test;
 
 class DescriptorFormTest {
@@ -39,5 +40,18 @@ class DescriptorFormTest {
 		assertEquals(2.5d, values.get("durationMillis"));
 		settings.put("taskCount", "7");
 		assertEquals(7L, new DescriptorForm(descriptor, settings).values().get("taskCount"));
+	}
+
+	@Test
+	void descriptorFieldsRemainAccessibleInAScrollPane() {
+		var descriptor = new JobLauncherDescriptor("many", "Many", "/api/jobs",
+				java.util.stream.IntStream.range(0, 12)
+						.mapToObj(index -> new SubmissionField("field" + index, "Field " + index, "integer", true, "0",
+								0d, 100d, List.of(), ""))
+						.toList(),
+				new OutputDescriptor("server-local", "directory", "Artifacts", false), "small", 1, "now");
+		Preferences settings = Preferences.userRoot().node("dev/mechana/test/" + UUID.randomUUID());
+		DescriptorForm form = new DescriptorForm(descriptor, settings);
+		assertEquals(JScrollPane.class, form.getComponent(0).getClass());
 	}
 }

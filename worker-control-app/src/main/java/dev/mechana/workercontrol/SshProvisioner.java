@@ -62,15 +62,13 @@ final class SshProvisioner {
 		RemoteOs os = detect(request, target);
 		String home = ssh(request, target, os == RemoteOs.WINDOWS ? "cd" : "pwd").strip();
 		String remote = resolveRemoteDirectory(home, request.remoteDirectory(), os);
-		String sandboxRoot = resolveRemoteDirectory(home, request.sandboxRoot(), os);
+		String sandboxRoot = resolveSandboxDirectory(home, request.sandboxRoot(), os);
 		String java = ssh(request, target, os == RemoteOs.WINDOWS ? "where java" : "command -v java").lines()
 				.findFirst().orElse("").strip();
 		if (java.isBlank())
 			throw new IOException("Java is not available in the remote SSH PATH");
 		Map<String, String> runtimes = discoverRuntimes(request, target, os);
-		Path windowsLauncher = null;
 		if (os == RemoteOs.WINDOWS) {
-			windowsLauncher = selectWindowsLauncher(request, target);
 			ssh(request, target, windowsAgentStopCommand(remote, false));
 		}
 		if (os == RemoteOs.WINDOWS)
@@ -92,9 +90,7 @@ final class SshProvisioner {
 			copy(request, target, request.workerJar(), remote + "/mechana-worker.jar");
 			copy(request, target, config, remote + "/worker-host-agent.properties");
 			if (os == RemoteOs.WINDOWS) {
-				String launcher = remote + "/mechana-windows-sandbox.exe";
-				copy(request, target, windowsLauncher, launcher);
-				installWindows(request, target, temporary, java, remote, launcher, runtimes);
+				installWindows(request, target, temporary, java, remote, runtimes);
 			} else if (os == RemoteOs.MACOS)
 				installMacOs(request, target, temporary, java, remote, home, runtimes);
 			else
@@ -126,8 +122,9 @@ final class SshProvisioner {
 		RemoteOs os = detect(request, target);
 		String home = ssh(request, target, os == RemoteOs.WINDOWS ? "cd" : "pwd").strip();
 		if (os == RemoteOs.WINDOWS) {
-			ssh(request, target,
-					"schtasks /End /TN MechanaWorkerHostAgent 2>NUL & " + "schtasks /Run /TN MechanaWorkerHostAgent");
+			ssh(request, target, "schtasks /Query /TN MechanaWorkerHostAgent >NUL 2>&1 || "
+					+ "(echo Agent is not installed; use Reinstall + start via SSH 1>&2 & exit /B 1) & "
+					+ "schtasks /End /TN MechanaWorkerHostAgent 2>NUL & " + "schtasks /Run /TN MechanaWorkerHostAgent");
 			return new Result(os, request.remoteDirectory(), "Agent restarted");
 		}
 		if (os == RemoteOs.MACOS) {
@@ -160,14 +157,13 @@ final class SshProvisioner {
 	}
 
 	private void installWindows(Request request, String target, Path temporary, String java, String remote,
-			String launcher, Map<String, String> runtimes) throws IOException, InterruptedException {
+			Map<String, String> runtimes) throws IOException, InterruptedException {
 		String controllerAddress = ssh(request, target,
 				"powershell.exe -NoProfile -NonInteractive -Command \"($env:SSH_CONNECTION -split ' ')[0]\"").strip();
 		if (!controllerAddress.matches("[0-9A-Fa-f:.]+"))
 			throw new IOException("Could not determine the SSH controller address for the Windows firewall rule");
 		Path script = temporary.resolve("run-worker-host-agent.ps1");
-		Files.writeString(script,
-				windowsScript(java, remote, launcher, runtimes, request.agentPort(), controllerAddress),
+		Files.writeString(script, windowsScript(java, remote, runtimes, request.agentPort(), controllerAddress),
 				StandardCharsets.UTF_8);
 		copy(request, target, script, remote + "/run-worker-host-agent.ps1");
 		String scriptPath = remote.replace('/', '\\') + "\\run-worker-host-agent.ps1";
@@ -176,21 +172,6 @@ final class SshProvisioner {
 						+ "schtasks /Create /TN MechanaWorkerHostAgent /SC ONLOGON /RL HIGHEST /F /TR "
 						+ cmdQuote("powershell.exe -NoProfile -ExecutionPolicy Bypass -File " + psQuote(scriptPath))
 						+ " & schtasks /Run /TN MechanaWorkerHostAgent");
-	}
-
-	private Path selectWindowsLauncher(Request request, String target) throws IOException, InterruptedException {
-		String architecture = ssh(request, target,
-				"powershell.exe -NoProfile -NonInteractive -Command \"$env:PROCESSOR_ARCHITECTURE\"").strip();
-		String rid = architecture.equalsIgnoreCase("ARM64") ? "win-arm64" : "win-x64";
-		Path configured = request.windowsSandboxLauncher();
-		String configuredText = configured.toString();
-		Path selected = configuredText.contains("win-arm64") || configuredText.contains("win-x64")
-				? Path.of(configuredText.replace("win-arm64", rid).replace("win-x64", rid))
-				: configured;
-		if (!Files.isRegularFile(selected))
-			throw new IOException(
-					"Build the Windows sandbox launcher for " + architecture + " before deploying: " + selected);
-		return selected;
 	}
 
 	static String windowsAgentStopCommand(String remote, boolean deleteTask) {
@@ -212,10 +193,9 @@ final class SshProvisioner {
 				+ "Write-Error 'Mechana host agent or worker did not stop within 10 seconds'; exit 1\"";
 	}
 
-	static String windowsScript(String java, String remote, String launcher, Map<String, String> runtimes,
-			int agentPort, String controllerAddress) {
+	static String windowsScript(String java, String remote, Map<String, String> runtimes, int agentPort,
+			String controllerAddress) {
 		StringBuilder arguments = new StringBuilder();
-		arguments.append(" '-Dmechana.windows.sandbox.launcher=").append(psLiteral(launcher)).append("'");
 		for (var runtime : runtimes.entrySet())
 			arguments.append(" '-Dmechana.runtime.").append(runtime.getKey()).append('=')
 					.append(psLiteral(runtime.getValue())).append("'");
@@ -373,11 +353,10 @@ final class SshProvisioner {
 	static String runtimeDiscoveryCommand(RemoteOs os, String name) {
 		if (os == RemoteOs.WINDOWS) {
 			String executable = name + ".exe";
-			return "powershell.exe -NoProfile -Command \"$found=(Get-Command " + executable
-					+ " -ErrorAction SilentlyContinue).Source; if($found){$found}else{$roots=@($env:ProgramFiles,"
-					+ "(Join-Path $env:LOCALAPPDATA 'Microsoft\\WinGet\\Packages')); Get-ChildItem -Path $roots "
-					+ "-Filter '" + executable + "' -File -Recurse -ErrorAction SilentlyContinue | "
-					+ "Select-Object -First 1 -ExpandProperty FullName}\"";
+			return "powershell.exe -NoProfile -Command \"Get-ChildItem -Path "
+					+ "(Join-Path $env:ProgramData 'Mechana\\runtime') -Filter '" + executable
+					+ "' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 "
+					+ "-ExpandProperty FullName\"";
 		}
 		List<String> candidates = new ArrayList<>();
 		if (os == RemoteOs.MACOS) {
@@ -486,6 +465,12 @@ final class SshProvisioner {
 		if (configured.startsWith("~/"))
 			return home + configured.substring(1);
 		return configured.startsWith("/") ? configured : home + "/" + configured;
+	}
+
+	static String resolveSandboxDirectory(String home, String configured, RemoteOs os) {
+		if (os == RemoteOs.WINDOWS && configured.equals("~/.mechana/sandbox"))
+			return "C:/ProgramData/Mechana/sandbox";
+		return resolveRemoteDirectory(home, configured, os);
 	}
 
 	private static boolean safeRemotePath(String value) {

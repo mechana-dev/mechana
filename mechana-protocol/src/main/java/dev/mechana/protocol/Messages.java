@@ -34,8 +34,8 @@ public final class Messages {
 
 		public JobSubmitRequest {
 			taskDurationsMillis = taskDurationsMillis == null ? List.of() : List.copyOf(taskDurationsMillis);
-			if (taskCount < 1 && taskDurationsMillis.isEmpty()) {
-				throw new IllegalArgumentException("taskCount must be positive");
+			if (taskCount < 0 && taskDurationsMillis.isEmpty()) {
+				throw new IllegalArgumentException("taskCount must not be negative");
 			}
 			if (taskDurationsMillis.isEmpty() && durationMillis < 1) {
 				throw new IllegalArgumentException("durationMillis must be positive");
@@ -113,7 +113,7 @@ public final class Messages {
 			double targetSizeRatio) {
 		public VideoJobSubmitRequest {
 			Objects.requireNonNull(sourcePath, "sourcePath");
-			if (durationSeconds <= 0 || segmentCount < 1 || targetSizeRatio <= 0 || targetSizeRatio >= 1)
+			if (durationSeconds <= 0 || segmentCount < 0 || targetSizeRatio <= 0 || targetSizeRatio >= 1)
 				throw new IllegalArgumentException("Invalid video job options");
 		}
 	}
@@ -156,7 +156,7 @@ public final class Messages {
 			int height, int samples, int fps) {
 		public BlenderJobSubmitRequest {
 			Objects.requireNonNull(sourcePath, "sourcePath");
-			if (firstFrame < 0 || lastFrame < firstFrame || taskCount < 1 || taskCount > lastFrame - firstFrame + 1)
+			if (firstFrame < 0 || lastFrame < firstFrame || taskCount < 0 || taskCount > lastFrame - firstFrame + 1)
 				throw new IllegalArgumentException("Invalid Blender frame range or task count");
 			if (width < 64 || height < 64 || width > 8192 || height > 8192 || samples < 1 || samples > 4096 || fps < 1
 					|| fps > 240)

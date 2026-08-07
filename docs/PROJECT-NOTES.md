@@ -1081,3 +1081,71 @@ owned-history purge. The new Swing module follows Worker Control conventions.
 Plugin-manifest descriptors, uploads, authentication, client-local storage, and
 cloud providers remain future direction; see `brain/current-state.md` and
 `docs/client-job-launcher.md`.
+
+## 2026-08-07 — Remove obsolete Windows launcher deployment requirement
+
+- Updated Worker Control's Windows SSH provisioning to use the PowerShell sandbox
+  launcher embedded in the worker JAR.
+- Removed the external Windows sandbox EXE field from the visible controller UI and
+  stopped uploading or forwarding the retired launcher property.
+- Kept the old saved profile value readable for migration compatibility; it no
+  longer affects deployment.
+- Added a regression assertion that generated Windows agent scripts do not contain
+  the obsolete launcher property.
+- Migrated the generic saved Windows sandbox default from the SSH user's home to
+  `C:\ProgramData\Mechana\sandbox` during reprovisioning, while preserving explicit
+  absolute operator paths.
+- Replaced the raw missing-task failure from Windows agent restart with an
+  actionable instruction to reinstall when the managed scheduled task is absent.
+- Labeled the verified `windows-appcontainer-job` worker backend as `Windows
+  sandbox` in the server dashboard, consistently with the existing macOS and Linux
+  labels.
+- Added a confirmed `Purge all` action to the server dashboard and Client Job
+  Launcher. The loopback-only bulk endpoint removes every durable completed-job
+  record and its server-local artifacts while leaving active jobs untouched.
+- Added version-controlled macOS `.command` launchers for the server, Worker
+  Control, and Client Job Launcher plus an installer under `scripts/macos`.
+- Added a packed two-second Blender geometry/orbit sample and made it the Client
+  Job Launcher's Blender default: frames 1–48 at 24 fps, with visible camera
+  movement throughout and development-sized 640×360/32-sample rendering.
+- Corrected Windows native-runtime discovery to select only executables staged
+  beneath `C:\ProgramData\Mechana\runtime`. Worker Control now fails
+  reprovisioning when a requested native sandbox runtime is absent instead of
+  configuring an installed path that the AppContainer must reject.
+- Made abandoned sandbox workspace deletion propagate filesystem traversal
+  failures as checked cleanup errors, preventing inaccessible stale Windows
+  AppContainer scratch from crashing replacement workers during startup.
+- Standardized Client Job Launcher capability presentation and task selection:
+  dropdown entries no longer show worker counts, every plugin uses
+  `Tasks (0 = fleet)`, and zero now means one task per compatible connected
+  worker rather than a plugin-specific multiplier or rejection.
+- Made descriptor forms vertically scrollable so longer plugin forms cannot be
+  clipped by the jobs-history divider, and moved Blender's Tasks control directly
+  below its source picker.
+
+## 2026-08-07 12:25:15 EDT — Consolidate launcher and Windows recovery work for review
+
+- Audited all six branch commits against `origin/main` before publication and
+  confirmed that the PR contains Windows reprovisioning recovery, removal of the
+  obsolete external sandbox launcher dependency, the animated Blender sample,
+  all three macOS shortcuts, fleet-consistent task selection, and scrollable
+  descriptor forms.
+- Updated `brain/current-state.md` with the checked-in Mac launcher suite, the
+  Blender orbit sample defaults, and the server dashboard's verified Windows
+  sandbox label; implementation limits remain separated from future direction.
+
+## 2026-08-07 12:42:36 EDT — Fix concurrent Windows sandbox runtime access
+
+- Diagnosed Blender job `9c8a97ae-aaee-423d-b69e-14cdc5950c12`: both Hyperion
+  workers intermittently lost access to the shared private Java and Blender
+  runtimes while concurrent AppContainer attempts edited their Package SID ACLs.
+- Serialized filesystem ACL grant/removal operations with a named cross-process
+  mutex. The lock covers only each short ACL mutation, so sandboxed render
+  processes still execute concurrently.
+- Reset each private attempt workspace ACL after the AppContainer exits and before
+  worker-side deletion. This handles Blender-created protected temporary
+  directories without broadening runtime or host filesystem access.
+- Added focused launcher-resource regression tests. A live eight-frame/eight-task
+  Blender job launched both fixed Hyperion workers concurrently without the prior
+  Java-security or Blender `Access is denied` startup failures and assembled its
+  final movie successfully.

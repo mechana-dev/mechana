@@ -20,11 +20,13 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
-import java.util.Comparator;
 
 /** Process-owned attempt workspace with crash-recovery metadata and locking. */
 public final class OwnedAttemptWorkspace implements AutoCloseable {
@@ -121,10 +123,21 @@ public final class OwnedAttemptWorkspace implements AutoCloseable {
 	}
 
 	private static void deleteTree(Path root) throws IOException {
-		try (var paths = Files.walk(root)) {
-			for (Path path : paths.sorted(Comparator.reverseOrder()).toList())
-				Files.deleteIfExists(path);
-		}
+		Files.walkFileTree(root, new SimpleFileVisitor<>() {
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+				Files.deleteIfExists(file);
+				return FileVisitResult.CONTINUE;
+			}
+
+			@Override
+			public FileVisitResult postVisitDirectory(Path directory, IOException failure) throws IOException {
+				if (failure != null)
+					throw failure;
+				Files.deleteIfExists(directory);
+				return FileVisitResult.CONTINUE;
+			}
+		});
 	}
 
 	private static void deleteIfEmpty(Path directory) throws IOException {

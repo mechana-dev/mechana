@@ -125,8 +125,6 @@ final class WorkerControlFrame extends JFrame {
 		artifacts.add(agentJar);
 		artifacts.add(new JLabel("Worker JAR"));
 		artifacts.add(workerJar);
-		artifacts.add(new JLabel("Windows sandbox EXE"));
-		artifacts.add(windowsSandboxLauncher);
 		JPanel remoteActions = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		remoteActions.add(deploy);
 		remoteActions.add(restartAgent);
