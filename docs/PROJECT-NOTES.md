@@ -1017,3 +1017,6 @@ Append-only record of material Mechana project changes and accepted decisions.
   nonblank tokens continue to enable bearer authentication.
 - Linux reinstall now explicitly restarts an already-running systemd user service
   so rewritten token and coordinator settings take effect immediately.
+- Linux reinstall also removes a verified stale Mechana agent holding the selected
+  port, including legacy `/opt` deployments, while refusing to kill an unrelated
+  listener.

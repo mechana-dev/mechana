@@ -135,7 +135,18 @@ class SshProvisionerTest {
 		provisioner.deploy(request(agent, worker, ""));
 
 		assertTrue(commands.stream().map(List::getLast).anyMatch(value -> value.contains("systemctl --user enable ")
-				&& value.contains("systemctl --user restart dev.mechana.worker-host-agent.service")));
+				&& value.contains("systemctl --user restart dev.mechana.worker-host-agent.service")
+				&& value.contains("ss -ltnp 'sport = :8790'") && value.contains("*mechana-worker-host-agent.jar*")));
+	}
+
+	@Test
+	void linuxStaleAgentCleanupRejectsUnrelatedListener() throws Exception {
+		String command = SshProvisioner.linuxPortReleaseCommand(8790);
+		assertTrue(command.contains("ss -ltnp 'sport = :8790'"));
+		assertTrue(command.contains("ps -p \"$agent_pid\" -o command="));
+		assertTrue(command.contains("*mechana-worker-host-agent.jar*"));
+		assertTrue(command.contains("Port 8790 is occupied by a non-Mechana process"));
+		assertEquals("", SshProvisioner.runCommand(List.of("/bin/sh", "-n", "-c", command), Duration.ofSeconds(5)));
 	}
 
 	@Test
