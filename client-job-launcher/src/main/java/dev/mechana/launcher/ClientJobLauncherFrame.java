@@ -86,6 +86,7 @@ final class ClientJobLauncherFrame extends JFrame {
 		setSize(980, 720);
 		setLocationByPlatform(true);
 		updateControls();
+		SwingUtilities.invokeLater(this::discover);
 	}
 
 	private void discover() {
