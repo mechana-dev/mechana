@@ -86,3 +86,13 @@ On Linux the existing host contract is executed through the bubblewrap backend;
 on Windows it is executed through the AppContainer/Job Object backend;
 plugin implementations remain platform-neutral and contain only computation logic.
 Cooperative protocol cancellation remains pending.
+
+## Client submission descriptors
+
+A plugin's user-facing contract includes a versioned submission descriptor:
+input and output artifact shapes, option fields, defaults and validation,
+presentation hints, and resource estimates. The launcher renders this contract;
+it does not select Java classes based on plugin identity. The implemented first
+slice uses a server composition catalog for the five existing plugins pending the
+general manifest contract. That catalog is an adapter, not yet plugin-owned
+manifest evidence.
