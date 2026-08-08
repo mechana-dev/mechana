@@ -1,25 +1,25 @@
 # Roadmap
 
-Last reviewed: 2026-08-06
+Last reviewed: 2026-08-08
 
 This sequence expresses intent, not completion. Check
 [current state](current-state.md) before reporting progress. Architecture Baseline
 1 closes design stabilization; implementation should preserve it or record an
 explicit superseding decision.
 
-## Active sandbox sequence
+## Completed sandbox sequence
 
 1. **PR A — macOS foundation:** runtime/policy/capability interfaces, workspace
    layout, managed lifecycle, experimental macOS adapter, host, and tests.
 2. **PR B — plugin migration:** connect the worker, migrate sleep then fractal,
    OCR/Tesseract, FFmpeg, and Blender, and declare native tools explicitly.
 3. **Platform backends:** Linux Bubblewrap and the Windows AppContainer/Job
-   Object foundation are implemented. All five current plugin paths are certified
-   on Hyperion for the recorded Windows runtime versions; complete Windows host
-   agent deployment automation and broaden native-runtime test profiles next.
-   No support is claimed before adversarial tests run.
+   Object foundation are implemented. All five current plugin paths are verified
+   on Hyperion for the recorded Windows runtime versions, and Worker Control can
+   provision the current macOS, Linux, and Windows development fleet. Broader
+   native-runtime profiles and stronger resource enforcement remain future work.
 
-## Next — Parallel Plugin Execution Framework
+## Active next step — Parallel Plugin Execution Framework
 
 - Define stable descriptor, validation, deterministic plan, work-unit, resource,
   assembly, and final-validation contracts in `mechana-api`.

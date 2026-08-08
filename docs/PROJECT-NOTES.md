@@ -1162,3 +1162,20 @@ cloud providers remain future direction; see `brain/current-state.md` and
   clear client-input error instead of an internal parser failure.
 - Added protocol-compatible constructor behavior plus launcher and server catalog
   regression coverage.
+
+## 2026-08-08 04:23:15 EDT — Audit the post-sandbox checkpoint
+
+- Audited `main`, the active worktrees, all remote development branches, and all
+  pull requests through PR #37. Confirmed that the completed sandbox/runtime,
+  Worker Control host-profile defaults, Client Job Launcher, homepage, legal and
+  branding, and subsequent Windows/launcher hardening work are present on `main`.
+- Confirmed there are no open pull requests. Historical and stacked development
+  branches are merged or superseded by their integration PRs; they contain no
+  additional completed implementation that should be applied to `main`.
+- Kept `agent/storage-abstraction-foundation` intentionally outstanding. Its seven
+  storage-foundation commits are the only unique unmerged implementation work and
+  are not part of this checkpoint.
+- Corrected stale roadmap, current-state, and worker-management wording so the
+  durable brain reflects the completed sandbox phase and implemented host controls.
+- Established annotated tag `architecture-baseline-1.2` as the post-sandbox,
+  pre-storage-abstraction checkpoint.

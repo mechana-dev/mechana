@@ -61,9 +61,10 @@ reaches it through an authenticated SSH tunnel. A blank Token field is therefore
 allowed as a development convenience on this path; a nonblank token retains
 bearer authentication in addition to the tunnel.
 
-The current host agent controls process count, not the full accepted CPU, RAM,
-scratch, cache, plugin allowlist, network, or sandbox policy. Those remain roadmap
-items and must not be presented as implemented guarantees. See
+The current host agent controls process count, selected plugin capabilities, and
+the explicit legacy/sandboxed execution mode. It does not yet enforce the full
+accepted CPU, RAM, scratch, cache, network, signer/trust, or availability policy.
+Those remain roadmap items and must not be presented as implemented guarantees. See
 [`WORKER-CONTROL.md`](../docs/WORKER-CONTROL.md) for current setup.
 
 Worker Control stores a complete profile per hostname and restores it when the
