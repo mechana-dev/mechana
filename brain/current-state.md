@@ -1,6 +1,6 @@
 # Current state
 
-Verified: 2026-08-07
+Verified: 2026-08-08
 
 This file reports repository evidence, not desired future status.
 

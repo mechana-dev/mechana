@@ -1259,3 +1259,18 @@ cloud providers remain future direction; see `brain/current-state.md` and
   files.
 - Added generated-plist regression coverage and documented the packaged native-tool
   environment.
+
+## 2026-08-08 07:25:00 EDT — Finalize the macOS application packaging change set
+
+- Consolidated the Dock-ready Server, Worker Control, and Job Launcher bundles,
+  their distinct icons, the dedicated single-window server dashboard, standard
+  `/Applications` installation, LaunchAgent lifecycle, server controls, and
+  self-contained Worker Control deployment artifacts into one reviewable change set.
+- Included the follow-up reliability fixes found during installed-app testing:
+  bounded host-agent listener teardown handling and a deterministic native-tool
+  path for coordinator-side FFmpeg/FFprobe operations.
+- Rebuilt and reinstalled all three application bundles, verified the live server
+  LaunchAgent environment, and completed the full 20-module Maven verification
+  reactor successfully before submitting PR #39 for final review.
+- Local app images remain unsigned development builds. Distribution outside the
+  owner's Macs will require Apple Developer signing and notarization.
