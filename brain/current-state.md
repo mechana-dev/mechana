@@ -105,6 +105,16 @@ This file reports repository evidence, not desired future status.
 - Version-controlled macOS launchers under `scripts/macos` start or reveal the
   local server dashboard, Worker Control, and Client Job Launcher. The installer
   copies those `.command` shortcuts to the current user's Desktop.
+- A `jpackage` workflow under `packaging/macos` builds Dock-ready **Mechana
+  Server**, **Mechana Worker Control**, and **Mechana Job Launcher** app-image
+  bundles with the Mechana icon and a bundled Java runtime. The GUI tools retain
+  their existing settings and exit with their main windows. The Server app uses
+  the loopback dashboard status API and a per-user, `KeepAlive` LaunchAgent to own
+  exactly one background server without tying its lifecycle to the launcher or
+  browser. It preserves the prior desktop launcher's data directory when present,
+  logs beneath `~/.mechana/logs`, cooperates with dashboard restart, and provides
+  explicit no-sudo stop/start/restart/status commands. These local builds are not
+  signed or notarized.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/

@@ -35,4 +35,25 @@ class ServerMainTest {
 		assertEquals(List.of("8787", "http://mba.example:8787", Path.of("server-data").toAbsolutePath().toString()),
 				command.subList(command.size() - 3, command.size()));
 	}
+
+	@Test
+	void packagedServerResolvesPluginsInsideItsAppBundle() {
+		String originalAppPath = System.getProperty("jpackage.app-path");
+		try {
+			System.setProperty("jpackage.app-path",
+					"/Applications/Mechana Server.app/Contents/MacOS/Mechana Server Daemon");
+			ServerMain.PluginJars plugins = ServerMain.PluginJars.configured();
+
+			assertEquals(Path.of("/Applications/Mechana Server.app/Contents/app/mechana-plugin-sleep.jar"),
+					plugins.sleep());
+			assertEquals(Path.of("/Applications/Mechana Server.app/Contents/app/mechana-plugin-blender-render.jar"),
+					plugins.blender());
+		} finally {
+			if (originalAppPath == null) {
+				System.clearProperty("jpackage.app-path");
+			} else {
+				System.setProperty("jpackage.app-path", originalAppPath);
+			}
+		}
+	}
 }

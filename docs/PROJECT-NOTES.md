@@ -1179,3 +1179,19 @@ cloud providers remain future direction; see `brain/current-state.md` and
   durable brain reflects the completed sandbox phase and implemented host controls.
 - Established annotated tag `architecture-baseline-1.2` as the post-sandbox,
   pre-storage-abstraction checkpoint.
+
+## 2026-08-08 04:55:00 EDT — Add Dock-ready macOS application bundles
+
+- Added Java 25 `jpackage` app-image builds for Mechana Server, Worker Control,
+  and Job Launcher with stable bundle identifiers, the canonical Mechana app
+  icon, bundled runtimes, Finder-safe paths, and no Terminal windows.
+- Made Mechana Server.app an idempotent status launcher backed by the loopback
+  dashboard API and a per-user `launchd` agent. The background server survives
+  launcher and browser exit, uses the packaged runtime and plugin artifacts,
+  retains existing desktop-launcher data when present, and writes user-local logs.
+- Made dashboard restart supervisor-aware and added explicit no-sudo server
+  status/start/stop/restart commands. Worker Control and Job Launcher retain their
+  existing settings and normal quit-on-window-close behavior.
+- Documented build, install, lifecycle, verification, and the unsigned/unnotarized
+  limitation in [macOS apps](macos-apps.md); updated `brain/current-state.md` from
+  repository evidence.

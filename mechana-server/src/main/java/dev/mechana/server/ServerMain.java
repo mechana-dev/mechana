@@ -22,6 +22,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 
 /** Starts the continuously running Mechana server and scheduler. */
@@ -55,6 +56,9 @@ public final class ServerMain {
 	@SuppressFBWarnings(value = "DM_EXIT", justification = "The restart action replaces this dedicated server JVM")
 	private static void restart(MechanaServer server, int port, String publicUrl, Path dataDirectory) {
 		server.close();
+		if (Boolean.getBoolean("mechana.launchd.managed")) {
+			System.exit(0);
+		}
 		try {
 			new ProcessBuilder(restartCommand(port, publicUrl, dataDirectory)).inheritIO().start();
 			System.exit(0);
@@ -95,8 +99,27 @@ public final class ServerMain {
 		}
 
 		private static Path pluginPath(String id, String defaultPath) {
-			return Path.of(System.getProperty("mechana.plugin." + id + ".jar", defaultPath)).toAbsolutePath()
-					.normalize();
+			String configured = System.getProperty("mechana.plugin." + id + ".jar");
+			String packagedApp = System.getProperty("jpackage.app-path");
+			Path path = configured != null
+					? Path.of(configured)
+					: packagedApp != null ? packagedPluginPath(packagedApp, id) : Path.of(defaultPath);
+			return path.toAbsolutePath().normalize();
+		}
+
+		private static Path packagedPluginPath(String executable, String id) {
+			String fileName = switch (id) {
+				case "sleep" -> "mechana-plugin-sleep.jar";
+				case "video" -> "mechana-plugin-video.jar";
+				case "fractal" -> "mechana-plugin-fractal-render.jar";
+				case "ocr" -> "mechana-plugin-ocr-tesseract.jar";
+				case "blender" -> "mechana-plugin-blender-render.jar";
+				default -> throw new IllegalArgumentException("Unknown plugin: " + id);
+			};
+			Path executablePath = Path.of(executable).toAbsolutePath();
+			Path macOsDirectory = Objects.requireNonNull(executablePath.getParent(), "packaged launcher directory");
+			Path contentsDirectory = Objects.requireNonNull(macOsDirectory.getParent(), "packaged Contents directory");
+			return contentsDirectory.resolve("app").resolve(fileName);
 		}
 	}
 }

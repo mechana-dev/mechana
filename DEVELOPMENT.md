@@ -1,5 +1,8 @@
 # Mechana™ development guide
 
+For Dock-ready macOS bundles that include Java and launch without Terminal
+windows, see [Mechana macOS apps](docs/macos-apps.md).
+
 ## First distributed execution slice
 
 The current implementation provides a continuously running HTTP server, any number of pull-based workers, a
