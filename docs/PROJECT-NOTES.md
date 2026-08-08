@@ -1205,3 +1205,14 @@ cloud providers remain future direction; see `brain/current-state.md` and
   Dock activation now reveals the one existing dashboard window instead of
   creating duplicate browser windows; closing that UI continues to leave the
   LaunchAgent-owned server running.
+
+## 2026-08-08 06:04:00 EDT — Restore packaged dashboard controls and add server stop
+
+- Added native WebKit confirmation-dialog handling so the dashboard's restart,
+  individual purge, and bulk purge controls send their requests from the packaged
+  Server app.
+- Added a confirmed, loopback-only **Stop server** action. Packaged shutdown
+  unloads the per-user LaunchAgent and closes the dashboard frontend; the next
+  Server app launch bootstraps the service again.
+- Added server endpoint coverage and documented the packaged lifecycle in
+  [macOS apps](macos-apps.md) and `brain/current-state.md`.

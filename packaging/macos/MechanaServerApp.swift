@@ -17,7 +17,7 @@
 import Cocoa
 import WebKit
 
-private final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
+private final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate {
     private var window: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -79,6 +79,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDe
 
         let webView = WKWebView(frame: frame)
         webView.navigationDelegate = self
+        webView.uiDelegate = self
         dashboardWindow.contentView = webView
         webView.load(URLRequest(url: URL(string: "http://127.0.0.1:8787/dashboard")!))
 
@@ -93,12 +94,26 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDe
             decisionHandler(.cancel)
             return
         }
-        if url.host == "127.0.0.1" && url.port == 8787 {
+        if url.scheme == "mechana" && url.host == "server-stopped" {
+            decisionHandler(.cancel)
+            NSApplication.shared.terminate(nil)
+        } else if url.host == "127.0.0.1" && url.port == 8787 {
             decisionHandler(.allow)
         } else {
             NSWorkspace.shared.open(url)
             decisionHandler(.cancel)
         }
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (Bool) -> Void) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = message
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Cancel")
+        completionHandler(alert.runModal() == .alertFirstButtonReturn)
     }
 }
 

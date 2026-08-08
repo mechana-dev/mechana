@@ -132,6 +132,7 @@ public final class MechanaServer implements AutoCloseable {
 	private final ConcurrentMap<String, BlenderJob> blenderJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, WorkerPresence> workers = new ConcurrentHashMap<>();
 	private volatile Runnable restartAction;
+	private volatile Runnable stopAction;
 	private final ScheduledExecutorService leaseReaper = Executors.newSingleThreadScheduledExecutor(runnable -> {
 		Thread thread = new Thread(runnable, "mechana-lease-reaper");
 		thread.setDaemon(true);
@@ -192,6 +193,7 @@ public final class MechanaServer implements AutoCloseable {
 		this.http.createContext("/api/client/jobs", this::serveLauncherJobs);
 		this.http.createContext("/api/dashboard", this::serveServerDashboardStatus);
 		this.http.createContext("/api/server/restart", this::restartServer);
+		this.http.createContext("/api/server/stop", this::stopServer);
 		this.http.createContext("/dashboard", this::serveDashboard);
 		this.http.createContext("/api/workers", new WorkersHandler());
 		this.http.createContext(PLUGIN_PATH, exchange -> servePlugin(exchange, this.pluginJar, this.pluginLocation));
@@ -266,6 +268,10 @@ public final class MechanaServer implements AutoCloseable {
 
 	void onRestart(Runnable action) {
 		this.restartAction = action;
+	}
+
+	void onStop(Runnable action) {
+		this.stopAction = action;
 	}
 
 	@Override
@@ -493,6 +499,24 @@ public final class MechanaServer implements AutoCloseable {
 		}
 		sendEmpty(exchange, 202);
 		Thread.ofPlatform().name("mechana-server-restart").start(action);
+	}
+
+	private void stopServer(HttpExchange exchange) throws IOException {
+		if (!"POST".equals(exchange.getRequestMethod())) {
+			sendEmpty(exchange, 405);
+			return;
+		}
+		if (!isLoopback(exchange)) {
+			sendText(exchange, 403, "Server stop is loopback-only");
+			return;
+		}
+		Runnable action = stopAction;
+		if (action == null) {
+			sendText(exchange, 503, "Server stop is not configured");
+			return;
+		}
+		sendEmpty(exchange, 202);
+		Thread.ofPlatform().name("mechana-server-stop").start(action);
 	}
 
 	private final class WorkersHandler implements HttpHandler {

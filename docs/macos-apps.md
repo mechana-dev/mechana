@@ -71,7 +71,10 @@ launchd.
 
 The dashboard's **Restart server** action remains the normal restart UI. A
 launchd-managed server exits and is relaunched by its agent instead of spawning a
-second unmanaged JVM. Developer lifecycle commands are also available:
+second unmanaged JVM. **Stop server** unloads the LaunchAgent and closes the
+dashboard frontend; opening the Server app starts and loads it again. The native
+WebKit frontend supplies macOS confirmation dialogs for restart, stop, and purge
+actions. Developer lifecycle commands are also available:
 
 ```shell
 packaging/macos/server-control.sh status

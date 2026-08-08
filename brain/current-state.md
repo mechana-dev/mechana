@@ -182,9 +182,11 @@ This file reports repository evidence, not desired future status.
   elapsed times stop advancing. Worker rows show `IDLE`, `OFFLINE`, or the active
   plugin name plus that worker's current work-unit progress and job link. Workers
   entries for ten seconds after timeout before removing them.
-- The master dashboard provides a confirmed loopback-only server restart action.
-  The replacement inherits the current launch configuration; workers reconnect
-  and completed history remains, while volatile active jobs do not survive.
+- The master dashboard provides confirmed loopback-only server restart and stop
+  actions. Restart inherits the current launch configuration; workers reconnect
+  and completed history remains, while volatile active jobs do not survive. In
+  the packaged macOS app, stop unloads the per-user LaunchAgent and closes the
+  dashboard frontend; launching the Server app starts it again.
 - Terminal job dashboard snapshots and server-owned artifacts persist beneath a
   configurable server data directory (default `.mechana/server`). Completed and
   cancelled rows show their terminal timestamp. Detail pages list downloadable

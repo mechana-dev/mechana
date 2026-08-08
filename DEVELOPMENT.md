@@ -36,7 +36,9 @@ the archived snapshot, all server-owned artifacts for that job, and the dashboar
 Worker presence history remains in memory and resets when the server restarts.
 Connected workers show `IDLE` when unassigned or the active plugin ID and progress
 with a link to their currently assigned job.
-The master page also provides a confirmed, loopback-only **Restart server** action.
+The master page also provides confirmed, loopback-only **Restart server** and
+**Stop server** actions. In the packaged macOS app, stop unloads the server's
+per-user LaunchAgent; launching the app starts it again.
 It launches the same server JAR with the current port, plugin, public URL, and data
 directory. Workers reconnect automatically and durable completed history remains;
 active in-memory jobs do not survive the restart.
