@@ -131,6 +131,9 @@ public final class ServerAppMain {
 				<string>http://marks-macbook-air-m4:8787</string><string>%s</string>
 				</array>
 				<key>WorkingDirectory</key><string>%s</string>
+				<key>EnvironmentVariables</key><dict>
+				<key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+				</dict>
 				<key>KeepAlive</key><true/><key>RunAtLoad</key><true/>
 				<key>StandardOutPath</key><string>%s</string>
 				<key>StandardErrorPath</key><string>%s</string>

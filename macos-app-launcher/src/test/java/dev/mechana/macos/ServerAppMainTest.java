@@ -48,6 +48,7 @@ class ServerAppMainTest {
 				temporaryDirectory);
 		assertTrue(plist.contains("Contents/MacOS/Mechana Server Daemon"));
 		assertTrue(plist.contains("Mechana &amp; Server.app"));
+		assertTrue(plist.contains("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"));
 	}
 
 	@Test

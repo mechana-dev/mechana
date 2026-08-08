@@ -59,7 +59,9 @@ The LaunchAgent runs the packaged server and plugin JARs with the Java runtime
 inside **Mechana Server.app**. It needs no `sudo`, has `KeepAlive` enabled, and
 writes standard and error output to `~/.mechana/logs/server.log` and
 `~/.mechana/logs/server-error.log`. Closing the dashboard therefore has no effect
-on the server.
+on the server. Its native-tool path includes `/opt/homebrew/bin`,
+`/usr/local/bin`, and standard system directories, allowing coordinator-side
+FFmpeg assembly when the app is launched without a shell.
 
 The former desktop shortcut stored server history under
 `~/Projects/mechana/.mechana/server`. The app detects and continues using that

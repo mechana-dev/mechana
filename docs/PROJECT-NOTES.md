@@ -1247,3 +1247,15 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Rebuilt the apps and verified the installed Worker's **Reinstall + start via
   SSH** action end to end on `marks-macbook-air-m4`, restoring two sandboxed
   workers.
+
+## 2026-08-08 06:49:00 EDT — Restore native tools to the packaged server environment
+
+- Diagnosed Blender job `79604b28-612d-4bfa-85b4-0bde2aacaf66`: all eight frame
+  batches succeeded, but coordinator-side movie assembly failed because the
+  Finder-launched server's LaunchAgent could not resolve Homebrew `ffmpeg`.
+- Added Apple Silicon Homebrew, Intel Homebrew, and system binary directories to
+  the packaged server LaunchAgent's deterministic `PATH`, covering Blender and
+  video coordinator-side FFmpeg/FFprobe work without depending on shell startup
+  files.
+- Added generated-plist regression coverage and documented the packaged native-tool
+  environment.

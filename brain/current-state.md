@@ -122,7 +122,9 @@ This file reports repository evidence, not desired future status.
   function-specific variants of the canonical mark: Worker Control has a blue
   connected-node symbol and Job Launcher has a warm paper-plane symbol. Server owns one dedicated WebKit
   dashboard window: Dock activation reveals the existing window, while closing
-  it leaves the LaunchAgent-owned server alive. These local builds are not signed
+  it leaves the LaunchAgent-owned server alive. Its LaunchAgent includes standard
+  Apple Silicon and Intel Homebrew paths so coordinator-side FFmpeg video and
+  Blender assembly work without a shell environment. These local builds are not signed
   or notarized.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
