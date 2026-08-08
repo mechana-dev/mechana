@@ -2,7 +2,7 @@
 
 Mechana provides three native macOS application bundles for local development:
 
-- **Mechana Server.app** starts or reveals the local server dashboard.
+- **Mechana Server.app** starts or reveals its dedicated local server dashboard window.
 - **Mechana Worker Control.app** runs Worker Control as an ordinary desktop app.
 - **Mechana Job Launcher.app** runs the Client Job Launcher as an ordinary desktop app.
 
@@ -33,25 +33,31 @@ packaging/macos/build-apps.sh --install
 ```
 
 The installer copies the bundles to `~/Applications`. Drag each app from there
-to the Dock. Rebuilding is deterministic from the shaded application JARs,
-Mechana's 1024-pixel brand icon, the current Java 25 `jpackage`, and a bundled
-runtime image.
+to the Dock. Rebuilding is deterministic from the shaded application JARs, three
+subtly color-coded Mechana icon variants, the current Java 25 `jpackage`, macOS's
+Swift compiler and WebKit framework, and a bundled runtime image.
 
 ## Server lifecycle
 
-**Mechana Server.app** is intentionally a short-lived launcher, not the server
-process. It first requests `http://127.0.0.1:8787/api/dashboard`. If a Mechana
-server responds, the app opens the dashboard and starts nothing. Otherwise it
+**Mechana Server.app** is a dedicated dashboard app, not the server process. It
+first requests `http://127.0.0.1:8787/api/dashboard`. If a Mechana server
+responds, the app opens the dashboard and starts nothing. Otherwise it
 writes and bootstraps the per-user LaunchAgent
 `~/Library/LaunchAgents/dev.mechana.server.plist`, waits for that same status API,
-and opens the default browser. The LaunchAgent label provides singleton process
+and opens its WebKit dashboard window. The LaunchAgent label provides singleton process
 ownership; API readiness verifies that the listener is actually Mechana.
+
+The dashboard window belongs to Mechana Server rather than Safari. Clicking its
+Dock icon while the app is open activates the existing window instead of creating
+another one. Closing the dashboard window quits only the dashboard app and leaves
+the LaunchAgent server running. Clicking the Dock icon again creates one fresh
+window connected to the same server.
 
 The LaunchAgent runs the packaged server and plugin JARs with the Java runtime
 inside **Mechana Server.app**. It needs no `sudo`, has `KeepAlive` enabled, and
 writes standard and error output to `~/.mechana/logs/server.log` and
-`~/.mechana/logs/server-error.log`. Closing the launcher or browser therefore has
-no effect on the server. Launching the app again only opens the dashboard.
+`~/.mechana/logs/server-error.log`. Closing the dashboard therefore has no effect
+on the server.
 
 The former desktop shortcut stored server history under
 `~/Projects/mechana/.mechana/server`. The app detects and continues using that

@@ -44,7 +44,9 @@ public final class ServerAppMain {
 				installAndStartAgent(appBundle(), Path.of(System.getProperty("user.home")));
 				waitUntilReady(Duration.ofSeconds(30));
 			}
-			Desktop.getDesktop().browse(DASHBOARD_URI);
+			if (shouldOpenBrowser(args)) {
+				Desktop.getDesktop().browse(DASHBOARD_URI);
+			}
 		} catch (IOException | InterruptedException | RuntimeException failure) {
 			if (failure instanceof InterruptedException) {
 				Thread.currentThread().interrupt();
@@ -54,6 +56,10 @@ public final class ServerAppMain {
 							+ "\n\nSee ~/.mechana/logs/server-error.log for details.",
 					"Mechana Server", JOptionPane.ERROR_MESSAGE);
 		}
+	}
+
+	static boolean shouldOpenBrowser(String[] args) {
+		return !List.of(args).contains("--start-only");
 	}
 
 	static Path appBundle() {

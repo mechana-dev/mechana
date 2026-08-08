@@ -113,8 +113,11 @@ This file reports repository evidence, not desired future status.
   exactly one background server without tying its lifecycle to the launcher or
   browser. It preserves the prior desktop launcher's data directory when present,
   logs beneath `~/.mechana/logs`, cooperates with dashboard restart, and provides
-  explicit no-sudo stop/start/restart/status commands. These local builds are not
-  signed or notarized.
+  explicit no-sudo stop/start/restart/status commands. The three apps use subtly
+  color-coded variants of the canonical mark. Server owns one dedicated WebKit
+  dashboard window: Dock activation reveals the existing window, while closing
+  it leaves the LaunchAgent-owned server alive. These local builds are not signed
+  or notarized.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/

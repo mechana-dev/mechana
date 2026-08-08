@@ -1195,3 +1195,13 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Documented build, install, lifecycle, verification, and the unsigned/unnotarized
   limitation in [macOS apps](macos-apps.md); updated `brain/current-state.md` from
   repository evidence.
+
+## 2026-08-08 05:48:00 EDT — Distinguish Dock apps and dedicate the server window
+
+- Added subtle dark, blue, and rose variants of the canonical Mechana app icon so
+  Server, Worker Control, and Job Launcher remain visibly related but are easy to
+  distinguish in the Dock.
+- Replaced Server's ordinary-browser handoff with a native macOS WebKit window.
+  Dock activation now reveals the one existing dashboard window instead of
+  creating duplicate browser windows; closing that UI continues to leave the
+  LaunchAgent-owned server running.

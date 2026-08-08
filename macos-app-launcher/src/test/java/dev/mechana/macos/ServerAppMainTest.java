@@ -17,6 +17,7 @@
 package dev.mechana.macos;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -47,5 +48,11 @@ class ServerAppMainTest {
 				temporaryDirectory);
 		assertTrue(plist.contains("Contents/MacOS/Mechana Server Daemon"));
 		assertTrue(plist.contains("Mechana &amp; Server.app"));
+	}
+
+	@Test
+	void nativeFrontendCanBootstrapWithoutOpeningAnotherBrowserWindow() {
+		assertFalse(ServerAppMain.shouldOpenBrowser(new String[]{"--start-only"}));
+		assertTrue(ServerAppMain.shouldOpenBrowser(new String[0]));
 	}
 }
