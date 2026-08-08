@@ -113,8 +113,9 @@ This file reports repository evidence, not desired future status.
   exactly one background server without tying its lifecycle to the launcher or
   browser. It preserves the prior desktop launcher's data directory when present,
   logs beneath `~/.mechana/logs`, cooperates with dashboard restart, and provides
-  explicit no-sudo stop/start/restart/status commands. The three apps use subtly
-  color-coded variants of the canonical mark. Server owns one dedicated WebKit
+  explicit no-sudo stop/start/restart/status commands. The three apps use
+  function-specific variants of the canonical mark: Worker Control has a blue
+  connected-node symbol and Job Launcher has a warm paper-plane symbol. Server owns one dedicated WebKit
   dashboard window: Dock activation reveals the existing window, while closing
   it leaves the LaunchAgent-owned server alive. These local builds are not signed
   or notarized.

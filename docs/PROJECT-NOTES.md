@@ -1216,3 +1216,11 @@ cloud providers remain future direction; see `brain/current-state.md` and
   Server app launch bootstraps the service again.
 - Added server endpoint coverage and documented the packaged lifecycle in
   [macOS apps](macos-apps.md) and `brain/current-state.md`.
+
+## 2026-08-08 06:12:00 EDT — Differentiate Worker Control and Job Launcher icons
+
+- Replaced the similar color-only app variants with distinct functional symbols:
+  Worker Control now uses a cool-blue connected-node mark, while Job Launcher uses
+  a warm amber paper-plane mark.
+- Retained the shared Mechana hexagonal visual language while making the two apps
+  recognizable by silhouette as well as color at Dock sizes.

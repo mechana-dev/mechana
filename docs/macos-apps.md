@@ -36,7 +36,7 @@ The installer copies the bundles to `/Applications`, so they appear under Finder
 standard **Applications** shortcut. Drag each app from there to the Dock. Set
 `MECHANA_APP_DESTINATION` when invoking the installer only if a different location
 is explicitly required. Rebuilding is deterministic from the shaded application JARs, three
-subtly color-coded Mechana icon variants, the current Java 25 `jpackage`, macOS's
+function-specific Mechana icon variants, the current Java 25 `jpackage`, macOS's
 Swift compiler and WebKit framework, and a bundled runtime image.
 
 ## Server lifecycle
