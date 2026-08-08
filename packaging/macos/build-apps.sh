@@ -25,10 +25,10 @@ for tool in mvn jpackage sips iconutil xcrun codesign; do
 done
 
 cd "${REPOSITORY}"
-mvn -pl macos-app-launcher,mechana-server,worker-control-app,client-job-launcher,plugins/sleep-plugin -am package
+mvn -pl macos-app-launcher,mechana-server,worker-host-agent,mechana-worker,worker-control-app,client-job-launcher,plugins/sleep-plugin -am package
 
 rm -rf "${TARGET}"
-mkdir -p "${STAGING}/server" "${STAGING}/worker-control" "${STAGING}/job-launcher" "${APPS}"
+mkdir -p "${STAGING}/server" "${STAGING}/worker-control/deployment" "${STAGING}/job-launcher" "${APPS}"
 
 create_icon() {
 	local source="$1"
@@ -55,6 +55,8 @@ cp plugins/fractal-render-plugin/target/mechana-plugin-fractal-render-0.1.0-SNAP
 cp plugins/ocr-tesseract-plugin/target/mechana-plugin-ocr-tesseract-0.1.0-SNAPSHOT.jar "${STAGING}/server/mechana-plugin-ocr-tesseract.jar"
 cp plugins/blender-render-plugin/target/mechana-plugin-blender-render-0.1.0-SNAPSHOT.jar "${STAGING}/server/mechana-plugin-blender-render.jar"
 cp worker-control-app/target/mechana-worker-control.jar "${STAGING}/worker-control/"
+cp worker-host-agent/target/mechana-worker-host-agent.jar "${STAGING}/worker-control/deployment/"
+cp mechana-worker/target/mechana-worker.jar "${STAGING}/worker-control/deployment/"
 cp client-job-launcher/target/mechana-client-job-launcher.jar "${STAGING}/job-launcher/"
 
 jpackage --type app-image --dest "${APPS}" --input "${STAGING}/server" \

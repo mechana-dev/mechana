@@ -88,7 +88,9 @@ This file reports repository evidence, not desired future status.
   independently for each host. Its four development-fleet host profiles are seeded
   with the established SSH users and ports and all five currently supported plugin
   capabilities and the MBA coordinator URL; saved per-host customizations remain
-  authoritative.
+  authoritative. The packaged macOS app includes the current host-agent and worker
+  deployment JARs and migrates only the old repository-relative default paths to
+  those bundled artifacts; explicit custom paths remain unchanged.
 - Windows SSH deployment uses the sandbox backend embedded in the worker JAR; it
   does not require or upload the retired external .NET sandbox-launcher executable.
   Existing saved launcher-path settings are retained only for profile migration

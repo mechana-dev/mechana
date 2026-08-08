@@ -1224,3 +1224,13 @@ cloud providers remain future direction; see `brain/current-state.md` and
   a warm amber paper-plane mark.
 - Retained the shared Mechana hexagonal visual language while making the two apps
   recognizable by silhouette as well as color at Dock sizes.
+
+## 2026-08-08 06:23:00 EDT — Make packaged Worker Control self-contained for deployment
+
+- Diagnosed Finder-launched **Reinstall + start via SSH** failures caused by saved
+  repository-relative host-agent and worker JAR paths being resolved outside the
+  Git worktree.
+- Added the current deployable host-agent and worker JARs to the Worker Control app
+  bundle and resolved packaged defaults relative to the bundle's own executable.
+- Migrated only the known repository-default paths to bundled artifacts, retained
+  explicit custom paths, and added settings migration coverage.

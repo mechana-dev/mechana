@@ -31,7 +31,9 @@ import java.util.Properties;
 final class SettingsStore {
 	static final String ALL_SUPPORTED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render";
 	static final String FLEET_COORDINATOR = "http://marks-macbook-air-m4:8787";
-	private static final int CURRENT_VERSION = 3;
+	static final String REPOSITORY_AGENT_JAR = "worker-host-agent/target/mechana-worker-host-agent.jar";
+	static final String REPOSITORY_WORKER_JAR = "mechana-worker/target/mechana-worker.jar";
+	private static final int CURRENT_VERSION = 4;
 	private static final Map<String, SshDefaults> KNOWN_HOSTS = Map.of("marks-macbook-air-m4",
 			new SshDefaults("markvita", 22), "rocinante", new SshDefaults("markvita", 21012), "srv959600",
 			new SshDefaults("root", 22), "hyperion", new SshDefaults("markf", 22));
@@ -109,8 +111,7 @@ final class SettingsStore {
 	static HostSettings defaults() {
 		return new HostSettings(8790, "", 1, AgentClient.LaunchMode.SANDBOXED, ALL_SUPPORTED_PLUGINS,
 				System.getProperty("user.name"), 22, "", false, "http://127.0.0.1:8787", "~/.mechana/host-agent",
-				"worker-host-agent/target/mechana-worker-host-agent.jar", "mechana-worker/target/mechana-worker.jar",
-				"~/.mechana/sandbox",
+				defaultAgentJar(), defaultWorkerJar(), "~/.mechana/sandbox",
 				"windows-sandbox-launcher/bin/Release/net10.0-windows/win-arm64/publish/mechana-windows-sandbox.exe");
 	}
 
@@ -137,9 +138,11 @@ final class SettingsStore {
 				Boolean.parseBoolean(
 						p.getProperty(prefix + "accept-new-host-key", Boolean.toString(defaults.acceptNewHostKey()))),
 				p.getProperty(prefix + "coordinator", defaults.coordinator()), remoteDirectory,
-				p.getProperty(prefix + "agent-jar", defaults.agentJar()),
-				p.getProperty(prefix + "worker-jar", defaults.workerJar()), sandboxRoot,
-				p.getProperty(prefix + "windows-sandbox-launcher", defaults.windowsSandboxLauncher()));
+				migratePackagedArtifact(p.getProperty(prefix + "agent-jar", defaults.agentJar()), REPOSITORY_AGENT_JAR,
+						defaultAgentJar()),
+				migratePackagedArtifact(p.getProperty(prefix + "worker-jar", defaults.workerJar()),
+						REPOSITORY_WORKER_JAR, defaultWorkerJar()),
+				sandboxRoot, p.getProperty(prefix + "windows-sandbox-launcher", defaults.windowsSandboxLauncher()));
 	}
 
 	private static HostSettings migrateLegacyProfile(String host, HostSettings legacy) {
@@ -171,6 +174,28 @@ final class SettingsStore {
 
 	private static String migrateSandboxRoot(String value) {
 		return "/var/lib/mechana-sandbox".equals(value) ? "~/.mechana/sandbox" : value;
+	}
+
+	static String defaultAgentJar() {
+		return packagedArtifact("mechana-worker-host-agent.jar", REPOSITORY_AGENT_JAR);
+	}
+
+	static String defaultWorkerJar() {
+		return packagedArtifact("mechana-worker.jar", REPOSITORY_WORKER_JAR);
+	}
+
+	private static String packagedArtifact(String name, String repositoryDefault) {
+		String appPath = System.getProperty("jpackage.app-path");
+		if (appPath == null || appPath.isBlank())
+			return repositoryDefault;
+		Path executable = Path.of(appPath).toAbsolutePath().normalize();
+		Path macOs = executable.getParent();
+		Path contents = macOs == null ? null : macOs.getParent();
+		return contents == null ? repositoryDefault : contents.resolve("app/deployment").resolve(name).toString();
+	}
+
+	private static String migratePackagedArtifact(String value, String repositoryDefault, String currentDefault) {
+		return value.equals(repositoryDefault) ? currentDefault : value;
 	}
 
 	private static void writeProfile(Properties p, String prefix, HostSettings profile) {

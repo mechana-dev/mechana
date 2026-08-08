@@ -47,8 +47,8 @@ final class WorkerControlFrame extends JFrame {
 	private final JCheckBox acceptNewHostKey = new JCheckBox("Accept new host key");
 	private final JTextField coordinator = new JTextField("http://127.0.0.1:8787", 20);
 	private final JTextField remoteDirectory = new JTextField("~/.mechana/host-agent", 18);
-	private final JTextField agentJar = new JTextField("worker-host-agent/target/mechana-worker-host-agent.jar", 24);
-	private final JTextField workerJar = new JTextField("mechana-worker/target/mechana-worker.jar", 24);
+	private final JTextField agentJar = new JTextField(SettingsStore.defaultAgentJar(), 24);
+	private final JTextField workerJar = new JTextField(SettingsStore.defaultWorkerJar(), 24);
 	private final JTextField sandboxRoot = new JTextField("~/.mechana/sandbox", 22);
 	private final JTextField windowsSandboxLauncher = new JTextField(
 			"windows-sandbox-launcher/bin/Release/net10.0-windows/win-arm64/publish/mechana-windows-sandbox.exe", 28);

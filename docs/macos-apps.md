@@ -92,7 +92,11 @@ Both Swing tools use their existing entry points and settings locations. Their
 `jpackage` launchers appear as ordinary GUI applications and do not allocate a
 console. Closing either main window uses its existing `EXIT_ON_CLOSE` behavior,
 which terminates that application completely. Worker Control's saved host, SSH,
-plugin, and deployment profiles are unchanged.
+plugin, and deployment profiles are retained. Its app bundle also carries the
+current host-agent and worker JARs needed by **Reinstall + start via SSH**, so that
+operation does not depend on a repository working directory. Existing profiles
+using the former repository-relative defaults migrate to the bundled copies;
+explicit custom deployment paths are preserved.
 
 ## Local verification
 
