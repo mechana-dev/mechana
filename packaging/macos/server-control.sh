@@ -6,7 +6,7 @@ set -euo pipefail
 
 LABEL="dev.mechana.server"
 SERVICE="gui/$(id -u)/${LABEL}"
-APP="${HOME}/Applications/Mechana Server.app"
+APP="/Applications/Mechana Server.app"
 STATUS_URL="http://127.0.0.1:8787/api/dashboard"
 
 case "${1:-status}" in

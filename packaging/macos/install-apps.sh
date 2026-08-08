@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 SOURCE="${SCRIPT_DIR}/target/apps"
-DESTINATION="${HOME}/Applications"
+DESTINATION="${MECHANA_APP_DESTINATION:-/Applications}"
 
 if [[ ! -d "${SOURCE}" ]]; then
 	print -u2 "Build the apps first with packaging/macos/build-apps.sh."

@@ -19,8 +19,8 @@ Use Java 25 on macOS and run from the repository root:
 packaging/macos/build-apps.sh
 ```
 
-The bundles are written to `packaging/macos/target/apps`. Install them for the
-current user with no administrator privileges:
+The bundles are written to `packaging/macos/target/apps`. Install them in the
+standard macOS Applications folder:
 
 ```shell
 packaging/macos/install-apps.sh
@@ -32,8 +32,10 @@ Or build and install in one operation:
 packaging/macos/build-apps.sh --install
 ```
 
-The installer copies the bundles to `~/Applications`. Drag each app from there
-to the Dock. Rebuilding is deterministic from the shaded application JARs, three
+The installer copies the bundles to `/Applications`, so they appear under Finder's
+standard **Applications** shortcut. Drag each app from there to the Dock. Set
+`MECHANA_APP_DESTINATION` when invoking the installer only if a different location
+is explicitly required. Rebuilding is deterministic from the shaded application JARs, three
 subtly color-coded Mechana icon variants, the current Java 25 `jpackage`, macOS's
 Swift compiler and WebKit framework, and a bundled runtime image.
 
@@ -94,9 +96,9 @@ plugin, and deployment profiles are unchanged.
 After installation, Finder-equivalent launches can be exercised with:
 
 ```shell
-open "$HOME/Applications/Mechana Server.app"
-open "$HOME/Applications/Mechana Worker Control.app"
-open "$HOME/Applications/Mechana Job Launcher.app"
+open "/Applications/Mechana Server.app"
+open "/Applications/Mechana Worker Control.app"
+open "/Applications/Mechana Job Launcher.app"
 ```
 
 Use Activity Monitor or `launchctl print gui/$(id -u)/dev.mechana.server` to
