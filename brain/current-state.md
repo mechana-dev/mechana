@@ -1,6 +1,6 @@
 # Current state
 
-Verified: 2026-08-07
+Verified: 2026-08-08
 
 This file reports repository evidence, not desired future status.
 
@@ -84,11 +84,16 @@ This file reports repository evidence, not desired future status.
   FFmpeg, FFprobe, Tesseract, and Blender through standard macOS/Linux locations,
   fails before deployment when the configured plugin set lacks a required tool,
   and persists verified absolute paths in the launchd/systemd definition.
+  Reinstall waits boundedly when a just-unloaded listener temporarily has no
+  readable process command, while still refusing to terminate any visible
+  listener that is not the Mechana host-agent JAR.
 - Worker Control persists connection, SSH, launch, plugin, and deployment settings
   independently for each host. Its four development-fleet host profiles are seeded
   with the established SSH users and ports and all five currently supported plugin
   capabilities and the MBA coordinator URL; saved per-host customizations remain
-  authoritative.
+  authoritative. The packaged macOS app includes the current host-agent and worker
+  deployment JARs and migrates only the old repository-relative default paths to
+  those bundled artifacts; explicit custom paths remain unchanged.
 - Windows SSH deployment uses the sandbox backend embedded in the worker JAR; it
   does not require or upload the retired external .NET sandbox-launcher executable.
   Existing saved launcher-path settings are retained only for profile migration
@@ -105,6 +110,22 @@ This file reports repository evidence, not desired future status.
 - Version-controlled macOS launchers under `scripts/macos` start or reveal the
   local server dashboard, Worker Control, and Client Job Launcher. The installer
   copies those `.command` shortcuts to the current user's Desktop.
+- A `jpackage` workflow under `packaging/macos` builds Dock-ready **Mechana
+  Server**, **Mechana Worker Control**, and **Mechana Job Launcher** app-image
+  bundles with the Mechana icon and a bundled Java runtime. The GUI tools retain
+  their existing settings and exit with their main windows. The Server app uses
+  the loopback dashboard status API and a per-user, `KeepAlive` LaunchAgent to own
+  exactly one background server without tying its lifecycle to the launcher or
+  browser. It preserves the prior desktop launcher's data directory when present,
+  logs beneath `~/.mechana/logs`, cooperates with dashboard restart, and provides
+  explicit no-sudo stop/start/restart/status commands. The three apps use
+  function-specific variants of the canonical mark: Worker Control has a blue
+  connected-node symbol and Job Launcher has a warm paper-plane symbol. Server owns one dedicated WebKit
+  dashboard window: Dock activation reveals the existing window, while closing
+  it leaves the LaunchAgent-owned server alive. Its LaunchAgent includes standard
+  Apple Silicon and Intel Homebrew paths so coordinator-side FFmpeg video and
+  Blender assembly work without a shell environment. These local builds are not signed
+  or notarized.
 - The root POM compiles with Java release 25 and accepts JDK 25 or newer plus
   Maven 3.9+.
 - A first plugin-runtime foundation defines trust modes, immutable policy/request/
@@ -169,9 +190,11 @@ This file reports repository evidence, not desired future status.
   elapsed times stop advancing. Worker rows show `IDLE`, `OFFLINE`, or the active
   plugin name plus that worker's current work-unit progress and job link. Workers
   entries for ten seconds after timeout before removing them.
-- The master dashboard provides a confirmed loopback-only server restart action.
-  The replacement inherits the current launch configuration; workers reconnect
-  and completed history remains, while volatile active jobs do not survive.
+- The master dashboard provides confirmed loopback-only server restart and stop
+  actions. Restart inherits the current launch configuration; workers reconnect
+  and completed history remains, while volatile active jobs do not survive. In
+  the packaged macOS app, stop unloads the per-user LaunchAgent and closes the
+  dashboard frontend; launching the Server app starts it again.
 - Terminal job dashboard snapshots and server-owned artifacts persist beneath a
   configurable server data directory (default `.mechana/server`). Completed and
   cancelled rows show their terminal timestamp. Detail pages list downloadable

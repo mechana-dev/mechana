@@ -22,6 +22,7 @@ There is intentionally **no horizontal cross-piece**.
 
 - `mechana-app-icon-dark.svg`
 - `mechana-app-icon-light.svg`
+- `mechana-app-icon.png` (1024-pixel packaging source generated from the light SVG)
 - `favicon.svg`
 
 ### Horizontal lockups

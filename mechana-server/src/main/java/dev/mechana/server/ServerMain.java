@@ -19,9 +19,11 @@ package dev.mechana.server;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 
 /** Starts the continuously running Mechana server and scheduler. */
@@ -39,6 +41,7 @@ public final class ServerMain {
 		MechanaServer server = new MechanaServer(port, publicUrl, plugins.sleep(), plugins.video(), plugins.fractal(),
 				plugins.ocr(), plugins.blender(), 5_000, dataDirectory);
 		server.onRestart(() -> restart(server, port, publicUrl, dataDirectory));
+		server.onStop(() -> stop(server));
 		server.start();
 		Runtime.getRuntime().addShutdownHook(new Thread(server::close, "mechana-shutdown"));
 		System.out.printf("Mechana server listening on %s%n", publicUrl);
@@ -55,12 +58,38 @@ public final class ServerMain {
 	@SuppressFBWarnings(value = "DM_EXIT", justification = "The restart action replaces this dedicated server JVM")
 	private static void restart(MechanaServer server, int port, String publicUrl, Path dataDirectory) {
 		server.close();
+		if (Boolean.getBoolean("mechana.launchd.managed")) {
+			System.exit(0);
+		}
 		try {
 			new ProcessBuilder(restartCommand(port, publicUrl, dataDirectory)).inheritIO().start();
 			System.exit(0);
 		} catch (IOException | URISyntaxException failure) {
 			System.err.printf("Could not restart Mechana server: %s%n", failure.getMessage());
 		}
+	}
+
+	@SuppressFBWarnings(value = "DM_EXIT", justification = "The stop action terminates this dedicated server JVM")
+	private static void stop(MechanaServer server) {
+		if (Boolean.getBoolean("mechana.launchd.managed")) {
+			try {
+				String uid = new String(new ProcessBuilder("/usr/bin/id", "-u").start().getInputStream().readAllBytes(),
+						StandardCharsets.UTF_8).trim();
+				Process unload = new ProcessBuilder("/bin/launchctl", "bootout", "gui/" + uid + "/dev.mechana.server")
+						.inheritIO().start();
+				if (unload.waitFor() != 0) {
+					System.err.println("Could not unload the Mechana server LaunchAgent");
+				}
+			} catch (IOException | InterruptedException failure) {
+				if (failure instanceof InterruptedException) {
+					Thread.currentThread().interrupt();
+				}
+				System.err.printf("Could not stop Mechana server: %s%n", failure.getMessage());
+			}
+			return;
+		}
+		server.close();
+		System.exit(0);
 	}
 
 	static List<String> restartCommand(int port, String publicUrl, Path dataDirectory) throws URISyntaxException {
@@ -95,8 +124,27 @@ public final class ServerMain {
 		}
 
 		private static Path pluginPath(String id, String defaultPath) {
-			return Path.of(System.getProperty("mechana.plugin." + id + ".jar", defaultPath)).toAbsolutePath()
-					.normalize();
+			String configured = System.getProperty("mechana.plugin." + id + ".jar");
+			String packagedApp = System.getProperty("jpackage.app-path");
+			Path path = configured != null
+					? Path.of(configured)
+					: packagedApp != null ? packagedPluginPath(packagedApp, id) : Path.of(defaultPath);
+			return path.toAbsolutePath().normalize();
+		}
+
+		private static Path packagedPluginPath(String executable, String id) {
+			String fileName = switch (id) {
+				case "sleep" -> "mechana-plugin-sleep.jar";
+				case "video" -> "mechana-plugin-video.jar";
+				case "fractal" -> "mechana-plugin-fractal-render.jar";
+				case "ocr" -> "mechana-plugin-ocr-tesseract.jar";
+				case "blender" -> "mechana-plugin-blender-render.jar";
+				default -> throw new IllegalArgumentException("Unknown plugin: " + id);
+			};
+			Path executablePath = Path.of(executable).toAbsolutePath();
+			Path macOsDirectory = Objects.requireNonNull(executablePath.getParent(), "packaged launcher directory");
+			Path contentsDirectory = Objects.requireNonNull(macOsDirectory.getParent(), "packaged Contents directory");
+			return contentsDirectory.resolve("app").resolve(fileName);
 		}
 	}
 }

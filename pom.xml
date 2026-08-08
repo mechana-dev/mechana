@@ -25,6 +25,7 @@
     <module>worker-host-agent</module>
     <module>worker-control-app</module>
     <module>client-job-launcher</module>
+    <module>macos-app-launcher</module>
   </modules>
 
   <properties>

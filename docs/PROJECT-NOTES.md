@@ -1179,3 +1179,98 @@ cloud providers remain future direction; see `brain/current-state.md` and
   durable brain reflects the completed sandbox phase and implemented host controls.
 - Established annotated tag `architecture-baseline-1.2` as the post-sandbox,
   pre-storage-abstraction checkpoint.
+
+## 2026-08-08 04:55:00 EDT — Add Dock-ready macOS application bundles
+
+- Added Java 25 `jpackage` app-image builds for Mechana Server, Worker Control,
+  and Job Launcher with stable bundle identifiers, the canonical Mechana app
+  icon, bundled runtimes, Finder-safe paths, and no Terminal windows.
+- Made Mechana Server.app an idempotent status launcher backed by the loopback
+  dashboard API and a per-user `launchd` agent. The background server survives
+  launcher and browser exit, uses the packaged runtime and plugin artifacts,
+  retains existing desktop-launcher data when present, and writes user-local logs.
+- Made dashboard restart supervisor-aware and added explicit no-sudo server
+  status/start/stop/restart commands. Worker Control and Job Launcher retain their
+  existing settings and normal quit-on-window-close behavior.
+- Documented build, install, lifecycle, verification, and the unsigned/unnotarized
+  limitation in [macOS apps](macos-apps.md); updated `brain/current-state.md` from
+  repository evidence.
+
+## 2026-08-08 05:48:00 EDT — Distinguish Dock apps and dedicate the server window
+
+- Added subtle dark, blue, and rose variants of the canonical Mechana app icon so
+  Server, Worker Control, and Job Launcher remain visibly related but are easy to
+  distinguish in the Dock.
+- Replaced Server's ordinary-browser handoff with a native macOS WebKit window.
+  Dock activation now reveals the one existing dashboard window instead of
+  creating duplicate browser windows; closing that UI continues to leave the
+  LaunchAgent-owned server running.
+
+## 2026-08-08 06:04:00 EDT — Restore packaged dashboard controls and add server stop
+
+- Added native WebKit confirmation-dialog handling so the dashboard's restart,
+  individual purge, and bulk purge controls send their requests from the packaged
+  Server app.
+- Added a confirmed, loopback-only **Stop server** action. Packaged shutdown
+  unloads the per-user LaunchAgent and closes the dashboard frontend; the next
+  Server app launch bootstraps the service again.
+- Added server endpoint coverage and documented the packaged lifecycle in
+  [macOS apps](macos-apps.md) and `brain/current-state.md`.
+
+## 2026-08-08 06:12:00 EDT — Differentiate Worker Control and Job Launcher icons
+
+- Replaced the similar color-only app variants with distinct functional symbols:
+  Worker Control now uses a cool-blue connected-node mark, while Job Launcher uses
+  a warm amber paper-plane mark.
+- Retained the shared Mechana hexagonal visual language while making the two apps
+  recognizable by silhouette as well as color at Dock sizes.
+
+## 2026-08-08 06:23:00 EDT — Make packaged Worker Control self-contained for deployment
+
+- Diagnosed Finder-launched **Reinstall + start via SSH** failures caused by saved
+  repository-relative host-agent and worker JAR paths being resolved outside the
+  Git worktree.
+- Added the current deployable host-agent and worker JARs to the Worker Control app
+  bundle and resolved packaged defaults relative to the bundle's own executable.
+- Migrated only the known repository-default paths to bundled artifacts, retained
+  explicit custom paths, and added settings migration coverage.
+
+## 2026-08-08 06:40:00 EDT — Tolerate macOS agent-unload listener races
+
+- Diagnosed a local MacBook Air reinstall that unloaded the existing LaunchAgent
+  but then classified its short-lived, commandless port listener as a non-Mechana
+  process.
+- Changed macOS and Linux stale-listener cleanup to wait boundedly when a listener
+  PID temporarily has no readable command. The safety boundary remains strict:
+  only a visible command containing `mechana-worker-host-agent.jar` may be killed,
+  and unrelated listeners still abort deployment.
+- Rebuilt the apps and verified the installed Worker's **Reinstall + start via
+  SSH** action end to end on `marks-macbook-air-m4`, restoring two sandboxed
+  workers.
+
+## 2026-08-08 06:49:00 EDT — Restore native tools to the packaged server environment
+
+- Diagnosed Blender job `79604b28-612d-4bfa-85b4-0bde2aacaf66`: all eight frame
+  batches succeeded, but coordinator-side movie assembly failed because the
+  Finder-launched server's LaunchAgent could not resolve Homebrew `ffmpeg`.
+- Added Apple Silicon Homebrew, Intel Homebrew, and system binary directories to
+  the packaged server LaunchAgent's deterministic `PATH`, covering Blender and
+  video coordinator-side FFmpeg/FFprobe work without depending on shell startup
+  files.
+- Added generated-plist regression coverage and documented the packaged native-tool
+  environment.
+
+## 2026-08-08 07:25:00 EDT — Finalize the macOS application packaging change set
+
+- Consolidated the Dock-ready Server, Worker Control, and Job Launcher bundles,
+  their distinct icons, the dedicated single-window server dashboard, standard
+  `/Applications` installation, LaunchAgent lifecycle, server controls, and
+  self-contained Worker Control deployment artifacts into one reviewable change set.
+- Included the follow-up reliability fixes found during installed-app testing:
+  bounded host-agent listener teardown handling and a deterministic native-tool
+  path for coordinator-side FFmpeg/FFprobe operations.
+- Rebuilt and reinstalled all three application bundles, verified the live server
+  LaunchAgent environment, and completed the full 20-module Maven verification
+  reactor successfully before submitting PR #39 for final review.
+- Local app images remain unsigned development builds. Distribution outside the
+  owner's Macs will require Apple Developer signing and notarization.

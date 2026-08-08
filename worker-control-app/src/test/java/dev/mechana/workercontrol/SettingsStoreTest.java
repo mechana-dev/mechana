@@ -134,6 +134,33 @@ class SettingsStoreTest {
 		assertEquals("~/.mechana/sandbox", migrated.sandboxRoot());
 	}
 
+	@Test
+	void packagedAppUsesBundledDeploymentJarsAndMigratesRepositoryDefaults() throws Exception {
+		String originalAppPath = System.getProperty("jpackage.app-path");
+		Path file = temporary.resolve("settings.properties");
+		Files.writeString(file,
+				"settings-version=3\nhost.0=rocinante\nlast-host=rocinante\nprofile.0.port=8790\n"
+						+ "profile.0.agent-jar=" + SettingsStore.REPOSITORY_AGENT_JAR + "\nprofile.0.worker-jar="
+						+ SettingsStore.REPOSITORY_WORKER_JAR + "\n");
+		try {
+			System.setProperty("jpackage.app-path",
+					"/Applications/Mechana Worker Control.app/Contents/MacOS/Mechana Worker Control");
+
+			SettingsStore.HostSettings loaded = new SettingsStore(file).load().profiles().get("rocinante");
+
+			assertEquals(
+					"/Applications/Mechana Worker Control.app/Contents/app/deployment/mechana-worker-host-agent.jar",
+					loaded.agentJar());
+			assertEquals("/Applications/Mechana Worker Control.app/Contents/app/deployment/mechana-worker.jar",
+					loaded.workerJar());
+		} finally {
+			if (originalAppPath == null)
+				System.clearProperty("jpackage.app-path");
+			else
+				System.setProperty("jpackage.app-path", originalAppPath);
+		}
+	}
+
 	private static SettingsStore.HostSettings profile(int port, int sshPort, String remoteDirectory,
 			String sandboxRoot) {
 		return new SettingsStore.HostSettings(port, "token-" + port, 4, AgentClient.LaunchMode.SANDBOXED,

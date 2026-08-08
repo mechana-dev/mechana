@@ -190,6 +190,28 @@ class MechanaServerDashboardTest {
 	}
 
 	@Test
+	void stopsServerOnlyThroughConfiguredLoopbackAction(@TempDir java.nio.file.Path temporary) throws Exception {
+		var plugin = Files.createTempFile("mechana-test-plugin", ".jar");
+		try (MechanaServer server = new MechanaServer(0, "http://localhost", plugin, 5_000, temporary);
+				HttpClient client = HttpClient.newHttpClient()) {
+			CountDownLatch stopped = new CountDownLatch(1);
+			server.onStop(stopped::countDown);
+			server.start();
+			URI base = URI.create("http://127.0.0.1:" + server.port());
+			HttpResponse<String> page = client.send(HttpRequest.newBuilder(base.resolve("/dashboard")).build(),
+					HttpResponse.BodyHandlers.ofString());
+			HttpRequest stop = HttpRequest.newBuilder(base.resolve("/api/server/stop"))
+					.POST(HttpRequest.BodyPublishers.noBody()).build();
+
+			assertTrue(page.body().contains("Stop server"));
+			assertEquals(202, client.send(stop, HttpResponse.BodyHandlers.discarding()).statusCode());
+			assertTrue(stopped.await(1, TimeUnit.SECONDS));
+		} finally {
+			Files.deleteIfExists(plugin);
+		}
+	}
+
+	@Test
 	void completedJobSurvivesRestartProvidesArtifactsAndCanBePurged(@TempDir java.nio.file.Path temporary)
 			throws Exception {
 		var plugin = temporary.resolve("plugin.jar");
