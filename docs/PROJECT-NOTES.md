@@ -1234,3 +1234,16 @@ cloud providers remain future direction; see `brain/current-state.md` and
   bundle and resolved packaged defaults relative to the bundle's own executable.
 - Migrated only the known repository-default paths to bundled artifacts, retained
   explicit custom paths, and added settings migration coverage.
+
+## 2026-08-08 06:40:00 EDT — Tolerate macOS agent-unload listener races
+
+- Diagnosed a local MacBook Air reinstall that unloaded the existing LaunchAgent
+  but then classified its short-lived, commandless port listener as a non-Mechana
+  process.
+- Changed macOS and Linux stale-listener cleanup to wait boundedly when a listener
+  PID temporarily has no readable command. The safety boundary remains strict:
+  only a visible command containing `mechana-worker-host-agent.jar` may be killed,
+  and unrelated listeners still abort deployment.
+- Rebuilt the apps and verified the installed Worker's **Reinstall + start via
+  SSH** action end to end on `marks-macbook-air-m4`, restoring two sandboxed
+  workers.

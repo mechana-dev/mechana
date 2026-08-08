@@ -164,6 +164,8 @@ class SshProvisionerTest {
 		assertTrue(command.contains("ss -ltnp 'sport = :8790'"));
 		assertTrue(command.contains("ps -p \"$agent_pid\" -o command="));
 		assertTrue(command.contains("*mechana-worker-host-agent.jar*"));
+		assertTrue(command.contains("agent_unknown_wait")
+				&& command.contains("listener could not be identified after waiting"));
 		assertTrue(command.contains("Port 8790 is occupied by a non-Mechana process"));
 		assertEquals("", SshProvisioner.runCommand(List.of("/bin/sh", "-n", "-c", command), Duration.ofSeconds(5)));
 	}
@@ -206,6 +208,8 @@ class SshProvisionerTest {
 		assertTrue(command.contains("lsof -nP -tiTCP:21012"));
 		assertTrue(command.contains("ps -p \"$agent_pid\" -o command="));
 		assertTrue(command.contains("*mechana-worker-host-agent.jar*"));
+		assertTrue(command.contains("agent_unknown_wait")
+				&& command.contains("listener could not be identified after waiting"));
 		assertTrue(command.contains("Port 21012 is occupied by a non-Mechana process"));
 		assertEquals("", SshProvisioner.runCommand(List.of("/bin/sh", "-n", "-c", command), Duration.ofSeconds(5)));
 	}

@@ -84,6 +84,9 @@ This file reports repository evidence, not desired future status.
   FFmpeg, FFprobe, Tesseract, and Blender through standard macOS/Linux locations,
   fails before deployment when the configured plugin set lacks a required tool,
   and persists verified absolute paths in the launchd/systemd definition.
+  Reinstall waits boundedly when a just-unloaded listener temporarily has no
+  readable process command, while still refusing to terminate any visible
+  listener that is not the Mechana host-agent JAR.
 - Worker Control persists connection, SSH, launch, plugin, and deployment settings
   independently for each host. Its four development-fleet host profiles are seeded
   with the established SSH users and ports and all five currently supported plugin

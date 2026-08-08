@@ -392,26 +392,34 @@ final class SshProvisioner {
 	}
 	static String macOsPortReleaseCommand(int port) {
 		return "agent_pid=$(lsof -nP -tiTCP:" + port
-				+ " -sTCP:LISTEN 2>/dev/null | head -n 1); while [ -n \"$agent_pid\" ]; do "
-				+ "agent_command=$(ps -p \"$agent_pid\" -o command=); case \"$agent_command\" in "
+				+ " -sTCP:LISTEN 2>/dev/null | head -n 1); agent_unknown_wait=0; while [ -n \"$agent_pid\" ]; do "
+				+ "agent_command=$(ps -p \"$agent_pid\" -o command=); if [ -z \"$agent_command\" ]; then "
+				+ "agent_unknown_wait=$((agent_unknown_wait + 1)); if [ \"$agent_unknown_wait\" -ge 50 ]; then "
+				+ "echo \"Port " + port
+				+ " listener could not be identified after waiting\" >&2; exit 1; fi; sleep 0.1; else "
+				+ "agent_unknown_wait=0; case \"$agent_command\" in "
 				+ "*mechana-worker-host-agent.jar*) kill \"$agent_pid\" 2>/dev/null || true; agent_wait=0; "
 				+ "while kill -0 \"$agent_pid\" 2>/dev/null && [ \"$agent_wait\" -lt 50 ]; do sleep 0.1; "
 				+ "agent_wait=$((agent_wait + 1)); done; kill -9 \"$agent_pid\" 2>/dev/null || true ;; "
 				+ "*) echo \"Port " + port + " is occupied by a non-Mechana process: $agent_command\" >&2; exit 1 ;; "
-				+ "esac; agent_pid=$(lsof -nP -tiTCP:" + port + " -sTCP:LISTEN 2>/dev/null | head -n 1); done";
+				+ "esac; fi; agent_pid=$(lsof -nP -tiTCP:" + port + " -sTCP:LISTEN 2>/dev/null | head -n 1); done";
 	}
 
 	static String linuxPortReleaseCommand(int port) {
 		String listener = "ss -ltnp 'sport = :" + port
 				+ "' 2>/dev/null | sed -n 's/.*pid=\\([0-9]*\\).*/\\1/p' | head -n 1";
-		return "agent_pid=$(" + listener + "); while [ -n \"$agent_pid\" ]; do "
-				+ "agent_command=$(ps -p \"$agent_pid\" -o command=); case \"$agent_command\" in "
+		return "agent_pid=$(" + listener + "); agent_unknown_wait=0; while [ -n \"$agent_pid\" ]; do "
+				+ "agent_command=$(ps -p \"$agent_pid\" -o command=); if [ -z \"$agent_command\" ]; then "
+				+ "agent_unknown_wait=$((agent_unknown_wait + 1)); if [ \"$agent_unknown_wait\" -ge 50 ]; then "
+				+ "echo \"Port " + port
+				+ " listener could not be identified after waiting\" >&2; exit 1; fi; sleep 0.1; else "
+				+ "agent_unknown_wait=0; case \"$agent_command\" in "
 				+ "*mechana-worker-host-agent.jar*) kill \"$agent_pid\" 2>/dev/null || true; agent_wait=0; "
 				+ "while kill -0 \"$agent_pid\" 2>/dev/null && [ \"$agent_wait\" -lt 50 ]; do sleep 0.1; "
 				+ "agent_wait=$((agent_wait + 1)); done; kill -9 \"$agent_pid\" 2>/dev/null || true ;; "
 				+ "*) echo \"Port " + port
-				+ " is occupied by a non-Mechana process: $agent_command\" >&2; exit 1 ;; esac; agent_pid=$(" + listener
-				+ "); done";
+				+ " is occupied by a non-Mechana process: $agent_command\" >&2; exit 1 ;; esac; fi; agent_pid=$("
+				+ listener + "); done";
 	}
 
 	static String linuxLegacySystemServiceCleanupCommand() {
