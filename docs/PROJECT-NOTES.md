@@ -1336,3 +1336,11 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added best-effort cleanup of launcher transfer files after success, failure, or
   cancellation and deterministic cleanup of assembly intermediates. The selected
   final output and completed-artifact metadata are retained.
+
+## 2026-08-08 23:34:00 EDT — Isolate client-local final outputs by job
+
+- Changed client-local FFmpeg assembly to create a job-ID subdirectory beneath
+  the selected output directory and publish the final video there. Final paths
+  now have the form `<selected-output>/<job-id>/compressed-<job-id>.mkv`.
+- Applied the same layout to both direct and legacy client-local assembly paths,
+  and added regression coverage for the layout and traversal rejection.

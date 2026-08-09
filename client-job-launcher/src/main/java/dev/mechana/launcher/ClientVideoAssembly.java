@@ -60,7 +60,7 @@ final class ClientVideoAssembly {
 		Path video = jobScratch.resolve("video.mkv");
 		run(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i",
 				concatManifest.toString(), "-map", "0:v:0", "-c", "copy", video.toString()));
-		Path output = outputDirectory.resolve("compressed-" + jobId + ".mkv").toAbsolutePath().normalize();
+		Path output = finalOutputPath(outputDirectory, jobId);
 		run(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", video.toString(), "-i",
 				source.toAbsolutePath().normalize().toString(), "-map", "0:v:0", "-map", "1:a:0?", "-t",
 				Double.toString(durationSeconds), "-c", "copy", "-f", "matroska", output.toString()));
@@ -126,7 +126,7 @@ final class ClientVideoAssembly {
 		Path video = jobScratch.resolve("video.mkv");
 		run(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i",
 				concatManifest.toString(), "-map", "0:v:0", "-c", "copy", video.toString()));
-		Path output = outputDirectory.resolve("compressed-" + jobId + ".mkv").toAbsolutePath().normalize();
+		Path output = finalOutputPath(outputDirectory, jobId);
 		run(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", video.toString(), "-i",
 				source.toAbsolutePath().normalize().toString(), "-map", "0:v:0", "-map", "1:a:0?", "-t",
 				Double.toString(durationSeconds), "-c", "copy", "-f", "matroska", output.toString()));
@@ -134,6 +134,15 @@ final class ClientVideoAssembly {
 		client.completeClientAssembly(server, jobId, new ClientAssemblyCompletion("client-local", output.toString(),
 				Objects.requireNonNull(output.getFileName()).toString(), Files.size(output), sha256));
 		return output;
+	}
+
+	static Path finalOutputPath(Path outputDirectory, String jobId) throws IOException {
+		Path outputRoot = outputDirectory.toAbsolutePath().normalize();
+		Path jobOutputDirectory = outputRoot.resolve(jobId).normalize();
+		if (!Objects.equals(jobOutputDirectory.getParent(), outputRoot))
+			throw new IOException("Invalid job ID for client output directory: " + jobId);
+		Files.createDirectories(jobOutputDirectory);
+		return jobOutputDirectory.resolve("compressed-" + jobId + ".mkv");
 	}
 
 	static void verify(Path file, ArtifactReference artifact) throws IOException {
