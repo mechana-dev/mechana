@@ -1417,3 +1417,30 @@ cloud providers remain future direction; see `brain/current-state.md` and
   plugin-owned preparation command applies the range consistently for server-local
   and client-local splitting, while client-local final audio selection uses the
   same offset.
+
+## 2026-08-09 07:00 EDT — Measure client-direct bandwidth and storage efficiency
+
+- Analyzed successful client-direct FFmpeg job
+  `6bc759c1-0a24-45dd-a4a3-944a995e423c`: eight workers processed 52.142 seconds
+  beginning at a 50-second offset from a 119,175,998-byte source.
+- Client-side preparation transferred 26,019,987 bytes of assigned input chunks
+  instead of the whole source. Workers returned 16,944,666 bytes of compressed
+  video partitions, and the server supplied 459,192 bytes of plugin packages, for
+  43,423,845 bytes of measured accepted-attempt payload.
+- Two launcher-local workers accounted for 4,531,442 bytes over the local direct
+  endpoint. Approximately 38.9 MB crossed machines. The server relayed no media
+  and retained only metadata; client assembly produced an 18,883,570-byte MKV.
+- Compared with the original uncached server-centered flow—whole-source upload,
+  chunk distribution, worker-result collection, and final download—the observed
+  direct path reduced estimated cross-machine application payload from about
+  181 MB to 38.9 MB, roughly 78%. This estimate excludes protocol framing,
+  control messages, and local scratch I/O, matching `transfer-summary.json`.
+- Confirmed why client-local assembly copies audio once from the original source:
+  workers encode video-only partitions, avoiding independently cut audio gaps,
+  overlaps, duplicate transfer, and re-encoding. The final file exceeds returned
+  partition bytes because local assembly adds that source audio and container data.
+- Documented that simultaneous worker publication can aggregate independent
+  worker upload bandwidth, but remains bounded by the requester's connection,
+  disk, HTTP handling, and any shared worker uplinks. Server-local can remain more
+  efficient for already-resident/cached inputs, repeated reuse, weak client links,
+  or jobs that must survive launcher disconnection.

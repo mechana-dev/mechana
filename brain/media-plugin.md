@@ -27,7 +27,11 @@ artifact only for the local video demo/composition entry points.
 The separate audio path is an intentional first-pass reliability choice: segment
 workers do not independently cut audio, avoiding timestamp gaps and overlaps at
 keyframe-aligned video boundaries. Audio is copied, so final MP4 muxing can reject
-an input audio codec that MP4 does not support.
+an input audio codec that MP4 does not support. Client-local assembly reads that
+single audio range from the original client source and muxes it locally; it does
+not send audio through the coordinator or require every worker to author an audio
+partition. The launcher must therefore remain active with the source available
+until assembly completes.
 
 Segmentation is time-based and keyframe-aware. Segment duration is a planning goal,
 not permission to cut at unsafe boundaries or divide by equal byte count. Boundary

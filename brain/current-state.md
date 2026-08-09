@@ -29,10 +29,18 @@
   normal completed artifact. Legacy workers remain compatible and contribute zero
   counters until upgraded.
 - A live eight-worker direct FFmpeg job verified the telemetry end to end: the
-  client sent 29,633,829 input bytes directly to workers, workers returned
-  16,717,070 output bytes directly to the client, and the server supplied 438,616
-  plugin bytes. The server relayed none of the 46,350,899 measured video-artifact
-  bytes; client-local assembly produced a 19,118,980-byte final MKV.
+  client sent only prepared work-unit chunks directly to workers, workers returned
+  compressed partitions directly to the client, and the server supplied only the
+  plugin packages. The coordinator relayed none of the video-artifact bytes;
+  client-local assembly produced and retained the final MKV.
+- A later eight-worker job using a 50-second source offset measured 26,019,987
+  client-to-worker input bytes, 16,944,666 worker-to-client output bytes, and
+  459,192 server-to-worker plugin bytes. Two workers were local to the launcher;
+  excluding their loopback payload, approximately 38.9 MB crossed machines. An
+  equivalent uncached server-centered path that uploaded the whole 119,175,998-byte
+  source, relayed the same chunks and results, and returned the final 18,883,570-byte
+  MKV would move approximately 181 MB. This is a measured workload comparison,
+  not a universal performance guarantee.
 - Distributed FFmpeg assembly no longer stream-copy concatenates independently
   encoded HEVC partitions. Each partition is decoded in its own input context and
   assembly emits one coherent HEVC stream, preventing heterogeneous worker codec
