@@ -12,7 +12,8 @@ Planning assigns each image index to exactly one batch. Image parameters derive
 only from the job seed and image index, so retries reproduce identical filenames
 and pixels. Even indices render Mandelbrot views and odd indices render Julia
 views. Workers report progress throughout scanline rendering and publish one batch
-ZIP through the current lease.
+ZIP through the current lease. The platform stores each accepted batch as an
+artifact reference and verifies it when staging private assembly scratch.
 
 Assembly is plugin-owned composition invoked by the server after every work unit
 succeeds. It rejects unexpected, duplicate, missing, or unreadable PNG entries and
@@ -24,7 +25,7 @@ publishes:
 - `fractal-collection.zip` containing the complete collection.
 
 The first slice does not expose per-image mid-task checkpoints, resource or
-scratch estimates, content-addressed batch storage, or generic artifact manifests.
+scratch estimates, client-local assembly, or generic artifact manifests.
 An interrupted batch restarts in full under a new fenced attempt.
 
 ## Operational verification

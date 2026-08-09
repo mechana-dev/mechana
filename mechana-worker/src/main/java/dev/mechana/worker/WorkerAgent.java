@@ -66,6 +66,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -157,8 +158,9 @@ public final class WorkerAgent {
 		Path pluginFile = null;
 		try {
 			pluginFile = downloadPlugin(lease);
+			long pluginBytes = Files.size(pluginFile);
 			if (sandboxedExecution()) {
-				executeSandboxed(lease, pluginFile, cancelled);
+				executeSandboxed(lease, pluginFile, pluginBytes, cancelled);
 			} else
 				try (URLClassLoader loader = new URLClassLoader(new java.net.URL[]{pluginFile.toUri().toURL()},
 						TaskPlugin.class.getClassLoader())) {
@@ -167,9 +169,9 @@ public final class WorkerAgent {
 					TaskPlugin plugin = pluginType.getConstructor().newInstance();
 					verifyDescriptor(plugin.descriptor(), lease);
 					System.out.printf("Worker %s running task %s%n", workerId, lease.taskId());
-					TaskContext context = new RemoteTaskContext(lease, cancelled);
+					RemoteTaskContext context = new RemoteTaskContext(lease, cancelled);
 					plugin.execute(context);
-					Response completion = post(taskPath(lease, "complete"), new TaskCompletion(lease.leaseToken()));
+					Response completion = post(taskPath(lease, "complete"), context.completion(pluginBytes));
 					requireStatus(completion, 204);
 					System.out.printf("Worker %s finished task %s successfully%n", workerId, lease.taskId());
 				}
@@ -193,7 +195,7 @@ public final class WorkerAgent {
 		}
 	}
 
-	private void executeSandboxed(TaskLease lease, Path downloadedPlugin, AtomicBoolean cancelled)
+	private void executeSandboxed(TaskLease lease, Path downloadedPlugin, long pluginBytes, AtomicBoolean cancelled)
 			throws IOException, InterruptedException {
 		try (OwnedAttemptWorkspace owned = OwnedAttemptWorkspace.create(sandboxRoot(), lease.jobId(),
 				lease.taskId() + "-" + lease.attempt(), workerId)) {
@@ -203,7 +205,7 @@ public final class WorkerAgent {
 			AtomicBoolean completed = new AtomicBoolean();
 			Path plugin = workspace.input().resolve("plugin.jar");
 			Files.copy(downloadedPlugin, plugin);
-			Map<String, String> parameters = prepareSandboxParameters(lease, workspace);
+			Map<String, String> parameters = prepareSandboxParameters(lease, workspace, context);
 			HostRequest hostRequest = new HostRequest(plugin.toString(), lease.pluginEntrypoint(), lease.pluginId(),
 					lease.pluginVersion(), lease.durationMillis(), parameters, workspace.output().toString());
 			Path requestFrame = workspace.input().resolve("request.ndjson");
@@ -236,7 +238,7 @@ public final class WorkerAgent {
 			if (result.exitCode() != 0 || !completed.get())
 				throw new IOException(
 						"Sandboxed plugin host exited with code " + result.exitCode() + diagnostic(result));
-			Response completion = post(taskPath(lease, "complete"), new TaskCompletion(lease.leaseToken()));
+			Response completion = post(taskPath(lease, "complete"), context.completion(pluginBytes));
 			requireStatus(completion, 204);
 			System.out.printf("Worker %s finished sandboxed task %s successfully%n", workerId, lease.taskId());
 		}
@@ -281,6 +283,8 @@ public final class WorkerAgent {
 
 	private static Set<String> advertisedCapabilities(Set<String> plugins) {
 		java.util.HashSet<String> advertised = new java.util.HashSet<>(plugins);
+		if (!plugins.isEmpty())
+			advertised.add("storage.client-direct-artifacts.v1");
 		if (plugins.contains("video-ffmpeg"))
 			advertised.add("storage.client-direct-video.v1");
 		if (!sandboxedExecution())
@@ -298,13 +302,13 @@ public final class WorkerAgent {
 		}
 	}
 
-	private Map<String, String> prepareSandboxParameters(TaskLease lease, AttemptWorkspace workspace)
-			throws IOException, InterruptedException {
+	private Map<String, String> prepareSandboxParameters(TaskLease lease, AttemptWorkspace workspace,
+			RemoteTaskContext context) throws IOException, InterruptedException {
 		Map<String, String> parameters = new HashMap<>(lease.parameters());
 		switch (lease.pluginId()) {
 			case "video-ffmpeg" -> {
 				parameters.put("inputPath",
-						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "input.mp4"));
+						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "input.mp4", context));
 				parameters.put("ffmpegCommand", requiredRuntime("ffmpeg"));
 				parameters.put("ffprobeCommand", requiredRuntime("ffprobe"));
 			}
@@ -312,12 +316,12 @@ public final class WorkerAgent {
 				int pageCount = Integer.parseInt(parameters.get("pageCount"));
 				for (int index = 0; index < pageCount; index++)
 					parameters.put("pagePath." + index, stageRemoteInput(parameters.remove("pageUrl." + index),
-							workspace.input(), "page-%06d.png".formatted(index)));
+							workspace.input(), "page-%06d.png".formatted(index), context));
 				parameters.put("tesseractCommand", requiredRuntime("tesseract"));
 			}
 			case "blender-render" -> {
 				parameters.put("inputPath",
-						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "scene.blend"));
+						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "scene.blend", context));
 				parameters.put("blenderCommand", requiredRuntime("blender"));
 			}
 			case "sleep", "fractal-render" -> {
@@ -328,12 +332,15 @@ public final class WorkerAgent {
 		return Map.copyOf(parameters);
 	}
 
-	private String stageRemoteInput(String url, Path input, String fileName) throws IOException, InterruptedException {
+	private String stageRemoteInput(String url, Path input, String fileName, RemoteTaskContext context)
+			throws IOException, InterruptedException {
 		if (url == null || url.isBlank())
 			throw new IOException("Sandbox input URL is missing");
 		Path destination = input.resolve(fileName);
-		Files.write(destination, downloadBytes(http, resolveCoordinatorUri(server, url), Duration.ofMinutes(20),
-				"Sandbox input download"));
+		byte[] bytes = downloadBytes(http, resolveCoordinatorUri(server, url), Duration.ofMinutes(20),
+				"Sandbox input download");
+		Files.write(destination, bytes);
+		context.inputBytes.addAndGet(bytes.length);
 		return destination.toAbsolutePath().normalize().toString();
 	}
 
@@ -344,8 +351,16 @@ public final class WorkerAgent {
 			try {
 				HttpRequest request = HttpRequest.newBuilder(uri).timeout(timeout).GET().build();
 				HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
-				if (response.statusCode() == 200)
-					return response.body();
+				if (response.statusCode() == 200) {
+					byte[] body = response.body();
+					String expectedHash = response.headers().firstValue("X-Checksum-Sha256").orElse("");
+					if (!expectedHash.isBlank() && !sha256(body).equalsIgnoreCase(expectedHash))
+						throw new IOException(description + " failed SHA-256 validation");
+					long expectedSize = response.headers().firstValueAsLong("Content-Length").orElse(-1);
+					if (expectedSize >= 0 && body.length != expectedSize)
+						throw new IOException(description + " failed size validation");
+					return body;
+				}
 				if (response.statusCode() < 500 && response.statusCode() != 408 && response.statusCode() != 429)
 					throw new IOException(description + " returned HTTP " + response.statusCode());
 				lastFailure = new IOException(description + " returned HTTP " + response.statusCode());
@@ -624,17 +639,19 @@ public final class WorkerAgent {
 		String supplied = lease.parameters().get("artifactUploadUrl");
 		if (supplied == null || supplied.isBlank())
 			return Optional.empty();
-		if (!"video-ffmpeg".equals(lease.pluginId()) || !name.matches("segment-[0-9]{5}\\.mkv"))
-			throw new IllegalArgumentException("Direct artifact publication is limited to FFmpeg segments");
-		URI input = URI.create(Objects.requireNonNull(lease.parameters().get("inputUrl"), "Direct input URL"));
+		if (!name.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))
+			throw new IllegalArgumentException("Direct artifact name is unsafe");
+		String origin = lease.parameters().getOrDefault("artifactTransferOrigin", lease.parameters().get("inputUrl"));
+		URI authority = URI.create(Objects.requireNonNull(origin, "Direct artifact transfer origin"));
 		URI output = URI.create(supplied);
 		boolean sameOrigin = Set.of("http", "https").contains(output.getScheme())
-				&& Objects.equals(input.getScheme(), output.getScheme())
-				&& Objects.equals(input.getHost(), output.getHost()) && effectivePort(input) == effectivePort(output);
+				&& Objects.equals(authority.getScheme(), output.getScheme())
+				&& Objects.equals(authority.getHost(), output.getHost())
+				&& effectivePort(authority) == effectivePort(output);
 		if (!sameOrigin || output.getUserInfo() != null || output.getQuery() != null || output.getFragment() != null
-				|| output.getPath() == null || !output.getPath().contains("/client-video/")
+				|| output.getPath() == null || !output.getPath().contains("/client-artifacts/")
 				|| !output.getPath().contains("/outputs/"))
-			throw new IllegalArgumentException("Direct artifact destination does not match the client input origin");
+			throw new IllegalArgumentException("Direct artifact destination does not match the authorized origin");
 		return Optional.of(output);
 	}
 
@@ -647,6 +664,8 @@ public final class WorkerAgent {
 	private final class RemoteTaskContext implements TaskContext {
 		private final TaskLease lease;
 		private final AtomicBoolean cancelled;
+		private final AtomicLong inputBytes = new AtomicLong();
+		private final AtomicLong outputBytes = new AtomicLong();
 
 		private RemoteTaskContext(TaskLease lease, AtomicBoolean cancelled) {
 			this.lease = lease;
@@ -674,12 +693,17 @@ public final class WorkerAgent {
 				HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
 				if (response.statusCode() != 204)
 					throw new IOException("Artifact upload returned HTTP " + response.statusCode());
+				outputBytes.addAndGet(Files.size(file));
 			} catch (IOException failure) {
 				throw new IllegalStateException("Could not publish artifact", failure);
 			} catch (InterruptedException interrupted) {
 				Thread.currentThread().interrupt();
 				throw new IllegalStateException("Artifact publication was interrupted", interrupted);
 			}
+		}
+
+		TaskCompletion completion(long pluginBytes) {
+			return new TaskCompletion(lease.leaseToken(), inputBytes.get(), outputBytes.get(), pluginBytes);
 		}
 
 		@Override

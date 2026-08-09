@@ -71,7 +71,7 @@ final class ClientVideoAssembly {
 	}
 
 	Path assembleDirect(URI server, String jobId, Path source, Path scratchDirectory, Path outputDirectory,
-			double durationSeconds, ClientVideoDataPlane dataPlane) throws IOException, InterruptedException {
+			double durationSeconds, ClientArtifactDataPlane dataPlane) throws IOException, InterruptedException {
 		Files.createDirectories(scratchDirectory);
 		Files.createDirectories(outputDirectory);
 		Path jobScratch = scratchDirectory.resolve(jobId).toAbsolutePath().normalize();
@@ -81,7 +81,7 @@ final class ClientVideoAssembly {
 			List<Path> segments = new ArrayList<>(manifest.segments().size());
 			for (int index = 0; index < manifest.segments().size(); index++) {
 				ArtifactReference accepted = manifest.segments().get(index);
-				ClientVideoDataPlane.LocalArtifact artifact = dataPlane.acceptedOutput(index, accepted.key());
+				ClientArtifactDataPlane.LocalArtifact artifact = dataPlane.acceptedOutput(index, accepted.key());
 				ArtifactReference identity = new ArtifactReference("client-local", artifact.path().toString(),
 						artifact.size(), "", true, artifact.sha256());
 				verify(artifact.path(), identity);

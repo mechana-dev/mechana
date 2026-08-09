@@ -1,6 +1,6 @@
 # Artifacts
 
-Last reviewed: 2026-08-08
+Last reviewed: 2026-08-09
 
 Artifacts abstract inputs, intermediates, and outputs from topology and storage.
 Jobs may choose each provider independently. Core and plugins
@@ -32,6 +32,15 @@ publication to requester-controlled providers is directional and can aggregate
 the independent bandwidth of the worker fleet rather than concentrating all
 result bytes through one server. See [storage](storage.md) for provider roles,
 security layers, assembly placement, and the limits of the BitTorrent analogy.
+
+Accepted task completions also carry byte counters for staged inputs, published
+outputs, and downloaded plugin packages. The server aggregates only lease-fenced
+accepted attempts by worker and publishes `transfer-summary.json` with the completed
+job, so stale or retried attempts cannot inflate authoritative job totals. The
+summary identifies whether bulk artifacts followed server-worker or direct
+client-worker routes; it does not put the artifact bytes on the control plane.
+Counters describe successful application payloads at worker boundaries, not wire
+overhead or client/server-local disk I/O.
 
 ## Locality and caching direction
 
@@ -67,21 +76,25 @@ assembly. Those SCP operations are explicit test scaffolding: they do not provid
 stable artifact identities, checksums, atomic publication, or provider-managed
 retention.
 
-The distributed sleep/server slice now has a small server-local retention adapter:
-each terminal job owns a directory containing an atomically published dashboard
-snapshot and an `artifacts/` subtree. The detailed dashboard enumerates regular
-files in that subtree as downloads, and purge deletes the whole owned job directory.
-This establishes restart persistence and ownership-aware cleanup, but it is not yet
-the storage-neutral, checksum-addressed artifact provider accepted above.
+The distributed Sleep slice publishes its terminal `job-summary.json` through
+`ArtifactStore`; completed history reports the same provider/key/size/SHA-256
+shape as every other artifact while the dashboard snapshot remains control-plane
+state. Purge still deletes the server-owned job directory.
 
-The Blender slice uses a server-local packed `.blend` as immutable input,
-server-mediated HTTP copies as task inputs, lease-fenced ZIP batches as partition
-outputs, and a validated MP4 as the retained final artifact. The input is currently
-downloaded once per work unit rather than addressed and cached once per worker.
+Fractal, OCR, and Blender publish lease-fenced ZIP batches as artifact references,
+stage and verify them into private assembly scratch, and publish final result trees
+through the output store. OCR rasterized page inputs and the packed Blender scene
+are immutable artifacts served with size/SHA metadata; workers verify those values
+while staging local tool inputs. Inputs are still downloaded once per work unit
+rather than cached once per worker.
+For `client-local`, inputs and accepted ZIP batches travel directly between the
+requester and capability-gated workers; the coordinator retains only task, lease,
+and artifact metadata. Plugin-owned assemblers produce the same logical results
+locally and completed history records provider/key/size/SHA-256.
 # Launcher presentation
 
 Client job history presents artifacts as provider, stable key, size, and an
 optional provider action URL. UI code must not reconstruct local filesystem paths
 from an artifact identity. The first implementation reports durable completed-job
-files as `server-local` references and client-assembled FFmpeg results as
+files as `server-local` references and client-assembled results as
 `client-local` references. Cloud references remain directional.

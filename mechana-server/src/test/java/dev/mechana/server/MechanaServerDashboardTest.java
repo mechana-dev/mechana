@@ -16,6 +16,7 @@
 
 package dev.mechana.server;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -107,6 +108,8 @@ class MechanaServerDashboardTest {
 			assertTrue(page.body().contains("Mechana Server"));
 			assertTrue(page.body().contains("/dashboard/jobs/"));
 			assertTrue(page.body().contains("capabilitySummary"));
+			assertTrue(page.body().contains("!item.startsWith('storage.')"));
+			assertTrue(page.body().contains("Transport: Direct client artifacts"));
 			assertTrue(page.body().contains("capabilityDetails"));
 			assertTrue(page.body().contains("FFmpeg video"));
 			assertTrue(page.body().contains("Linux sandbox"));
@@ -236,8 +239,9 @@ class MechanaServerDashboardTest {
 					TaskLease.class);
 			HttpRequest complete = HttpRequest
 					.newBuilder(base.resolve("/api/workers/worker-1/tasks/" + lease.taskId() + "/complete"))
-					.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers
-							.ofString(json.writeValueAsString(Map.of("leaseToken", lease.leaseToken()))))
+					.header("Content-Type", "application/json")
+					.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(Map.of("leaseToken",
+							lease.leaseToken(), "inputBytes", 10, "outputBytes", 20, "pluginBytes", 30))))
 					.build();
 			assertEquals(204, client.send(complete, HttpResponse.BodyHandlers.discarding()).statusCode());
 		}
@@ -258,6 +262,7 @@ class MechanaServerDashboardTest {
 			assertTrue(detail.contains("\"completed\":true"));
 			assertTrue(detail.contains("\"completedAt\":"));
 			assertTrue(detail.contains("job-summary.json"));
+			assertTrue(detail.contains("transfer-summary.json"));
 			assertTrue(detail.contains("\"provider\":\"server-local\""));
 			assertTrue(detail.contains("\"key\":\"jobs/" + jobId + "/artifacts/job-summary.json\""));
 			assertTrue(detail.contains("\"sha256\":"));
@@ -270,6 +275,15 @@ class MechanaServerDashboardTest {
 					HttpResponse.BodyHandlers.ofString());
 			assertEquals(200, artifact.statusCode());
 			assertTrue(artifact.body().contains(jobId));
+			HttpResponse<String> transfers = client.send(HttpRequest
+					.newBuilder(base.resolve("/api/jobs/" + jobId + "/artifacts/transfer-summary.json")).build(),
+					HttpResponse.BodyHandlers.ofString());
+			assertEquals(200, transfers.statusCode());
+			assertTrue(transfers.body().contains("\"topology\" : \"server-worker\""));
+			assertTrue(transfers.body().contains("\"worker\" : \"worker-1\""));
+			assertTrue(transfers.body().contains("\"inputBytes\" : 10"));
+			assertTrue(transfers.body().contains("\"outputBytes\" : 20"));
+			assertTrue(transfers.body().contains("\"pluginBytes\" : 30"));
 
 			HttpResponse<Void> purged = client.send(
 					HttpRequest.newBuilder(base.resolve("/api/jobs/" + jobId)).DELETE().build(),
@@ -417,6 +431,9 @@ class MechanaServerDashboardTest {
 			assertTrue(detail.contains("fractal-collection.zip"));
 			assertTrue(detail.contains("contact-sheet.png"));
 			assertTrue(detail.contains("fractal-00000.png"));
+			assertTrue(detail.contains("\"provider\":\"server-local\""));
+			assertTrue(detail.contains("\"key\":\"jobs/" + jobId + "/artifacts/fractal-collection.zip\""));
+			assertTrue(detail.contains("\"sha256\":"));
 		}
 	}
 
@@ -461,6 +478,7 @@ class MechanaServerDashboardTest {
 					HttpResponse.BodyHandlers.ofByteArray());
 			assertEquals(200, page.statusCode());
 			assertTrue(page.body().length > 0);
+			assertTrue(page.headers().firstValue("X-Checksum-Sha256").orElseThrow().matches("[0-9a-f]{64}"));
 
 			Path batch = temporary.resolve("ocr-batch-00000.zip");
 			try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(batch))) {
@@ -490,6 +508,54 @@ class MechanaServerDashboardTest {
 			assertTrue(detail.contains("document.md"));
 			assertTrue(detail.contains("document.tex"));
 			assertTrue(detail.contains("page-000001.txt"));
+			assertTrue(detail.contains("\"key\":\"jobs/" + jobId + "/artifacts/document.md\""));
+			assertTrue(detail.contains("\"sha256\":"));
+		}
+	}
+
+	@Test
+	void storesBlenderSceneAndFrameBatchAsVerifiedArtifacts(@TempDir Path temporary) throws Exception {
+		Path plugin = temporary.resolve("plugin.jar");
+		Path scene = temporary.resolve("scene.blend");
+		Files.writeString(plugin, "plugin");
+		Files.writeString(scene, "BLENDER-v300");
+		ObjectMapper json = new ObjectMapper();
+		Path data = temporary.resolve("data");
+		int port;
+		try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+			port = socket.getLocalPort();
+		}
+		try (MechanaServer server = new MechanaServer(port, "http://127.0.0.1:" + port, plugin, plugin, plugin, plugin,
+				plugin, 5_000, data); HttpClient client = HttpClient.newHttpClient()) {
+			server.start();
+			URI base = URI.create("http://127.0.0.1:" + server.port());
+			String request = json.writeValueAsString(Map.of("sourcePath", scene.toString(), "firstFrame", 1,
+					"lastFrame", 1, "taskCount", 1, "width", 64, "height", 64, "samples", 1, "fps", 24));
+			String jobId = json.readValue(client.send(
+					HttpRequest.newBuilder(base.resolve("/api/jobs/blender")).header("Content-Type", "application/json")
+							.POST(HttpRequest.BodyPublishers.ofString(request)).build(),
+					HttpResponse.BodyHandlers.ofString()).body(), JobSubmission.class).jobId();
+			TaskLease lease = json.readValue(client.send(HttpRequest
+					.newBuilder(base.resolve("/api/workers/worker-1/lease")).header("Content-Type", "application/json")
+					.POST(HttpRequest.BodyPublishers
+							.ofString("{\"workerAddress\":\"192.0.2.10\",\"supportedPlugins\":[\"blender-render\"]}"))
+					.build(), HttpResponse.BodyHandlers.ofString()).body(), TaskLease.class);
+			HttpResponse<byte[]> stagedScene = client.send(
+					HttpRequest.newBuilder(URI.create(lease.parameters().get("inputUrl"))).build(),
+					HttpResponse.BodyHandlers.ofByteArray());
+			assertEquals(200, stagedScene.statusCode());
+			assertEquals("BLENDER-v300", new String(stagedScene.body(), java.nio.charset.StandardCharsets.UTF_8));
+			assertTrue(stagedScene.headers().firstValue("X-Checksum-Sha256").orElseThrow().matches("[0-9a-f]{64}"));
+
+			byte[] frames = "frame archive".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+			HttpRequest upload = HttpRequest
+					.newBuilder(base
+							.resolve("/api/workers/worker-1/tasks/" + lease.taskId() + "/artifacts/frames-00000.zip"))
+					.header("X-Mechana-Lease", lease.leaseToken()).PUT(HttpRequest.BodyPublishers.ofByteArray(frames))
+					.build();
+			assertEquals(204, client.send(upload, HttpResponse.BodyHandlers.discarding()).statusCode());
+			assertArrayEquals(frames,
+					Files.readAllBytes(data.resolve("jobs/" + jobId + "/intermediate/frames-00000.zip")));
 		}
 	}
 

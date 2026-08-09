@@ -1344,3 +1344,59 @@ cloud providers remain future direction; see `brain/current-state.md` and
   now have the form `<selected-output>/<job-id>/compressed-<job-id>.mkv`.
 - Applied the same layout to both direct and legacy client-local assembly paths,
   and added regression coverage for the layout and traversal rejection.
+
+## 2026-08-09 03:35:00 EDT — Migrate remaining plugins to artifact storage
+
+- Extracted the requester-hosted direct transfer service from the FFmpeg-specific
+  class into a generic client artifact data plane. Updated workers advertise
+  `storage.client-direct-artifacts.v1`, restrict destinations to the authorized
+  origin and safe artifact namespace, and retain the legacy video capability.
+- Migrated Fractal batches and result trees, OCR page inputs/batches/results, and
+  Blender scene inputs/frame batches/results through `ArtifactStore` and
+  `ArtifactReference` boundaries. Assembly stages verified size/SHA-256 bytes into
+  private scratch before plugin or native-tool use.
+- Published Sleep's completed `job-summary.json` through the same artifact store
+  so completed history consistently records provider/key/size/SHA-256 metadata.
+- Preserved `server-local` as the default and existing-worker compatibility for
+  those jobs. Direct client-local assembly remains implemented only for FFmpeg;
+  Fractal, OCR, and Blender launcher assembly adapters are explicitly deferred.
+
+## 2026-08-09 04:20 EDT — Add universal client-local plugin assembly
+
+- Extended the generic requester-hosted artifact data plane to Fractal, OCR, and
+  Blender without changing the default server-local workflows.
+- Reused plugin-owned planning and assembly on both placement paths. OCR PDF
+  rasterization now lives in the OCR plugin and runs at the selected assembly
+  host; Fractal needs no input; Blender serves its packed scene directly.
+- Capability-gated workers publish lease-fenced ZIP batches directly to client
+  scratch. The coordinator records accepted attempt identities and final
+  provider/key/size/SHA-256 metadata without relaying intermediate bytes.
+- Common launcher controls expose placement, scratch, output, and transfer host;
+  the launcher displays SPLITTING during local preparation and ASSEMBLING while
+  producing the final artifact. Sleep keeps irrelevant controls disabled.
+
+## 2026-08-09 05:45 EDT — Add per-worker transfer accounting
+
+- Added backward-compatible completion counters for bytes staged into worker
+  scratch, bytes successfully published by workers, and plugin-package downloads.
+- Aggregate only accepted lease completions, preventing stale attempts from
+  becoming part of authoritative job telemetry.
+- Log one terminal transfer total and publish a provider-backed
+  `transfer-summary.json` completed artifact with topology, directional routes,
+  totals, and per-worker breakdowns. Existing workers continue to run but report
+  zero counters until reinstalled.
+
+## 2026-08-09 05:52 EDT — Verify transfer accounting on an eight-worker video job
+
+- Job `462fa0ee-b8f3-417b-a368-228ed24fd77e` completed all eight FFmpeg work
+  units through the `client-worker-direct` topology and retained an exact
+  per-worker `transfer-summary.json`.
+- Measured 29,633,829 input bytes from client to workers, 16,717,070 output bytes
+  from workers to client, and 438,616 plugin-package bytes from server to workers:
+  46,789,515 application-payload bytes in total.
+- The 119,175,998-byte source was prepared into worker chunks totaling 24.9% of
+  the original source size. Client-local assembly produced a 19,118,980-byte MKV;
+  the coordinator relayed none of the video input or compressed-segment bytes.
+- Counters intentionally exclude HTTP/TLS framing, small control messages, and
+  local preparation/assembly disk I/O. They include only accepted task attempts,
+  so stale completion reports cannot affect the durable totals.

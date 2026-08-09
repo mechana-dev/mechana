@@ -27,6 +27,7 @@ import java.io.File;
 import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.prefs.Preferences;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
@@ -79,9 +80,24 @@ final class DescriptorForm extends JPanel {
 				.filter(entry -> "storageProvider".equals(entry.getKey().name())).map(Map.Entry::getValue).findFirst()
 				.orElse(null);
 		if (storage instanceof JComboBox<?> choice)
-			choice.addActionListener(event -> updateOutputSummary());
+			choice.addActionListener(event -> updatePlacementControls());
+		updatePlacementControls();
 		updateOutputSummary();
 		add(outputSummary, BorderLayout.SOUTH);
+	}
+
+	private void updatePlacementControls() {
+		String provider = editors.entrySet().stream().filter(entry -> "storageProvider".equals(entry.getKey().name()))
+				.map(entry -> editorValue(entry.getValue())).findFirst().orElse("server-local");
+		boolean clientLocal = "client-local".equals(provider) && !"sleep".equals(descriptor.capabilityId());
+		for (var entry : editors.entrySet()) {
+			String name = entry.getKey().name();
+			if (Set.of("clientScratchDirectory", "clientOutputDirectory", "clientTransferHost").contains(name))
+				entry.getValue().setEnabled(clientLocal);
+			if ("storageProvider".equals(name) && "sleep".equals(descriptor.capabilityId()))
+				entry.getValue().setEnabled(false);
+		}
+		updateOutputSummary();
 	}
 
 	String outputSummary() {

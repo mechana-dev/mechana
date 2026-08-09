@@ -49,6 +49,7 @@ import dev.mechana.plugins.blender.BlenderMovieAssembler;
 import dev.mechana.plugins.blender.FramePlanner;
 import dev.mechana.plugins.fractal.FractalCollectionAssembler;
 import dev.mechana.plugins.ocr.OcrMarkdownAssembler;
+import dev.mechana.plugins.ocr.OcrPageSplitter;
 import dev.mechana.plugins.video.CancellationToken;
 import dev.mechana.plugins.video.ExternalProcessRunner;
 import dev.mechana.plugins.video.FfmpegCommands;
@@ -58,6 +59,7 @@ import dev.mechana.plugins.video.VideoAssembler;
 import dev.mechana.plugins.video.VideoTypes;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayInputStream;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -81,11 +83,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import javax.imageio.ImageIO;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.rendering.ImageType;
-import org.apache.pdfbox.rendering.PDFRenderer;
 
 /** HTTP adapter around the scheduler and authoritative plugin registry. */
 public final class MechanaServer implements AutoCloseable {
@@ -114,7 +111,7 @@ public final class MechanaServer implements AutoCloseable {
 	private final Scheduler scheduler;
 	private final CompletedJobStore completedJobs;
 	private final ArtifactStoreRegistry artifactStores;
-	private final ArtifactStore videoArtifactStore;
+	private final ArtifactStore defaultArtifactStore;
 	private final HttpServer http;
 	private final Path pluginJar;
 	private final PluginLocation pluginLocation;
@@ -132,10 +129,12 @@ public final class MechanaServer implements AutoCloseable {
 	private final ConcurrentMap<String, dev.mechana.api.ArtifactReference> clientVideoUploads = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, VideoJob> videoJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, FractalJob> fractalJobs = new ConcurrentHashMap<>();
-	private final ConcurrentMap<String, Path> ocrInputs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, dev.mechana.api.ArtifactReference> ocrInputs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, OcrJob> ocrJobs = new ConcurrentHashMap<>();
-	private final ConcurrentMap<String, Path> blenderInputs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, dev.mechana.api.ArtifactReference> blenderInputs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, BlenderJob> blenderJobs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, DirectClientJob> directClientJobs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, ConcurrentMap<String, TransferTotals>> jobTransfers = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, WorkerPresence> workers = new ConcurrentHashMap<>();
 	private volatile Runnable restartAction;
 	private volatile Runnable stopAction;
@@ -174,9 +173,10 @@ public final class MechanaServer implements AutoCloseable {
 	public MechanaServer(int port, String publicUrl, Path pluginJar, Path videoPluginJar, Path fractalPluginJar,
 			Path ocrPluginJar, Path blenderPluginJar, long leaseMillis, Path dataDirectory) throws IOException {
 		this.scheduler = new Scheduler(leaseMillis);
-		this.completedJobs = new CompletedJobStore(dataDirectory, json);
 		this.artifactStores = new ArtifactStoreRegistry().register(new ServerLocalArtifactStore(dataDirectory));
-		this.videoArtifactStore = artifactStores.require(dev.mechana.api.StorageSelection.defaults().inputProviderId());
+		this.defaultArtifactStore = artifactStores
+				.require(dev.mechana.api.StorageSelection.defaults().inputProviderId());
+		this.completedJobs = new CompletedJobStore(dataDirectory, json, defaultArtifactStore);
 		this.workRoot = dataDirectory.toAbsolutePath().normalize().resolve("work");
 		Files.createDirectories(workRoot);
 		this.publicUrl = stripTrailingSlash(publicUrl);
@@ -327,21 +327,24 @@ public final class MechanaServer implements AutoCloseable {
 					return;
 				}
 				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs/fractal".equals(path)) {
-					requireLoopback(exchange);
 					FractalJobSubmitRequest request = read(exchange, FractalJobSubmitRequest.class);
+					if ("server-local".equals(request.storageProvider()))
+						requireLoopback(exchange);
 					String jobId = submitFractal(request);
 					sendJson(exchange, 202, new JobSubmission(jobId));
 					return;
 				}
 				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs/ocr".equals(path)) {
-					requireLoopback(exchange);
 					OcrJobSubmitRequest request = read(exchange, OcrJobSubmitRequest.class);
+					if ("server-local".equals(request.storageProvider()))
+						requireLoopback(exchange);
 					sendJson(exchange, 202, new JobSubmission(submitOcr(request)));
 					return;
 				}
 				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs/blender".equals(path)) {
-					requireLoopback(exchange);
 					BlenderJobSubmitRequest request = read(exchange, BlenderJobSubmitRequest.class);
+					if ("server-local".equals(request.storageProvider()))
+						requireLoopback(exchange);
 					sendJson(exchange, 202, new JobSubmission(submitBlender(request)));
 					return;
 				}
@@ -634,6 +637,7 @@ public final class MechanaServer implements AutoCloseable {
 			requirePost(exchange);
 			markWorkerSeen(workerId, null, Set.of());
 			String[] completedLease = new String[1];
+			TaskCompletion[] completedTransfer = new TaskCompletion[1];
 			boolean accepted = switch (action) {
 				case "heartbeat" -> {
 					TaskHeartbeat heartbeat = read(exchange, TaskHeartbeat.class);
@@ -646,6 +650,7 @@ public final class MechanaServer implements AutoCloseable {
 				case "complete" -> {
 					TaskCompletion completion = read(exchange, TaskCompletion.class);
 					completedLease[0] = completion.leaseToken();
+					completedTransfer[0] = completion;
 					yield scheduler.complete(workerId, taskId, completion.leaseToken());
 				}
 				case "fail" -> {
@@ -658,10 +663,14 @@ public final class MechanaServer implements AutoCloseable {
 				JobStatusResponse status = scheduler.statusForTask(taskId);
 				if (completedLease[0] != null)
 					recordDirectClientCompletion(status.jobId(), taskId, completedLease[0]);
+				if (completedTransfer[0] != null)
+					recordTransferCompletion(status.jobId(), workerId, completedTransfer[0]);
 				if ("complete".equals(action) && "ASSEMBLING".equals(scheduler.dashboard(status.jobId()).stage())) {
 					if (videoJobs.containsKey(status.jobId())) {
 						if (!videoJobs.get(status.jobId()).clientAssembly())
 							assembleVideo(status.jobId());
+					} else if (directClientJobs.containsKey(status.jobId())) {
+						// The requester owns assembly; the coordinator only fences accepted attempts.
 					} else if (fractalJobs.containsKey(status.jobId()))
 						assembleFractal(status.jobId());
 					else if (ocrJobs.containsKey(status.jobId()))
@@ -699,29 +708,24 @@ public final class MechanaServer implements AutoCloseable {
 			BlenderJob blender = blenderJobs.get(jobId);
 			if (video != null && name.matches("segment-[0-9]{5}\\.mkv")) {
 				try (InputStream input = exchange.getRequestBody()) {
-					dev.mechana.api.ArtifactReference published = videoArtifactStore
+					dev.mechana.api.ArtifactReference published = defaultArtifactStore
 							.put("jobs/" + jobId + "/intermediate/segments/" + name, input);
 					video.segments().put(name, published);
 				}
 				sendEmpty(exchange, 204);
 				return;
 			}
-			Path artifactRoot;
+			Map<String, dev.mechana.api.ArtifactReference> publications;
 			if (fractal != null && name.matches("batch-[0-9]{5}\\.zip"))
-				artifactRoot = fractal.scratch().resolve("batches");
+				publications = fractal.batches();
 			else if (ocr != null && name.matches("ocr-batch-[0-9]{5}\\.zip"))
-				artifactRoot = ocr.scratch().resolve("batches");
+				publications = ocr.batches();
 			else if (blender != null && name.matches("frames-[0-9]{5}\\.zip"))
-				artifactRoot = blender.scratch().resolve("batches");
+				publications = blender.batches();
 			else
 				throw new IllegalArgumentException("Unexpected task artifact");
-			Path destination = artifactRoot.resolve(name).normalize();
-			if (!destination.startsWith(artifactRoot))
-				throw new IllegalArgumentException("Invalid artifact path");
-			Path parent = Objects.requireNonNull(destination.getParent(), "Artifact destination must have a parent");
-			Files.createDirectories(parent);
 			try (InputStream input = exchange.getRequestBody()) {
-				Files.copy(input, destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				publications.put(name, defaultArtifactStore.put("jobs/" + jobId + "/intermediate/" + name, input));
 			}
 			sendEmpty(exchange, 204);
 		}
@@ -752,7 +756,7 @@ public final class MechanaServer implements AutoCloseable {
 		if (!token.matches("[A-Za-z0-9._-]+"))
 			throw new IllegalArgumentException("Invalid client video upload token");
 		try (InputStream input = exchange.getRequestBody()) {
-			clientVideoUploads.put(token, videoArtifactStore.put("client-uploads/" + token + "/source", input));
+			clientVideoUploads.put(token, defaultArtifactStore.put("client-uploads/" + token + "/source", input));
 		}
 		sendEmpty(exchange, 204);
 	}
@@ -792,7 +796,7 @@ public final class MechanaServer implements AutoCloseable {
 				deleteArtifactQuietly(uploadedSource);
 			dev.mechana.api.ArtifactReference sourceArtifact;
 			try (InputStream bytes = Files.newInputStream(preparedInput)) {
-				sourceArtifact = videoArtifactStore.put("video-staging/" + workToken + "/input/source.mp4", bytes);
+				sourceArtifact = defaultArtifactStore.put("video-staging/" + workToken + "/input/source.mp4", bytes);
 			}
 			stageArtifact(sourceArtifact, input);
 			FfmpegCommands commands = new FfmpegCommands("ffmpeg", "ffprobe");
@@ -816,7 +820,7 @@ public final class MechanaServer implements AutoCloseable {
 				String inputToken = UUID.randomUUID().toString();
 				dev.mechana.api.ArtifactReference workerInput;
 				try (InputStream bytes = Files.newInputStream(segmentInput)) {
-					workerInput = videoArtifactStore.put(
+					workerInput = defaultArtifactStore.put(
 							"video-staging/" + workToken + "/inputs/input-%05d.mp4".formatted(segment.index()), bytes);
 				}
 				videoInputs.put(inputToken, workerInput);
@@ -878,7 +882,8 @@ public final class MechanaServer implements AutoCloseable {
 							Map.entry("endSeconds", Double.toString(chunk.endSeconds())),
 							Map.entry("videoBitrate", Long.toString(request.videoBitrate())),
 							Map.entry("preset", options.preset()),
-							Map.entry("requiredWorkerCapability", "storage.client-direct-video.v1")),
+							Map.entry("requiredWorkerCapability", "storage.client-direct-artifacts.v1"),
+							Map.entry("artifactTransferOrigin", outputUrl)),
 					"Segment " + index, Map.of("range", chunk.startSeconds() + "–" + chunk.endSeconds() + "s")));
 		}
 		VideoTypes.Plan plan = new VideoTypes.Plan(info, options, List.copyOf(segments), scratch);
@@ -897,12 +902,26 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private void recordDirectClientCompletion(String jobId, String taskId, String leaseToken) {
+		DirectClientJob direct = directClientJobs.get(jobId);
+		if (direct != null) {
+			String name = direct.taskArtifacts().get(taskId);
+			if (name != null)
+				direct.acceptedLeaseHashes().put(name,
+						sha256(leaseToken.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+		}
 		VideoJob video = videoJobs.get(jobId);
 		if (video == null || !video.directClient())
 			return;
 		String name = video.taskArtifacts().get(taskId);
 		if (name != null)
 			video.acceptedLeaseHashes().put(name, sha256(leaseToken.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+	}
+
+	private void recordTransferCompletion(String jobId, String workerId, TaskCompletion completion) {
+		TransferTotals attempt = new TransferTotals(completion.inputBytes(), completion.outputBytes(),
+				completion.pluginBytes());
+		jobTransfers.computeIfAbsent(jobId, ignored -> new ConcurrentHashMap<>()).merge(workerId, attempt,
+				TransferTotals::plus);
 	}
 
 	private String submitFractal(FractalJobSubmitRequest request) throws IOException {
@@ -919,12 +938,13 @@ public final class MechanaServer implements AutoCloseable {
 			int start = 0;
 			for (int batch = 0; batch < taskCount; batch++) {
 				int count = base + (batch < remainder ? 1 : 0);
-				work.add(new WorkSpec(count,
-						Map.of("startIndex", Integer.toString(start), "imageCount", Integer.toString(count), "width",
-								Integer.toString(request.width()), "height", Integer.toString(request.height()),
-								"maxIterations", Integer.toString(request.maxIterations()), "seed",
-								Long.toString(request.seed()), "batchIndex", Integer.toString(batch)),
-						"Batch " + batch,
+				Map<String, String> parameters = new HashMap<>(Map.of("startIndex", Integer.toString(start),
+						"imageCount", Integer.toString(count), "width", Integer.toString(request.width()), "height",
+						Integer.toString(request.height()), "maxIterations", Integer.toString(request.maxIterations()),
+						"seed", Long.toString(request.seed()), "batchIndex", Integer.toString(batch)));
+				if ("client-local".equals(request.storageProvider()))
+					configureDirectOutput(parameters, request.clientOutputUrl(), batch);
+				work.add(new WorkSpec(count, Map.copyOf(parameters), "Batch " + batch,
 						Map.of("images", start + "–" + (start + count - 1), "count", Integer.toString(count))));
 				start += count;
 			}
@@ -935,7 +955,10 @@ public final class MechanaServer implements AutoCloseable {
 							"maxIterations", Integer.toString(request.maxIterations()), "seed",
 							Long.toString(request.seed())),
 					fractalPluginLocation);
-			fractalJobs.put(jobId, new FractalJob(scratch, request));
+			fractalJobs.put(jobId,
+					new FractalJob(scratch, request, new ConcurrentHashMap<>(), new ConcurrentHashMap<>()));
+			if ("client-local".equals(request.storageProvider()))
+				directClientJobs.put(jobId, directJob(jobId, taskCount, "batch-%05d.zip"));
 			retained = true;
 			return jobId;
 		} finally {
@@ -945,6 +968,8 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private String submitOcr(OcrJobSubmitRequest request) throws IOException {
+		if ("client-local".equals(request.storageProvider()))
+			return submitDirectClientOcr(request);
 		Path source = Path.of(request.sourcePath()).toAbsolutePath().normalize();
 		if (!Files.isRegularFile(source))
 			throw new IllegalArgumentException("PDF source does not exist: " + source);
@@ -963,25 +988,10 @@ public final class MechanaServer implements AutoCloseable {
 		Files.createDirectories(scratch.resolve("batches"));
 		List<String> inputTokens = new java.util.ArrayList<>();
 		boolean retained = false;
-		try (PDDocument document = Loader.loadPDF(source.toFile())) {
-			int documentPages = document.getNumberOfPages();
-			if (documentPages < 1)
-				throw new IllegalArgumentException("PDF contains no pages");
-			if (request.firstPage() > documentPages)
-				throw new IllegalArgumentException("firstPage exceeds PDF page count");
-			int pageCount = request.pageCount() == 0
-					? documentPages - request.firstPage() + 1
-					: Math.min(request.pageCount(), documentPages - request.firstPage() + 1);
-			PDFRenderer renderer = new PDFRenderer(document);
-			List<Path> rendered = new java.util.ArrayList<>(pageCount);
-			for (int index = 0; index < pageCount; index++) {
-				int documentPage = request.firstPage() + index;
-				Path page = pages.resolve("page-%06d.png".formatted(documentPage));
-				if (!ImageIO.write(renderer.renderImageWithDPI(documentPage - 1, request.dpi(), ImageType.GRAY), "png",
-						page.toFile()))
-					throw new IOException("PNG writer is unavailable");
-				rendered.add(page);
-			}
+		try {
+			List<Path> rendered = new OcrPageSplitter()
+					.split(source, pages, request.firstPage(), request.pageCount(), request.dpi()).pages();
+			int pageCount = rendered.size();
 			int taskCount = request.taskCount() > 0
 					? Math.min(request.taskCount(), pageCount)
 					: Math.min(pageCount, compatibleWorkerCount(OCR_PLUGIN_ID));
@@ -998,7 +1008,10 @@ public final class MechanaServer implements AutoCloseable {
 				parameters.put("language", request.language());
 				for (int offset = 0; offset < count; offset++) {
 					String token = UUID.randomUUID().toString();
-					ocrInputs.put(token, rendered.get(start + offset));
+					Path page = rendered.get(start + offset);
+					try (InputStream bytes = Files.newInputStream(page)) {
+						ocrInputs.put(token, defaultArtifactStore.put("ocr-staging/" + token + "/input.png", bytes));
+					}
 					inputTokens.add(token);
 					parameters.put("pageUrl." + offset, publicUrl + "/api/ocr-inputs/" + token);
 				}
@@ -1014,18 +1027,22 @@ public final class MechanaServer implements AutoCloseable {
 							Integer.toString(taskCount), "dpi", Integer.toString(request.dpi()), "language",
 							request.language(), "title", request.title()),
 					ocrPluginLocation);
-			ocrJobs.put(jobId, new OcrJob(List.copyOf(inputTokens), scratch, request.firstPage(), pageCount, request));
+			ocrJobs.put(jobId, new OcrJob(List.copyOf(inputTokens), scratch, request.firstPage(), pageCount, request,
+					new ConcurrentHashMap<>(), new ConcurrentHashMap<>()));
 			retained = true;
 			return jobId;
 		} finally {
 			if (!retained) {
-				inputTokens.forEach(ocrInputs::remove);
+				inputTokens.stream().map(ocrInputs::remove).filter(Objects::nonNull)
+						.forEach(this::deleteArtifactQuietly);
 				deleteTree(scratch);
 			}
 		}
 	}
 
 	private String submitBlender(BlenderJobSubmitRequest request) throws IOException {
+		if ("client-local".equals(request.storageProvider()))
+			return submitDirectClientBlender(request);
 		Path source = Path.of(request.sourcePath()).toAbsolutePath().normalize();
 		if (!Files.isRegularFile(source) || !Objects.requireNonNull(source.getFileName()).toString()
 				.toLowerCase(java.util.Locale.ROOT).endsWith(".blend"))
@@ -1033,7 +1050,9 @@ public final class MechanaServer implements AutoCloseable {
 		Path scratch = workRoot.resolve(UUID.randomUUID().toString());
 		Files.createDirectories(scratch.resolve("batches"));
 		String token = UUID.randomUUID().toString();
-		blenderInputs.put(token, source);
+		try (InputStream bytes = Files.newInputStream(source)) {
+			blenderInputs.put(token, defaultArtifactStore.put("blender-staging/" + token + "/scene.blend", bytes));
+		}
 		boolean retained = false;
 		try {
 			int taskCount = request.taskCount() > 0
@@ -1059,15 +1078,101 @@ public final class MechanaServer implements AutoCloseable {
 							"dimensions", request.width() + "×" + request.height(), "samples",
 							Integer.toString(request.samples()), "fps", Integer.toString(request.fps())),
 					blenderPluginLocation);
-			blenderJobs.put(jobId, new BlenderJob(token, scratch, request));
+			blenderJobs.put(jobId,
+					new BlenderJob(token, scratch, request, new ConcurrentHashMap<>(), new ConcurrentHashMap<>()));
 			retained = true;
 			return jobId;
 		} finally {
 			if (!retained) {
-				blenderInputs.remove(token);
+				deleteArtifactQuietly(blenderInputs.remove(token));
 				deleteTree(scratch);
 			}
 		}
+	}
+
+	private String submitDirectClientOcr(OcrJobSubmitRequest request) throws IOException {
+		int pageCount = request.clientPages().size();
+		if (request.pageCount() != pageCount)
+			throw new IllegalArgumentException("Client OCR page count does not match the rasterized artifacts");
+		int taskCount = request.taskCount() > 0
+				? Math.min(request.taskCount(), pageCount)
+				: Math.min(pageCount, compatibleWorkerCount(OCR_PLUGIN_ID));
+		List<WorkSpec> work = new java.util.ArrayList<>(taskCount);
+		int base = pageCount / taskCount;
+		int remainder = pageCount % taskCount;
+		int start = 0;
+		for (int batch = 0; batch < taskCount; batch++) {
+			int count = base + (batch < remainder ? 1 : 0);
+			Map<String, String> parameters = new HashMap<>();
+			parameters.put("startPage", Integer.toString(request.firstPage() + start));
+			parameters.put("pageCount", Integer.toString(count));
+			parameters.put("batchIndex", Integer.toString(batch));
+			parameters.put("language", request.language());
+			for (int offset = 0; offset < count; offset++)
+				parameters.put("pageUrl." + offset, request.clientPages().get(start + offset).url());
+			configureDirectOutput(parameters, request.clientOutputUrl(), batch);
+			int first = request.firstPage() + start;
+			work.add(new WorkSpec(count, Map.copyOf(parameters), "Pages " + first + "–" + (first + count - 1),
+					Map.of("pages", first + "–" + (first + count - 1), "language", request.language())));
+			start += count;
+		}
+		String jobId = scheduler.submitPlugin(OCR_PLUGIN_ID, OCR_PLUGIN_VERSION, OCR_PLUGIN_ENTRYPOINT, work,
+				Map.of("source", request.sourcePath(), "pages",
+						request.firstPage() + "–" + (request.firstPage() + pageCount - 1), "taskCount",
+						Integer.toString(taskCount), "dpi", Integer.toString(request.dpi()), "language",
+						request.language(), "title", request.title(), "dataPlane", "client-direct"),
+				ocrPluginLocation);
+		Path scratch = workRoot.resolve(UUID.randomUUID().toString());
+		ocrJobs.put(jobId, new OcrJob(List.of(), scratch, request.firstPage(), pageCount, request,
+				new ConcurrentHashMap<>(), new ConcurrentHashMap<>()));
+		directClientJobs.put(jobId, directJob(jobId, taskCount, "ocr-batch-%05d.zip"));
+		return jobId;
+	}
+
+	private String submitDirectClientBlender(BlenderJobSubmitRequest request) throws IOException {
+		int taskCount = request.taskCount() > 0
+				? request.taskCount()
+				: Math.min(request.lastFrame() - request.firstFrame() + 1, compatibleWorkerCount(BLENDER_PLUGIN_ID));
+		List<FramePlanner.Batch> batches = new FramePlanner().plan(request.firstFrame(), request.lastFrame(),
+				taskCount);
+		List<WorkSpec> work = batches.stream().map(batch -> {
+			Map<String, String> parameters = new HashMap<>(Map.of("inputUrl", request.clientScene().url(), "batchIndex",
+					Integer.toString(batch.index()), "firstFrame", Integer.toString(batch.firstFrame()), "lastFrame",
+					Integer.toString(batch.lastFrame()), "width", Integer.toString(request.width()), "height",
+					Integer.toString(request.height()), "samples", Integer.toString(request.samples()), "threads",
+					"0"));
+			configureDirectOutput(parameters, request.clientOutputUrl(), batch.index());
+			return new WorkSpec(batch.frameCount(), Map.copyOf(parameters),
+					"Frames " + batch.firstFrame() + "–" + batch.lastFrame(),
+					Map.of("frames", batch.firstFrame() + "–" + batch.lastFrame(), "samples",
+							Integer.toString(request.samples())));
+		}).toList();
+		String jobId = scheduler.submitPlugin(BLENDER_PLUGIN_ID, BLENDER_PLUGIN_VERSION, BLENDER_PLUGIN_ENTRYPOINT,
+				work,
+				Map.of("source", request.sourcePath(), "frames", request.firstFrame() + "–" + request.lastFrame(),
+						"dimensions", request.width() + "×" + request.height(), "samples",
+						Integer.toString(request.samples()), "fps", Integer.toString(request.fps()), "dataPlane",
+						"client-direct"),
+				blenderPluginLocation);
+		Path scratch = workRoot.resolve(UUID.randomUUID().toString());
+		blenderJobs.put(jobId,
+				new BlenderJob("", scratch, request, new ConcurrentHashMap<>(), new ConcurrentHashMap<>()));
+		directClientJobs.put(jobId, directJob(jobId, taskCount, "frames-%05d.zip"));
+		return jobId;
+	}
+
+	private static void configureDirectOutput(Map<String, String> parameters, String template, int index) {
+		String output = template.replace("{index}", Integer.toString(index));
+		parameters.put("artifactUploadUrl", output);
+		parameters.put("artifactTransferOrigin", output);
+		parameters.put("requiredWorkerCapability", "storage.client-direct-artifacts.v1");
+	}
+
+	private static DirectClientJob directJob(String jobId, int taskCount, String artifactPattern) {
+		Map<String, String> tasks = new HashMap<>();
+		for (int index = 0; index < taskCount; index++)
+			tasks.put(jobId + "-" + (index + 1), artifactPattern.formatted(index));
+		return new DirectClientJob(Map.copyOf(tasks), new ConcurrentHashMap<>());
 	}
 
 	private int compatibleWorkerCount(String capability) {
@@ -1114,42 +1219,46 @@ public final class MechanaServer implements AutoCloseable {
 		dev.mechana.api.ArtifactReference input = path.startsWith(prefix)
 				? videoInputs.get(path.substring(prefix.length()))
 				: null;
-		if (input == null || !videoArtifactStore.exists(input)) {
+		if (input == null || !defaultArtifactStore.exists(input)) {
 			sendEmpty(exchange, 404);
 			return;
 		}
 		exchange.getResponseHeaders().set("Content-Type", "video/mp4");
 		exchange.getResponseHeaders().set("X-Checksum-Sha256", input.sha256());
 		exchange.sendResponseHeaders(200, input.sizeBytes());
-		try (InputStream bytes = videoArtifactStore.open(input); var output = exchange.getResponseBody()) {
+		try (InputStream bytes = defaultArtifactStore.open(input); var output = exchange.getResponseBody()) {
 			bytes.transferTo(output);
 		}
 	}
 
 	private void serveOcrInput(HttpExchange exchange) throws IOException {
-		serveMappedInput(exchange, "/api/ocr-inputs/", ocrInputs, "image/png");
+		serveMappedArtifact(exchange, "/api/ocr-inputs/", ocrInputs, "image/png");
 	}
 
 	private void serveBlenderInput(HttpExchange exchange) throws IOException {
-		serveMappedInput(exchange, "/api/blender-inputs/", blenderInputs, "application/x-blender");
+		serveMappedArtifact(exchange, "/api/blender-inputs/", blenderInputs, "application/x-blender");
 	}
 
-	private static void serveMappedInput(HttpExchange exchange, String prefix, Map<String, Path> inputs,
-			String contentType) throws IOException {
+	private void serveMappedArtifact(HttpExchange exchange, String prefix,
+			Map<String, dev.mechana.api.ArtifactReference> inputs, String contentType) throws IOException {
 		if (!"GET".equals(exchange.getRequestMethod())) {
 			sendEmpty(exchange, 405);
 			return;
 		}
 		String path = exchange.getRequestURI().getPath();
-		Path input = path.startsWith(prefix) ? inputs.get(path.substring(prefix.length())) : null;
-		if (input == null || !Files.isRegularFile(input)) {
+		dev.mechana.api.ArtifactReference input = path.startsWith(prefix)
+				? inputs.get(path.substring(prefix.length()))
+				: null;
+		if (input == null || !artifactStores.require(input.providerId()).exists(input)) {
 			sendEmpty(exchange, 404);
 			return;
 		}
 		exchange.getResponseHeaders().set("Content-Type", contentType);
-		exchange.sendResponseHeaders(200, Files.size(input));
-		try (var output = exchange.getResponseBody()) {
-			Files.copy(input, output);
+		exchange.getResponseHeaders().set("X-Checksum-Sha256", input.sha256());
+		exchange.sendResponseHeaders(200, input.sizeBytes());
+		try (InputStream bytes = artifactStores.require(input.providerId()).open(input);
+				var output = exchange.getResponseBody()) {
+			bytes.transferTo(output);
 		}
 	}
 
@@ -1172,7 +1281,7 @@ public final class MechanaServer implements AutoCloseable {
 			new FinalValidator(new MediaProbe(commands, runner)).validateSmallerThanInput(video.output(), video.plan());
 			try (InputStream bytes = Files.newInputStream(video.output())) {
 				video.finalArtifact(
-						videoArtifactStore.put("jobs/" + jobId + "/artifacts/compressed-first-minute.mkv", bytes));
+						defaultArtifactStore.put("jobs/" + jobId + "/artifacts/compressed-first-minute.mkv", bytes));
 			}
 			scheduler.finishVideo(jobId, null);
 		} catch (InterruptedException failure) {
@@ -1184,6 +1293,17 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private VideoAssemblyManifest clientAssemblyManifest(String jobId) {
+		DirectClientJob direct = directClientJobs.get(jobId);
+		if (direct != null) {
+			if (!"ASSEMBLING".equals(scheduler.dashboard(jobId).stage()))
+				throw new IllegalArgumentException("Worker artifacts are not ready for client assembly");
+			List<ArtifactReference> artifacts = direct.taskArtifacts().values().stream().sorted().map(name -> {
+				String accepted = Objects.requireNonNull(direct.acceptedLeaseHashes().get(name),
+						"Missing accepted client artifact " + name);
+				return new ArtifactReference("client-local", accepted, 0, "", true, "");
+			}).toList();
+			return new VideoAssemblyManifest(jobId, artifacts);
+		}
 		VideoJob video = videoJobs.get(jobId);
 		if (video == null || !video.clientAssembly())
 			throw new IllegalArgumentException("Job does not use client-side assembly: " + jobId);
@@ -1221,6 +1341,22 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private void completeClientAssembly(String jobId, ClientAssemblyCompletion completion) {
+		DirectClientJob direct = directClientJobs.get(jobId);
+		if (direct != null && "ASSEMBLING".equals(scheduler.dashboard(jobId).stage())) {
+			dev.mechana.api.ArtifactReference finalArtifact = new dev.mechana.api.ArtifactReference(
+					completion.provider(), completion.key(), completion.size(), completion.sha256());
+			if (fractalJobs.containsKey(jobId))
+				fractalJobs.get(jobId).outputs().put(completion.name(), finalArtifact);
+			else if (ocrJobs.containsKey(jobId))
+				ocrJobs.get(jobId).outputs().put(completion.name(), finalArtifact);
+			else if (blenderJobs.containsKey(jobId))
+				blenderJobs.get(jobId).outputs().put(completion.name(), finalArtifact);
+			else
+				throw new IllegalArgumentException("Unknown direct client job: " + jobId);
+			scheduler.finishAssembly(jobId, null);
+			archiveIfTerminal(jobId);
+			return;
+		}
 		VideoJob video = videoJobs.get(jobId);
 		if (video == null || !video.clientAssembly() || !"ASSEMBLING".equals(scheduler.dashboard(jobId).stage()))
 			throw new IllegalArgumentException("Job is not awaiting client assembly: " + jobId);
@@ -1235,13 +1371,12 @@ public final class MechanaServer implements AutoCloseable {
 		if (fractal == null)
 			return;
 		try {
-			List<Path> batches;
-			try (var paths = Files.list(fractal.scratch().resolve("batches"))) {
-				batches = paths.filter(Files::isRegularFile).sorted().toList();
-			}
+			List<Path> batches = stagePublishedBatches(fractal.batches(), fractal.scratch().resolve("batches"));
 			FractalJobSubmitRequest request = fractal.request();
-			new FractalCollectionAssembler().assemble(batches, fractal.scratch().resolve("result"),
-					request.imageCount(), request.width(), request.height(), request.maxIterations(), request.seed());
+			Path result = fractal.scratch().resolve("result");
+			new FractalCollectionAssembler().assemble(batches, result, request.imageCount(), request.width(),
+					request.height(), request.maxIterations(), request.seed());
+			publishResultTree(jobId, result, fractal.outputs());
 			scheduler.finishAssembly(jobId, null);
 		} catch (IOException failure) {
 			scheduler.finishAssembly(jobId, "Fractal assembly failed: " + failure.getMessage());
@@ -1253,12 +1388,11 @@ public final class MechanaServer implements AutoCloseable {
 		if (ocr == null)
 			return;
 		try {
-			List<Path> batches;
-			try (var paths = Files.list(ocr.scratch().resolve("batches"))) {
-				batches = paths.filter(Files::isRegularFile).sorted().toList();
-			}
-			new OcrMarkdownAssembler().assemble(batches, ocr.scratch().resolve("result"), ocr.firstPage(),
-					ocr.pageCount(), ocr.request().title());
+			List<Path> batches = stagePublishedBatches(ocr.batches(), ocr.scratch().resolve("batches"));
+			Path result = ocr.scratch().resolve("result");
+			new OcrMarkdownAssembler().assemble(batches, result, ocr.firstPage(), ocr.pageCount(),
+					ocr.request().title());
+			publishResultTree(jobId, result, ocr.outputs());
 			scheduler.finishAssembly(jobId, null);
 		} catch (IOException failure) {
 			scheduler.finishAssembly(jobId, "OCR assembly failed: " + failure.getMessage());
@@ -1270,18 +1404,43 @@ public final class MechanaServer implements AutoCloseable {
 		if (blender == null)
 			return;
 		try {
-			List<Path> batches;
-			try (var paths = Files.list(blender.scratch().resolve("batches"))) {
-				batches = paths.filter(Files::isRegularFile).sorted().toList();
-			}
+			List<Path> batches = stagePublishedBatches(blender.batches(), blender.scratch().resolve("batches"));
 			BlenderJobSubmitRequest request = blender.request();
-			new BlenderMovieAssembler().assemble(batches, blender.scratch().resolve("result"), request.firstFrame(),
-					request.lastFrame(), request.width(), request.height(), request.fps(), "ffmpeg");
+			Path result = blender.scratch().resolve("result");
+			new BlenderMovieAssembler().assemble(batches, result, request.firstFrame(), request.lastFrame(),
+					request.width(), request.height(), request.fps(), "ffmpeg");
+			publishResultTree(jobId, result, blender.outputs());
 			scheduler.finishAssembly(jobId, null);
 		} catch (IOException | InterruptedException failure) {
 			if (failure instanceof InterruptedException)
 				Thread.currentThread().interrupt();
 			scheduler.finishAssembly(jobId, "Blender assembly failed: " + failure.getMessage());
+		}
+	}
+
+	private List<Path> stagePublishedBatches(Map<String, dev.mechana.api.ArtifactReference> artifacts, Path directory)
+			throws IOException {
+		Files.createDirectories(directory);
+		List<Path> staged = new java.util.ArrayList<>(artifacts.size());
+		for (var entry : artifacts.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList()) {
+			Path destination = directory.resolve(entry.getKey()).normalize();
+			if (!destination.startsWith(directory))
+				throw new IOException("Unsafe intermediate artifact name: " + entry.getKey());
+			stageArtifact(entry.getValue(), destination);
+			staged.add(destination);
+		}
+		return List.copyOf(staged);
+	}
+
+	private void publishResultTree(String jobId, Path result, Map<String, dev.mechana.api.ArtifactReference> outputs)
+			throws IOException {
+		try (var paths = Files.walk(result)) {
+			for (Path path : paths.filter(Files::isRegularFile).sorted().toList()) {
+				String name = result.relativize(path).toString().replace('\\', '/');
+				try (InputStream bytes = Files.newInputStream(path)) {
+					outputs.put(name, defaultArtifactStore.put("jobs/" + jobId + "/artifacts/" + name, bytes));
+				}
+			}
 		}
 	}
 
@@ -1321,10 +1480,11 @@ public final class MechanaServer implements AutoCloseable {
 
 	private void archiveIfTerminal(String jobId) {
 		InMemoryJobMonitor.Snapshot snapshot = scheduler.dashboard(jobId);
-		if (!isTerminal(snapshot.stage()))
+		if (!isTerminal(snapshot.stage()) || completedJobs.find(jobId).isPresent())
 			return;
 		try {
 			completedJobs.archive(snapshot);
+			publishTransferSummary(jobId, snapshot);
 			VideoJob video = videoJobs.get(jobId);
 			if (video != null && "SUCCEEDED".equals(snapshot.stage()) && video.finalArtifact() != null) {
 				if ("server-local".equals(video.finalArtifact().providerId()))
@@ -1333,34 +1493,19 @@ public final class MechanaServer implements AutoCloseable {
 					completedJobs.registerExternalArtifact(jobId, "compressed-first-minute.mkv", video.finalArtifact());
 			}
 			FractalJob fractal = fractalJobs.get(jobId);
-			if (fractal != null && "SUCCEEDED".equals(snapshot.stage())) {
-				Path result = fractal.scratch().resolve("result");
-				completedJobs.storeArtifact(jobId, "manifest.json", result.resolve("manifest.json"));
-				completedJobs.storeArtifact(jobId, "contact-sheet.png", result.resolve("contact-sheet.png"));
-				completedJobs.storeArtifact(jobId, "fractal-collection.zip", result.resolve("fractal-collection.zip"));
-				try (var images = Files.list(result.resolve("images"))) {
-					for (Path image : images.filter(Files::isRegularFile).sorted().toList())
-						completedJobs.storeArtifact(jobId, Objects
-								.requireNonNull(image.getFileName(), "Image path must have a file name").toString(),
-								image);
-				}
-			}
+			if (fractal != null && "SUCCEEDED".equals(snapshot.stage()))
+				registerCompletedArtifacts(jobId, fractal.outputs());
 			OcrJob ocr = ocrJobs.get(jobId);
-			if (ocr != null && "SUCCEEDED".equals(snapshot.stage())) {
-				Path result = ocr.scratch().resolve("result");
-				completedJobs.storeArtifact(jobId, "document.md", result.resolve("document.md"));
-				completedJobs.storeArtifact(jobId, "document.tex", result.resolve("document.tex"));
-				try (var pages = Files.list(result.resolve("pages"))) {
-					for (Path page : pages.filter(Files::isRegularFile).sorted().toList())
-						completedJobs.storeArtifact(jobId, Objects.requireNonNull(page.getFileName()).toString(), page);
-				}
-			}
+			if (ocr != null && "SUCCEEDED".equals(snapshot.stage()))
+				registerCompletedArtifacts(jobId, ocr.outputs());
 			BlenderJob blender = blenderJobs.get(jobId);
 			if (blender != null && "SUCCEEDED".equals(snapshot.stage()))
-				completedJobs.storeArtifact(jobId, "animation.mp4", blender.scratch().resolve("result/animation.mp4"));
+				registerCompletedArtifacts(jobId, blender.outputs());
 		} catch (IOException failure) {
 			System.err.printf("Could not archive completed job %s: %s%n", jobId, failure.getMessage());
 		} finally {
+			jobTransfers.remove(jobId);
+			directClientJobs.remove(jobId);
 			VideoJob video = videoJobs.remove(jobId);
 			if (video != null) {
 				video.inputTokens().forEach(videoInputs::remove);
@@ -1370,18 +1515,60 @@ public final class MechanaServer implements AutoCloseable {
 				deleteTree(video.scratch());
 			}
 			FractalJob fractal = fractalJobs.remove(jobId);
-			if (fractal != null)
+			if (fractal != null) {
+				fractal.batches().values().forEach(this::deleteArtifactQuietly);
 				deleteTree(fractal.scratch());
+			}
 			OcrJob ocr = ocrJobs.remove(jobId);
 			if (ocr != null) {
-				ocr.inputTokens().forEach(ocrInputs::remove);
+				ocr.inputTokens().stream().map(ocrInputs::remove).filter(Objects::nonNull)
+						.forEach(this::deleteArtifactQuietly);
+				ocr.batches().values().forEach(this::deleteArtifactQuietly);
 				deleteTree(ocr.scratch());
 			}
 			BlenderJob blender = blenderJobs.remove(jobId);
 			if (blender != null) {
-				blenderInputs.remove(blender.inputToken());
+				deleteArtifactQuietly(blenderInputs.remove(blender.inputToken()));
+				blender.batches().values().forEach(this::deleteArtifactQuietly);
 				deleteTree(blender.scratch());
 			}
+		}
+	}
+
+	private void publishTransferSummary(String jobId, InMemoryJobMonitor.Snapshot snapshot) throws IOException {
+		Map<String, TransferTotals> nodes = Map.copyOf(jobTransfers.getOrDefault(jobId, new ConcurrentHashMap<>()));
+		TransferTotals total = nodes.values().stream().reduce(new TransferTotals(0, 0, 0), TransferTotals::plus);
+		boolean direct = "client-direct".equals(snapshot.details().get("dataPlane"));
+		Map<String, Object> document = new java.util.LinkedHashMap<>();
+		document.put("jobId", jobId);
+		document.put("topology", direct ? "client-worker-direct" : "server-worker");
+		document.put("inputRoute", direct ? "client-to-worker" : "server-to-worker");
+		document.put("outputRoute", direct ? "worker-to-client" : "worker-to-server");
+		document.put("inputBytes", total.inputBytes());
+		document.put("outputBytes", total.outputBytes());
+		document.put("pluginBytes", total.pluginBytes());
+		document.put("nodes", nodes.entrySet().stream().sorted(Map.Entry.comparingByKey())
+				.map(entry -> Map.of("worker", entry.getKey(), "inputBytes", entry.getValue().inputBytes(),
+						"outputBytes", entry.getValue().outputBytes(), "pluginBytes", entry.getValue().pluginBytes()))
+				.toList());
+		byte[] bytes = json.writerWithDefaultPrettyPrinter().writeValueAsBytes(document);
+		dev.mechana.api.ArtifactReference artifact;
+		try (InputStream input = new ByteArrayInputStream(bytes)) {
+			artifact = defaultArtifactStore.put("jobs/" + jobId + "/artifacts/transfer-summary.json", input);
+		}
+		completedJobs.registerArtifact(jobId, "transfer-summary.json", artifact);
+		System.out.printf("Job %s transfer summary: topology=%s input=%d output=%d plugin=%d bytes nodes=%d%n", jobId,
+				document.get("topology"), total.inputBytes(), total.outputBytes(), total.pluginBytes(), nodes.size());
+	}
+
+	private void registerCompletedArtifacts(String jobId, Map<String, dev.mechana.api.ArtifactReference> artifacts)
+			throws IOException {
+		for (var entry : artifacts.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList()) {
+			dev.mechana.api.ArtifactReference artifact = entry.getValue();
+			if (dev.mechana.api.StorageSelection.SERVER_LOCAL.equals(artifact.providerId()))
+				completedJobs.registerArtifact(jobId, entry.getKey(), artifact);
+			else
+				completedJobs.registerExternalArtifact(jobId, entry.getKey(), artifact);
 		}
 	}
 
@@ -1733,14 +1920,30 @@ public final class MechanaServer implements AutoCloseable {
 		}
 	}
 
-	private record FractalJob(Path scratch, FractalJobSubmitRequest request) {
+	private record FractalJob(Path scratch, FractalJobSubmitRequest request,
+			ConcurrentMap<String, dev.mechana.api.ArtifactReference> batches,
+			ConcurrentMap<String, dev.mechana.api.ArtifactReference> outputs) {
 	}
 
 	private record OcrJob(List<String> inputTokens, Path scratch, int firstPage, int pageCount,
-			OcrJobSubmitRequest request) {
+			OcrJobSubmitRequest request, ConcurrentMap<String, dev.mechana.api.ArtifactReference> batches,
+			ConcurrentMap<String, dev.mechana.api.ArtifactReference> outputs) {
 	}
 
-	private record BlenderJob(String inputToken, Path scratch, BlenderJobSubmitRequest request) {
+	private record BlenderJob(String inputToken, Path scratch, BlenderJobSubmitRequest request,
+			ConcurrentMap<String, dev.mechana.api.ArtifactReference> batches,
+			ConcurrentMap<String, dev.mechana.api.ArtifactReference> outputs) {
+	}
+
+	private record DirectClientJob(Map<String, String> taskArtifacts,
+			ConcurrentMap<String, String> acceptedLeaseHashes) {
+	}
+
+	private record TransferTotals(long inputBytes, long outputBytes, long pluginBytes) {
+		TransferTotals plus(TransferTotals other) {
+			return new TransferTotals(Math.addExact(inputBytes, other.inputBytes),
+					Math.addExact(outputBytes, other.outputBytes), Math.addExact(pluginBytes, other.pluginBytes));
+		}
 	}
 
 	private record WorkerActivity(String jobId, String plugin, int progress) {

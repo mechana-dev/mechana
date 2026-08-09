@@ -196,27 +196,54 @@ public final class Messages {
 	}
 
 	public record FractalJobSubmitRequest(int imageCount, int taskCount, int width, int height, int maxIterations,
-			long seed) {
+			long seed, String storageProvider, String clientOutputUrl) {
+		public FractalJobSubmitRequest(int imageCount, int taskCount, int width, int height, int maxIterations,
+				long seed) {
+			this(imageCount, taskCount, width, height, maxIterations, seed, "server-local", "");
+		}
+		public FractalJobSubmitRequest(int imageCount, int taskCount, int width, int height, int maxIterations,
+				long seed, String storageProvider) {
+			this(imageCount, taskCount, width, height, maxIterations, seed, storageProvider, "");
+		}
 		public FractalJobSubmitRequest {
+			storageProvider = storageProvider == null || storageProvider.isBlank() ? "server-local" : storageProvider;
+			clientOutputUrl = clientOutputUrl == null ? "" : clientOutputUrl;
+			if (!Set.of("server-local", "client-local").contains(storageProvider))
+				throw new IllegalArgumentException("Unsupported fractal storage provider: " + storageProvider);
 			if (imageCount < 1 || taskCount < 0 || taskCount > imageCount)
 				throw new IllegalArgumentException("Invalid fractal image or task count");
 			if (width < 64 || height < 64 || width > 8192 || height > 8192)
 				throw new IllegalArgumentException("Fractal dimensions must be between 64 and 8192 pixels");
 			if (maxIterations < 16 || maxIterations > 100_000)
 				throw new IllegalArgumentException("maxIterations must be between 16 and 100000");
+			validateClientOutput(storageProvider, clientOutputUrl);
 		}
 	}
 
 	public record OcrJobSubmitRequest(String sourcePath, int taskCount, int dpi, String language, String title,
-			int firstPage, int pageCount) {
+			int firstPage, int pageCount, String storageProvider, List<ArtifactReference> clientPages,
+			String clientOutputUrl) {
 		public OcrJobSubmitRequest(String sourcePath, int taskCount, int dpi, String language, String title) {
-			this(sourcePath, taskCount, dpi, language, title, 1, 0);
+			this(sourcePath, taskCount, dpi, language, title, 1, 0, "server-local", List.of(), "");
+		}
+		public OcrJobSubmitRequest(String sourcePath, int taskCount, int dpi, String language, String title,
+				int firstPage, int pageCount) {
+			this(sourcePath, taskCount, dpi, language, title, firstPage, pageCount, "server-local", List.of(), "");
+		}
+		public OcrJobSubmitRequest(String sourcePath, int taskCount, int dpi, String language, String title,
+				int firstPage, int pageCount, String storageProvider) {
+			this(sourcePath, taskCount, dpi, language, title, firstPage, pageCount, storageProvider, List.of(), "");
 		}
 
 		public OcrJobSubmitRequest {
 			Objects.requireNonNull(sourcePath, "sourcePath");
 			language = language == null || language.isBlank() ? "eng" : language;
 			title = title == null || title.isBlank() ? "OCR Document" : title;
+			storageProvider = storageProvider == null || storageProvider.isBlank() ? "server-local" : storageProvider;
+			clientPages = clientPages == null ? List.of() : List.copyOf(clientPages);
+			clientOutputUrl = clientOutputUrl == null ? "" : clientOutputUrl;
+			if (!Set.of("server-local", "client-local").contains(storageProvider))
+				throw new IllegalArgumentException("Unsupported OCR storage provider: " + storageProvider);
 			if (taskCount < 0)
 				throw new IllegalArgumentException("taskCount must not be negative");
 			firstPage = firstPage == 0 ? 1 : firstPage;
@@ -226,19 +253,43 @@ public final class Messages {
 				throw new IllegalArgumentException("dpi must be between 150 and 600");
 			if (!language.matches("[A-Za-z0-9_+.-]+"))
 				throw new IllegalArgumentException("Invalid OCR language expression");
+			if ("client-local".equals(storageProvider) && clientPages.isEmpty())
+				throw new IllegalArgumentException("Client-local OCR requires rasterized page artifacts");
+			validateClientOutput(storageProvider, clientOutputUrl);
 		}
 	}
 
 	public record BlenderJobSubmitRequest(String sourcePath, int firstFrame, int lastFrame, int taskCount, int width,
-			int height, int samples, int fps) {
+			int height, int samples, int fps, String storageProvider, ArtifactReference clientScene,
+			String clientOutputUrl) {
+		public BlenderJobSubmitRequest(String sourcePath, int firstFrame, int lastFrame, int taskCount, int width,
+				int height, int samples, int fps) {
+			this(sourcePath, firstFrame, lastFrame, taskCount, width, height, samples, fps, "server-local", null, "");
+		}
+		public BlenderJobSubmitRequest(String sourcePath, int firstFrame, int lastFrame, int taskCount, int width,
+				int height, int samples, int fps, String storageProvider) {
+			this(sourcePath, firstFrame, lastFrame, taskCount, width, height, samples, fps, storageProvider, null, "");
+		}
 		public BlenderJobSubmitRequest {
 			Objects.requireNonNull(sourcePath, "sourcePath");
+			storageProvider = storageProvider == null || storageProvider.isBlank() ? "server-local" : storageProvider;
+			clientOutputUrl = clientOutputUrl == null ? "" : clientOutputUrl;
+			if (!Set.of("server-local", "client-local").contains(storageProvider))
+				throw new IllegalArgumentException("Unsupported Blender storage provider: " + storageProvider);
 			if (firstFrame < 0 || lastFrame < firstFrame || taskCount < 0 || taskCount > lastFrame - firstFrame + 1)
 				throw new IllegalArgumentException("Invalid Blender frame range or task count");
 			if (width < 64 || height < 64 || width > 8192 || height > 8192 || samples < 1 || samples > 4096 || fps < 1
 					|| fps > 240)
 				throw new IllegalArgumentException("Invalid Blender render options");
+			if ("client-local".equals(storageProvider) && clientScene == null)
+				throw new IllegalArgumentException("Client-local Blender requires a scene artifact");
+			validateClientOutput(storageProvider, clientOutputUrl);
 		}
+	}
+
+	private static void validateClientOutput(String provider, String outputUrl) {
+		if ("client-local".equals(provider) && (!outputUrl.startsWith("http://") && !outputUrl.startsWith("https://")))
+			throw new IllegalArgumentException("Client output URL must use HTTP or HTTPS");
 	}
 
 	public record TaskStatus(String taskId, String state, int progress, int attempt, String workerId) {
@@ -305,9 +356,14 @@ public final class Messages {
 		}
 	}
 
-	public record TaskCompletion(String leaseToken) {
+	public record TaskCompletion(String leaseToken, long inputBytes, long outputBytes, long pluginBytes) {
+		public TaskCompletion(String leaseToken) {
+			this(leaseToken, 0, 0, 0);
+		}
 		public TaskCompletion {
 			Objects.requireNonNull(leaseToken, "leaseToken");
+			if (inputBytes < 0 || outputBytes < 0 || pluginBytes < 0)
+				throw new IllegalArgumentException("Task transfer counters must not be negative");
 		}
 	}
 

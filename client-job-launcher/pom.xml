@@ -25,6 +25,21 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
+      <groupId>dev.mechana</groupId>
+      <artifactId>mechana-plugin-fractal-render</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.mechana</groupId>
+      <artifactId>mechana-plugin-ocr-tesseract</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.mechana</groupId>
+      <artifactId>mechana-plugin-blender-render</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
     </dependency>

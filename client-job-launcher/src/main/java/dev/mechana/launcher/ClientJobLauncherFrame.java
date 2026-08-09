@@ -16,6 +16,7 @@
 
 package dev.mechana.launcher;
 
+import dev.mechana.plugins.ocr.OcrPageSplitter;
 import dev.mechana.protocol.Messages.ArtifactReference;
 import dev.mechana.protocol.Messages.JobLauncherDescriptor;
 import dev.mechana.protocol.Messages.LauncherJob;
@@ -54,6 +55,8 @@ final class ClientJobLauncherFrame extends JFrame {
 	private transient List<LauncherJob> jobItems = List.of();
 	@SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "Swing frames are not deserialized")
 	private final transient Map<String, ClientVideoContext> clientVideoJobs = new ConcurrentHashMap<>();
+	@SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "Swing frames are not deserialized")
+	private final transient Map<String, ClientPluginContext> clientPluginJobs = new ConcurrentHashMap<>();
 	@SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "Swing frames are not deserialized")
 	private final transient Set<String> assemblingClientJobs = ConcurrentHashMap.newKeySet();
 	private Timer refreshTimer;
@@ -153,15 +156,15 @@ final class ClientJobLauncherFrame extends JFrame {
 		try {
 			var values = form.values();
 			ClientVideoRequest clientVideo = clientVideoRequest(form.descriptor(), values);
-			values.remove("clientScratchDirectory");
-			values.remove("clientOutputDirectory");
-			values.remove("clientTransferHost");
+			boolean clientPlugin = clientVideo == null && "client-local".equals(values.get("storageProvider"));
+			if (clientVideo != null || clientPlugin)
+				connectionState.setText("SPLITTING — preparing local artifacts…");
 			run(() -> {
 				if (clientVideo != null) {
-					ClientVideoDataPlane plane = new ClientVideoDataPlane(clientVideo.scratch(),
+					ClientArtifactDataPlane plane = new ClientArtifactDataPlane(clientVideo.scratch(),
 							clientVideo.transferHost());
 					try {
-						ClientVideoDataPlane.Prepared prepared = plane.prepare(clientVideo.source(),
+						ClientArtifactDataPlane.Prepared prepared = plane.prepare(clientVideo.source(),
 								clientVideo.durationSeconds(), clientVideo.segmentCount(),
 								clientVideo.targetSizeRatio());
 						values.put("durationSeconds", prepared.durationSeconds());
@@ -169,25 +172,43 @@ final class ClientJobLauncherFrame extends JFrame {
 						values.put("clientChunks", prepared.chunks());
 						values.put("clientOutputUrl", plane.outputUrl(0).replace("/outputs/0", "/outputs/{index}"));
 						values.put("videoBitrate", prepared.videoBitrate());
+						removeClientControls(values);
 						String jobId = client.submit(serverUri(), form.descriptor(), values);
 						return new SubmissionResult(jobId, new ClientVideoContext(clientVideo.source(),
-								plane.scratchDirectory(), clientVideo.output(), prepared.durationSeconds(), plane));
+								plane.scratchDirectory(), clientVideo.output(), prepared.durationSeconds(), plane),
+								null);
 					} catch (java.io.IOException | InterruptedException | RuntimeException failure) {
 						plane.close();
 						throw failure;
 					}
 				}
-				String jobId = client.submit(serverUri(), form.descriptor(), values);
-				return new SubmissionResult(jobId, null);
+				ClientPluginContext context = clientPlugin ? prepareClientPlugin(form.descriptor(), values) : null;
+				try {
+					removeClientControls(values);
+					String jobId = client.submit(serverUri(), form.descriptor(), values);
+					return new SubmissionResult(jobId, null, context);
+				} catch (java.io.IOException | InterruptedException | RuntimeException failure) {
+					if (context != null)
+						context.dataPlane().close();
+					throw failure;
+				}
 			}, submission -> {
 				if (submission.clientVideo() != null)
 					clientVideoJobs.put(submission.jobId(), submission.clientVideo());
+				if (submission.clientPlugin() != null)
+					clientPluginJobs.put(submission.jobId(), submission.clientPlugin());
 				connectionState.setText("Submitted " + submission.jobId());
 				refreshJobs();
 			});
 		} catch (IllegalArgumentException invalid) {
 			showError(invalid);
 		}
+	}
+
+	private static void removeClientControls(Map<String, Object> values) {
+		values.remove("clientScratchDirectory");
+		values.remove("clientOutputDirectory");
+		values.remove("clientTransferHost");
 	}
 
 	private void abortSelected() {
@@ -246,6 +267,9 @@ final class ClientJobLauncherFrame extends JFrame {
 				ClientVideoContext abandoned = clientVideoJobs.remove(job.jobId());
 				if (abandoned != null)
 					abandoned.dataPlane().close();
+				ClientPluginContext abandonedPlugin = clientPluginJobs.remove(job.jobId());
+				if (abandonedPlugin != null)
+					abandonedPlugin.dataPlane().close();
 			}
 		jobsModel.setRowCount(0);
 		for (LauncherJob job : jobItems)
@@ -284,6 +308,30 @@ final class ClientJobLauncherFrame extends JFrame {
 
 	private void continueClientAssemblies() {
 		for (LauncherJob job : jobItems) {
+			ClientPluginContext pluginContext = clientPluginJobs.get(job.jobId());
+			if (pluginContext != null && "ASSEMBLING".equals(job.status()) && assemblingClientJobs.add(job.jobId())) {
+				connectionState.setText("ASSEMBLING " + job.jobId() + " on this client…");
+				CompletableFuture.runAsync(() -> {
+					try {
+						new ClientPluginAssembly(client).assemble(serverUri(), job.jobId(), pluginContext);
+					} catch (java.io.IOException | InterruptedException failure) {
+						throw new java.util.concurrent.CompletionException(failure);
+					}
+				}).whenComplete((ignored, failure) -> SwingUtilities.invokeLater(() -> {
+					assemblingClientJobs.remove(job.jobId());
+					ClientPluginContext finished = clientPluginJobs.remove(job.jobId());
+					if (finished != null)
+						finished.dataPlane().close();
+					if (failure == null) {
+						connectionState.setText("Client assembly completed for " + job.jobId());
+						refreshJobs();
+					} else {
+						connectionState.setText("Client assembly failed");
+						showError(failure.getCause());
+					}
+				}));
+				continue;
+			}
 			ClientVideoContext context = clientVideoJobs.get(job.jobId());
 			if (context == null || !"ASSEMBLING".equals(job.status()) || !assemblingClientJobs.add(job.jobId()))
 				continue;
@@ -308,6 +356,71 @@ final class ClientJobLauncherFrame extends JFrame {
 					showError(failure.getCause());
 				}
 			}));
+		}
+	}
+
+	private ClientPluginContext prepareClientPlugin(JobLauncherDescriptor descriptor, Map<String, Object> values)
+			throws java.io.IOException {
+		Path scratch = optionalDirectory(values, "clientScratchDirectory");
+		Path output = requiredDirectory(values, "clientOutputDirectory", "Client output directory");
+		ClientArtifactDataPlane plane = new ClientArtifactDataPlane(scratch,
+				String.valueOf(values.getOrDefault("clientTransferHost", "")));
+		try {
+			String plugin = descriptor.capabilityId();
+			int requestedTasks = ((Number) values.get("taskCount")).intValue();
+			int taskCount;
+			ClientPluginContext context;
+			switch (plugin) {
+				case "fractal-render" -> {
+					int images = ((Number) values.get("imageCount")).intValue();
+					taskCount = requestedTasks > 0 ? requestedTasks : Math.min(images, descriptor.availableWorkers());
+					context = new ClientPluginContext(plugin, plane.scratchDirectory(), output, plane, images,
+							((Number) values.get("width")).intValue(), ((Number) values.get("height")).intValue(),
+							((Number) values.get("maxIterations")).intValue(),
+							((Number) values.get("seed")).longValue(), 0, 0, "", 0, 0, 0);
+				}
+				case "ocr-tesseract" -> {
+					Path source = Path.of(String.valueOf(values.get("sourcePath"))).toAbsolutePath().normalize();
+					if (!Files.isRegularFile(source))
+						throw new IllegalArgumentException("Input PDF does not exist: " + source);
+					int firstPage = ((Number) values.get("firstPage")).intValue();
+					var split = new OcrPageSplitter().split(source, plane.scratchDirectory().resolve("ocr-pages"),
+							firstPage, ((Number) values.get("pageCount")).intValue(),
+							((Number) values.get("dpi")).intValue());
+					List<ArtifactReference> pages = new java.util.ArrayList<>(split.pages().size());
+					for (int index = 0; index < split.pages().size(); index++)
+						pages.add(plane.serveInput(index, split.pages().get(index), "image/png"));
+					values.put("clientPages", pages);
+					values.put("pageCount", pages.size());
+					taskCount = requestedTasks > 0
+							? Math.min(requestedTasks, pages.size())
+							: Math.min(pages.size(), descriptor.availableWorkers());
+					context = new ClientPluginContext(plugin, plane.scratchDirectory(), output, plane, 0, 0, 0, 0, 0,
+							firstPage, pages.size(), String.valueOf(values.get("title")), 0, 0, 0);
+				}
+				case "blender-render" -> {
+					Path source = Path.of(String.valueOf(values.get("sourcePath"))).toAbsolutePath().normalize();
+					if (!Files.isRegularFile(source))
+						throw new IllegalArgumentException("Packed Blender scene does not exist: " + source);
+					values.put("clientScene", plane.serveInput(0, source, "application/octet-stream"));
+					int first = ((Number) values.get("firstFrame")).intValue();
+					int last = ((Number) values.get("lastFrame")).intValue();
+					taskCount = requestedTasks > 0
+							? requestedTasks
+							: Math.min(last - first + 1, descriptor.availableWorkers());
+					context = new ClientPluginContext(plugin, plane.scratchDirectory(), output, plane, 0,
+							((Number) values.get("width")).intValue(), ((Number) values.get("height")).intValue(), 0, 0,
+							0, 0, "", first, last, ((Number) values.get("fps")).intValue());
+				}
+				default -> throw new IllegalArgumentException("Unsupported client-local plugin " + plugin);
+			}
+			plane.configureOutputs(taskCount, ".zip");
+			values.put("taskCount", taskCount);
+			values.put("clientOutputUrl", plane.outputUrl(0).replace("/outputs/0", "/outputs/{index}"));
+			return context;
+		} catch (java.io.IOException | RuntimeException failure) {
+			plane.close();
+			throw failure;
 		}
 	}
 
@@ -363,9 +476,9 @@ final class ClientJobLauncherFrame extends JFrame {
 			double targetSizeRatio, String transferHost) {
 	}
 	private record ClientVideoContext(Path source, Path scratch, Path output, double durationSeconds,
-			ClientVideoDataPlane dataPlane) {
+			ClientArtifactDataPlane dataPlane) {
 	}
-	private record SubmissionResult(String jobId, ClientVideoContext clientVideo) {
+	private record SubmissionResult(String jobId, ClientVideoContext clientVideo, ClientPluginContext clientPlugin) {
 	}
 	private static final class ReadOnlyTableModel extends DefaultTableModel {
 		private static final long serialVersionUID = 1L;

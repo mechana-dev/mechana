@@ -13,6 +13,7 @@ import dev.mechana.plugins.video.ExternalProcessRunner;
 import dev.mechana.plugins.video.FfmpegCommands;
 import dev.mechana.plugins.video.MediaProbe;
 import dev.mechana.plugins.video.VideoTypes;
+import dev.mechana.protocol.Messages.ArtifactReference;
 import dev.mechana.protocol.Messages.ClientVideoChunk;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
@@ -32,10 +33,12 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Requester-hosted, tokenized HTTP data plane for direct FFmpeg worker
- * transfers.
+ * Requester-hosted, tokenized HTTP data plane for direct worker artifact
+ * transfers. Plugin adapters may prepare inputs and assemble accepted outputs,
+ * but this service owns transport, attempt identity, atomic publication, and
+ * integrity metadata.
  */
-final class ClientVideoDataPlane implements AutoCloseable {
+final class ClientArtifactDataPlane implements AutoCloseable {
 	record Prepared(List<ClientVideoChunk> chunks, long videoBitrate, double durationSeconds) {
 	}
 	record LocalArtifact(Path path, long size, String sha256) {
@@ -48,12 +51,16 @@ final class ClientVideoDataPlane implements AutoCloseable {
 	private final String advertisedHost;
 	private final HttpServer http;
 	private final Map<String, LocalArtifact> outputs = new ConcurrentHashMap<>();
-	private List<Path> chunks = List.of();
+	private final Map<Integer, ServedArtifact> inputs = new ConcurrentHashMap<>();
+	private int outputCount;
+	private String outputExtension = ".bin";
+	private record ServedArtifact(Path path, String contentType, long size, String sha256) {
+	}
 
-	ClientVideoDataPlane(Path scratchDirectory, String configuredHost) throws IOException {
+	ClientArtifactDataPlane(Path scratchDirectory, String configuredHost) throws IOException {
 		this.temporaryScratch = scratchDirectory == null;
 		this.scratchDirectory = temporaryScratch
-				? Files.createTempDirectory("mechana-client-video-").toAbsolutePath().normalize()
+				? Files.createTempDirectory("mechana-client-artifacts-").toAbsolutePath().normalize()
 				: scratchDirectory.toAbsolutePath().normalize();
 		root = this.scratchDirectory.resolve("client-transfer-" + token).toAbsolutePath().normalize();
 		Files.createDirectories(root.resolve("chunks"));
@@ -62,7 +69,7 @@ final class ClientVideoDataPlane implements AutoCloseable {
 				? automaticHost(InetAddress.getLocalHost().getHostName())
 				: configuredHost.strip();
 		http = HttpServer.create(new InetSocketAddress("0.0.0.0", 0), 0);
-		http.createContext("/client-video/" + token + "/", this::handle);
+		http.createContext("/client-artifacts/" + token + "/", this::handle);
 		http.setExecutor(java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
 		http.start();
 	}
@@ -104,11 +111,31 @@ final class ClientVideoDataPlane implements AutoCloseable {
 			references.add(new ClientVideoChunk(baseUrl() + "/chunks/" + segment.index(), segment.startSeconds(),
 					segment.endSeconds(), Files.size(chunk), sha256(chunk)));
 		}
-		chunks = List.copyOf(localChunks);
+		for (int index = 0; index < localChunks.size(); index++)
+			serveInput(index, localChunks.get(index), "video/mp4");
+		configureOutputs(localChunks.size(), ".mkv");
 		long targetBytes = Math.max(1, Math.round(info.inputBytes() * targetSizeRatio));
 		long audioAllowance = info.audioStreams() > 0 ? 192_000 : 0;
 		long bitrate = Math.max(100_000, Math.round(targetBytes * 8 / info.durationSeconds()) - audioAllowance);
 		return new Prepared(List.copyOf(references), bitrate, info.durationSeconds());
+	}
+
+	ArtifactReference serveInput(int index, Path source, String contentType) throws IOException {
+		Path normalized = source.toAbsolutePath().normalize();
+		if (!Files.isRegularFile(normalized) || index < 0)
+			throw new IllegalArgumentException("Invalid client input artifact");
+		ServedArtifact artifact = new ServedArtifact(normalized, contentType, Files.size(normalized),
+				sha256(normalized));
+		inputs.put(index, artifact);
+		return new ArtifactReference("client-local", normalized.toString(), artifact.size(),
+				baseUrl() + "/inputs/" + index, true, artifact.sha256());
+	}
+
+	void configureOutputs(int count, String extension) {
+		if (count < 1 || extension == null || !extension.matches("\\.[A-Za-z0-9]{1,12}"))
+			throw new IllegalArgumentException("Invalid direct output configuration");
+		outputCount = count;
+		outputExtension = extension;
 	}
 
 	String outputUrl(int index) {
@@ -127,7 +154,7 @@ final class ClientVideoDataPlane implements AutoCloseable {
 	}
 
 	private String baseUrl() {
-		return "http://" + advertisedHost + ":" + http.getAddress().getPort() + "/client-video/" + token;
+		return "http://" + advertisedHost + ":" + http.getAddress().getPort() + "/client-artifacts/" + token;
 	}
 
 	static String automaticHost(String localHostName) {
@@ -139,27 +166,30 @@ final class ClientVideoDataPlane implements AutoCloseable {
 
 	private void handle(HttpExchange exchange) throws IOException {
 		try {
-			String suffix = exchange.getRequestURI().getPath().substring(("/client-video/" + token + "/").length());
-			if ("GET".equals(exchange.getRequestMethod()) && suffix.startsWith("chunks/")) {
-				int index = Integer.parseInt(suffix.substring("chunks/".length()));
-				Path chunk = chunks.get(index);
-				exchange.getResponseHeaders().set("Content-Type", "video/mp4");
-				exchange.getResponseHeaders().set("X-Checksum-Sha256", sha256(chunk));
-				exchange.sendResponseHeaders(200, Files.size(chunk));
+			String suffix = exchange.getRequestURI().getPath().substring(("/client-artifacts/" + token + "/").length());
+			if ("GET".equals(exchange.getRequestMethod())
+					&& (suffix.startsWith("inputs/") || suffix.startsWith("chunks/"))) {
+				String prefix = suffix.startsWith("inputs/") ? "inputs/" : "chunks/";
+				int index = Integer.parseInt(suffix.substring(prefix.length()));
+				ServedArtifact artifact = java.util.Objects.requireNonNull(inputs.get(index), "Unknown input artifact");
+				exchange.getResponseHeaders().set("Content-Type", artifact.contentType());
+				exchange.getResponseHeaders().set("X-Checksum-Sha256", artifact.sha256());
+				exchange.sendResponseHeaders(200, artifact.size());
 				try (var output = exchange.getResponseBody()) {
-					Files.copy(chunk, output);
+					Files.copy(artifact.path(), output);
 				}
 				return;
 			}
 			if ("PUT".equals(exchange.getRequestMethod()) && suffix.startsWith("outputs/")) {
 				int index = Integer.parseInt(suffix.substring("outputs/".length()));
-				if (index < 0 || index >= chunks.size())
-					throw new IllegalArgumentException("Invalid segment index");
+				if (index < 0 || index >= outputCount)
+					throw new IllegalArgumentException("Invalid output index");
 				String lease = exchange.getRequestHeaders().getFirst("X-Mechana-Lease");
 				if (lease == null || lease.isBlank())
 					throw new IllegalArgumentException("Missing worker lease");
 				String leaseHash = sha256(lease.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-				Path destination = root.resolve("worker-outputs/segment-%05d-%s.mkv".formatted(index, leaseHash));
+				Path destination = root
+						.resolve("worker-outputs/artifact-%05d-%s%s".formatted(index, leaseHash, outputExtension));
 				Path temporary = Files.createTempFile(root.resolve("worker-outputs"), ".upload-", ".tmp");
 				try (var input = exchange.getRequestBody()) {
 					Files.copy(input, temporary, StandardCopyOption.REPLACE_EXISTING);

@@ -86,16 +86,18 @@ class WorkerTest {
 	}
 
 	@Test
-	void directVideoOutputMustMatchTheTokenizedClientInputOrigin() {
-		TaskLease accepted = lease(Map.of("inputUrl", "http://client.example:49152/client-video/token/chunks/0",
-				"artifactUploadUrl", "http://client.example:49152/client-video/token/outputs/0"));
-		assertEquals(URI.create("http://client.example:49152/client-video/token/outputs/0"),
+	void directArtifactOutputMustMatchTheAuthorizedTransferOrigin() {
+		TaskLease accepted = lease(Map.of("artifactTransferOrigin", "http://client.example:49152", "artifactUploadUrl",
+				"http://client.example:49152/client-artifacts/token/outputs/0"));
+		assertEquals(URI.create("http://client.example:49152/client-artifacts/token/outputs/0"),
 				WorkerAgent.directArtifactDestination(accepted, "segment-00000.mkv").orElseThrow());
 
-		TaskLease exfiltration = lease(Map.of("inputUrl", "http://client.example:49152/client-video/token/chunks/0",
-				"artifactUploadUrl", "https://unrelated.example/client-video/token/outputs/0"));
+		TaskLease exfiltration = lease(Map.of("artifactTransferOrigin", "http://client.example:49152",
+				"artifactUploadUrl", "https://unrelated.example/client-artifacts/token/outputs/0"));
 		assertThrows(IllegalArgumentException.class,
 				() -> WorkerAgent.directArtifactDestination(exfiltration, "segment-00000.mkv"));
+		assertThrows(IllegalArgumentException.class,
+				() -> WorkerAgent.directArtifactDestination(accepted, "../stolen.txt"));
 	}
 
 	private static TaskLease lease(java.util.Map<String, String> parameters) {
