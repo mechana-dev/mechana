@@ -66,6 +66,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -157,8 +158,9 @@ public final class WorkerAgent {
 		Path pluginFile = null;
 		try {
 			pluginFile = downloadPlugin(lease);
+			long pluginBytes = Files.size(pluginFile);
 			if (sandboxedExecution()) {
-				executeSandboxed(lease, pluginFile, cancelled);
+				executeSandboxed(lease, pluginFile, pluginBytes, cancelled);
 			} else
 				try (URLClassLoader loader = new URLClassLoader(new java.net.URL[]{pluginFile.toUri().toURL()},
 						TaskPlugin.class.getClassLoader())) {
@@ -167,9 +169,9 @@ public final class WorkerAgent {
 					TaskPlugin plugin = pluginType.getConstructor().newInstance();
 					verifyDescriptor(plugin.descriptor(), lease);
 					System.out.printf("Worker %s running task %s%n", workerId, lease.taskId());
-					TaskContext context = new RemoteTaskContext(lease, cancelled);
+					RemoteTaskContext context = new RemoteTaskContext(lease, cancelled);
 					plugin.execute(context);
-					Response completion = post(taskPath(lease, "complete"), new TaskCompletion(lease.leaseToken()));
+					Response completion = post(taskPath(lease, "complete"), context.completion(pluginBytes));
 					requireStatus(completion, 204);
 					System.out.printf("Worker %s finished task %s successfully%n", workerId, lease.taskId());
 				}
@@ -193,7 +195,7 @@ public final class WorkerAgent {
 		}
 	}
 
-	private void executeSandboxed(TaskLease lease, Path downloadedPlugin, AtomicBoolean cancelled)
+	private void executeSandboxed(TaskLease lease, Path downloadedPlugin, long pluginBytes, AtomicBoolean cancelled)
 			throws IOException, InterruptedException {
 		try (OwnedAttemptWorkspace owned = OwnedAttemptWorkspace.create(sandboxRoot(), lease.jobId(),
 				lease.taskId() + "-" + lease.attempt(), workerId)) {
@@ -203,7 +205,7 @@ public final class WorkerAgent {
 			AtomicBoolean completed = new AtomicBoolean();
 			Path plugin = workspace.input().resolve("plugin.jar");
 			Files.copy(downloadedPlugin, plugin);
-			Map<String, String> parameters = prepareSandboxParameters(lease, workspace);
+			Map<String, String> parameters = prepareSandboxParameters(lease, workspace, context);
 			HostRequest hostRequest = new HostRequest(plugin.toString(), lease.pluginEntrypoint(), lease.pluginId(),
 					lease.pluginVersion(), lease.durationMillis(), parameters, workspace.output().toString());
 			Path requestFrame = workspace.input().resolve("request.ndjson");
@@ -236,7 +238,7 @@ public final class WorkerAgent {
 			if (result.exitCode() != 0 || !completed.get())
 				throw new IOException(
 						"Sandboxed plugin host exited with code " + result.exitCode() + diagnostic(result));
-			Response completion = post(taskPath(lease, "complete"), new TaskCompletion(lease.leaseToken()));
+			Response completion = post(taskPath(lease, "complete"), context.completion(pluginBytes));
 			requireStatus(completion, 204);
 			System.out.printf("Worker %s finished sandboxed task %s successfully%n", workerId, lease.taskId());
 		}
@@ -300,13 +302,13 @@ public final class WorkerAgent {
 		}
 	}
 
-	private Map<String, String> prepareSandboxParameters(TaskLease lease, AttemptWorkspace workspace)
-			throws IOException, InterruptedException {
+	private Map<String, String> prepareSandboxParameters(TaskLease lease, AttemptWorkspace workspace,
+			RemoteTaskContext context) throws IOException, InterruptedException {
 		Map<String, String> parameters = new HashMap<>(lease.parameters());
 		switch (lease.pluginId()) {
 			case "video-ffmpeg" -> {
 				parameters.put("inputPath",
-						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "input.mp4"));
+						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "input.mp4", context));
 				parameters.put("ffmpegCommand", requiredRuntime("ffmpeg"));
 				parameters.put("ffprobeCommand", requiredRuntime("ffprobe"));
 			}
@@ -314,12 +316,12 @@ public final class WorkerAgent {
 				int pageCount = Integer.parseInt(parameters.get("pageCount"));
 				for (int index = 0; index < pageCount; index++)
 					parameters.put("pagePath." + index, stageRemoteInput(parameters.remove("pageUrl." + index),
-							workspace.input(), "page-%06d.png".formatted(index)));
+							workspace.input(), "page-%06d.png".formatted(index), context));
 				parameters.put("tesseractCommand", requiredRuntime("tesseract"));
 			}
 			case "blender-render" -> {
 				parameters.put("inputPath",
-						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "scene.blend"));
+						stageRemoteInput(parameters.remove("inputUrl"), workspace.input(), "scene.blend", context));
 				parameters.put("blenderCommand", requiredRuntime("blender"));
 			}
 			case "sleep", "fractal-render" -> {
@@ -330,12 +332,15 @@ public final class WorkerAgent {
 		return Map.copyOf(parameters);
 	}
 
-	private String stageRemoteInput(String url, Path input, String fileName) throws IOException, InterruptedException {
+	private String stageRemoteInput(String url, Path input, String fileName, RemoteTaskContext context)
+			throws IOException, InterruptedException {
 		if (url == null || url.isBlank())
 			throw new IOException("Sandbox input URL is missing");
 		Path destination = input.resolve(fileName);
-		Files.write(destination, downloadBytes(http, resolveCoordinatorUri(server, url), Duration.ofMinutes(20),
-				"Sandbox input download"));
+		byte[] bytes = downloadBytes(http, resolveCoordinatorUri(server, url), Duration.ofMinutes(20),
+				"Sandbox input download");
+		Files.write(destination, bytes);
+		context.inputBytes.addAndGet(bytes.length);
 		return destination.toAbsolutePath().normalize().toString();
 	}
 
@@ -659,6 +664,8 @@ public final class WorkerAgent {
 	private final class RemoteTaskContext implements TaskContext {
 		private final TaskLease lease;
 		private final AtomicBoolean cancelled;
+		private final AtomicLong inputBytes = new AtomicLong();
+		private final AtomicLong outputBytes = new AtomicLong();
 
 		private RemoteTaskContext(TaskLease lease, AtomicBoolean cancelled) {
 			this.lease = lease;
@@ -686,12 +693,17 @@ public final class WorkerAgent {
 				HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
 				if (response.statusCode() != 204)
 					throw new IOException("Artifact upload returned HTTP " + response.statusCode());
+				outputBytes.addAndGet(Files.size(file));
 			} catch (IOException failure) {
 				throw new IllegalStateException("Could not publish artifact", failure);
 			} catch (InterruptedException interrupted) {
 				Thread.currentThread().interrupt();
 				throw new IllegalStateException("Artifact publication was interrupted", interrupted);
 			}
+		}
+
+		TaskCompletion completion(long pluginBytes) {
+			return new TaskCompletion(lease.leaseToken(), inputBytes.get(), outputBytes.get(), pluginBytes);
 		}
 
 		@Override

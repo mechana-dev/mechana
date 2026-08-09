@@ -33,6 +33,13 @@ the independent bandwidth of the worker fleet rather than concentrating all
 result bytes through one server. See [storage](storage.md) for provider roles,
 security layers, assembly placement, and the limits of the BitTorrent analogy.
 
+Accepted task completions also carry byte counters for staged inputs, published
+outputs, and downloaded plugin packages. The server aggregates only lease-fenced
+accepted attempts by worker and publishes `transfer-summary.json` with the completed
+job, so stale or retried attempts cannot inflate authoritative job totals. The
+summary identifies whether bulk artifacts followed server-worker or direct
+client-worker routes; it does not put the artifact bytes on the control plane.
+
 ## Locality and caching direction
 
 Immutable artifacts should have content-verifiable identities. A worker may keep

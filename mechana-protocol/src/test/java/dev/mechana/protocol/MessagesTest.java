@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.mechana.protocol.Messages.BlenderJobSubmitRequest;
 import dev.mechana.protocol.Messages.ClientVideoChunk;
 import dev.mechana.protocol.Messages.JobSubmitRequest;
+import dev.mechana.protocol.Messages.TaskCompletion;
 import dev.mechana.protocol.Messages.VideoJobSubmitRequest;
 import org.junit.jupiter.api.Test;
 
@@ -57,5 +58,17 @@ class MessagesTest {
 				100, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
 		assertDoesNotThrow(() -> new VideoJobSubmitRequest("input.mp4", 5, 1, 0.75, "client-local", "", chunks,
 				"http://client:49000/client-video/token/outputs/{index}", 1_000_000));
+	}
+
+	@Test
+	void validatesTransferCountersWhileKeepingLegacyCompletionsCompatible() {
+		TaskCompletion legacy = new TaskCompletion("lease-token");
+		assertEquals(0, legacy.inputBytes());
+		assertEquals(0, legacy.outputBytes());
+		assertEquals(0, legacy.pluginBytes());
+		assertDoesNotThrow(() -> new TaskCompletion("lease-token", 10, 20, 30));
+		assertThrows(IllegalArgumentException.class, () -> new TaskCompletion("lease-token", -1, 0, 0));
+		assertThrows(IllegalArgumentException.class, () -> new TaskCompletion("lease-token", 0, -1, 0));
+		assertThrows(IllegalArgumentException.class, () -> new TaskCompletion("lease-token", 0, 0, -1));
 	}
 }

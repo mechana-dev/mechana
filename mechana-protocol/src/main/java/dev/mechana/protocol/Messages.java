@@ -356,9 +356,14 @@ public final class Messages {
 		}
 	}
 
-	public record TaskCompletion(String leaseToken) {
+	public record TaskCompletion(String leaseToken, long inputBytes, long outputBytes, long pluginBytes) {
+		public TaskCompletion(String leaseToken) {
+			this(leaseToken, 0, 0, 0);
+		}
 		public TaskCompletion {
 			Objects.requireNonNull(leaseToken, "leaseToken");
+			if (inputBytes < 0 || outputBytes < 0 || pluginBytes < 0)
+				throw new IllegalArgumentException("Task transfer counters must not be negative");
 		}
 	}
 

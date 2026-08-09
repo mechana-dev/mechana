@@ -239,8 +239,9 @@ class MechanaServerDashboardTest {
 					TaskLease.class);
 			HttpRequest complete = HttpRequest
 					.newBuilder(base.resolve("/api/workers/worker-1/tasks/" + lease.taskId() + "/complete"))
-					.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers
-							.ofString(json.writeValueAsString(Map.of("leaseToken", lease.leaseToken()))))
+					.header("Content-Type", "application/json")
+					.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(Map.of("leaseToken",
+							lease.leaseToken(), "inputBytes", 10, "outputBytes", 20, "pluginBytes", 30))))
 					.build();
 			assertEquals(204, client.send(complete, HttpResponse.BodyHandlers.discarding()).statusCode());
 		}
@@ -261,6 +262,7 @@ class MechanaServerDashboardTest {
 			assertTrue(detail.contains("\"completed\":true"));
 			assertTrue(detail.contains("\"completedAt\":"));
 			assertTrue(detail.contains("job-summary.json"));
+			assertTrue(detail.contains("transfer-summary.json"));
 			assertTrue(detail.contains("\"provider\":\"server-local\""));
 			assertTrue(detail.contains("\"key\":\"jobs/" + jobId + "/artifacts/job-summary.json\""));
 			assertTrue(detail.contains("\"sha256\":"));
@@ -273,6 +275,15 @@ class MechanaServerDashboardTest {
 					HttpResponse.BodyHandlers.ofString());
 			assertEquals(200, artifact.statusCode());
 			assertTrue(artifact.body().contains(jobId));
+			HttpResponse<String> transfers = client.send(HttpRequest
+					.newBuilder(base.resolve("/api/jobs/" + jobId + "/artifacts/transfer-summary.json")).build(),
+					HttpResponse.BodyHandlers.ofString());
+			assertEquals(200, transfers.statusCode());
+			assertTrue(transfers.body().contains("\"topology\" : \"server-worker\""));
+			assertTrue(transfers.body().contains("\"worker\" : \"worker-1\""));
+			assertTrue(transfers.body().contains("\"inputBytes\" : 10"));
+			assertTrue(transfers.body().contains("\"outputBytes\" : 20"));
+			assertTrue(transfers.body().contains("\"pluginBytes\" : 30"));
 
 			HttpResponse<Void> purged = client.send(
 					HttpRequest.newBuilder(base.resolve("/api/jobs/" + jobId)).DELETE().build(),

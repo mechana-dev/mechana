@@ -23,6 +23,11 @@
   server-local jobs but cannot lease direct tasks. Google Drive, S3,
   and restart-resumable launcher assembly remain future work. Fractal, OCR, and
   Blender use the same direct transfer service and plugin-owned assembly model.
+- Updated workers report staged-input, published-output, and plugin-package byte
+  counts with task completion. The server aggregates accepted lease attempts per
+  compute node, logs terminal totals, and retains `transfer-summary.json` as a
+  normal completed artifact. Legacy workers remain compatible and contribute zero
+  counters until upgraded.
 
 Verified: 2026-08-09
 

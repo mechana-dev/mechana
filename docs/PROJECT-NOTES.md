@@ -1374,3 +1374,14 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Common launcher controls expose placement, scratch, output, and transfer host;
   the launcher displays SPLITTING during local preparation and ASSEMBLING while
   producing the final artifact. Sleep keeps irrelevant controls disabled.
+
+## 2026-08-09 05:45 EDT — Add per-worker transfer accounting
+
+- Added backward-compatible completion counters for bytes staged into worker
+  scratch, bytes successfully published by workers, and plugin-package downloads.
+- Aggregate only accepted lease completions, preventing stale attempts from
+  becoming part of authoritative job telemetry.
+- Log one terminal transfer total and publish a provider-backed
+  `transfer-summary.json` completed artifact with topology, directional routes,
+  totals, and per-worker breakdowns. Existing workers continue to run but report
+  zero counters until reinstalled.

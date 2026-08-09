@@ -59,6 +59,7 @@ import dev.mechana.plugins.video.VideoAssembler;
 import dev.mechana.plugins.video.VideoTypes;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayInputStream;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -133,6 +134,7 @@ public final class MechanaServer implements AutoCloseable {
 	private final ConcurrentMap<String, dev.mechana.api.ArtifactReference> blenderInputs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, BlenderJob> blenderJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, DirectClientJob> directClientJobs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, ConcurrentMap<String, TransferTotals>> jobTransfers = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, WorkerPresence> workers = new ConcurrentHashMap<>();
 	private volatile Runnable restartAction;
 	private volatile Runnable stopAction;
@@ -635,6 +637,7 @@ public final class MechanaServer implements AutoCloseable {
 			requirePost(exchange);
 			markWorkerSeen(workerId, null, Set.of());
 			String[] completedLease = new String[1];
+			TaskCompletion[] completedTransfer = new TaskCompletion[1];
 			boolean accepted = switch (action) {
 				case "heartbeat" -> {
 					TaskHeartbeat heartbeat = read(exchange, TaskHeartbeat.class);
@@ -647,6 +650,7 @@ public final class MechanaServer implements AutoCloseable {
 				case "complete" -> {
 					TaskCompletion completion = read(exchange, TaskCompletion.class);
 					completedLease[0] = completion.leaseToken();
+					completedTransfer[0] = completion;
 					yield scheduler.complete(workerId, taskId, completion.leaseToken());
 				}
 				case "fail" -> {
@@ -659,6 +663,8 @@ public final class MechanaServer implements AutoCloseable {
 				JobStatusResponse status = scheduler.statusForTask(taskId);
 				if (completedLease[0] != null)
 					recordDirectClientCompletion(status.jobId(), taskId, completedLease[0]);
+				if (completedTransfer[0] != null)
+					recordTransferCompletion(status.jobId(), workerId, completedTransfer[0]);
 				if ("complete".equals(action) && "ASSEMBLING".equals(scheduler.dashboard(status.jobId()).stage())) {
 					if (videoJobs.containsKey(status.jobId())) {
 						if (!videoJobs.get(status.jobId()).clientAssembly())
@@ -909,6 +915,13 @@ public final class MechanaServer implements AutoCloseable {
 		String name = video.taskArtifacts().get(taskId);
 		if (name != null)
 			video.acceptedLeaseHashes().put(name, sha256(leaseToken.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+	}
+
+	private void recordTransferCompletion(String jobId, String workerId, TaskCompletion completion) {
+		TransferTotals attempt = new TransferTotals(completion.inputBytes(), completion.outputBytes(),
+				completion.pluginBytes());
+		jobTransfers.computeIfAbsent(jobId, ignored -> new ConcurrentHashMap<>()).merge(workerId, attempt,
+				TransferTotals::plus);
 	}
 
 	private String submitFractal(FractalJobSubmitRequest request) throws IOException {
@@ -1467,10 +1480,11 @@ public final class MechanaServer implements AutoCloseable {
 
 	private void archiveIfTerminal(String jobId) {
 		InMemoryJobMonitor.Snapshot snapshot = scheduler.dashboard(jobId);
-		if (!isTerminal(snapshot.stage()))
+		if (!isTerminal(snapshot.stage()) || completedJobs.find(jobId).isPresent())
 			return;
 		try {
 			completedJobs.archive(snapshot);
+			publishTransferSummary(jobId, snapshot);
 			VideoJob video = videoJobs.get(jobId);
 			if (video != null && "SUCCEEDED".equals(snapshot.stage()) && video.finalArtifact() != null) {
 				if ("server-local".equals(video.finalArtifact().providerId()))
@@ -1490,6 +1504,7 @@ public final class MechanaServer implements AutoCloseable {
 		} catch (IOException failure) {
 			System.err.printf("Could not archive completed job %s: %s%n", jobId, failure.getMessage());
 		} finally {
+			jobTransfers.remove(jobId);
 			directClientJobs.remove(jobId);
 			VideoJob video = videoJobs.remove(jobId);
 			if (video != null) {
@@ -1518,6 +1533,32 @@ public final class MechanaServer implements AutoCloseable {
 				deleteTree(blender.scratch());
 			}
 		}
+	}
+
+	private void publishTransferSummary(String jobId, InMemoryJobMonitor.Snapshot snapshot) throws IOException {
+		Map<String, TransferTotals> nodes = Map.copyOf(jobTransfers.getOrDefault(jobId, new ConcurrentHashMap<>()));
+		TransferTotals total = nodes.values().stream().reduce(new TransferTotals(0, 0, 0), TransferTotals::plus);
+		boolean direct = "client-direct".equals(snapshot.details().get("dataPlane"));
+		Map<String, Object> document = new java.util.LinkedHashMap<>();
+		document.put("jobId", jobId);
+		document.put("topology", direct ? "client-worker-direct" : "server-worker");
+		document.put("inputRoute", direct ? "client-to-worker" : "server-to-worker");
+		document.put("outputRoute", direct ? "worker-to-client" : "worker-to-server");
+		document.put("inputBytes", total.inputBytes());
+		document.put("outputBytes", total.outputBytes());
+		document.put("pluginBytes", total.pluginBytes());
+		document.put("nodes", nodes.entrySet().stream().sorted(Map.Entry.comparingByKey())
+				.map(entry -> Map.of("worker", entry.getKey(), "inputBytes", entry.getValue().inputBytes(),
+						"outputBytes", entry.getValue().outputBytes(), "pluginBytes", entry.getValue().pluginBytes()))
+				.toList());
+		byte[] bytes = json.writerWithDefaultPrettyPrinter().writeValueAsBytes(document);
+		dev.mechana.api.ArtifactReference artifact;
+		try (InputStream input = new ByteArrayInputStream(bytes)) {
+			artifact = defaultArtifactStore.put("jobs/" + jobId + "/artifacts/transfer-summary.json", input);
+		}
+		completedJobs.registerArtifact(jobId, "transfer-summary.json", artifact);
+		System.out.printf("Job %s transfer summary: topology=%s input=%d output=%d plugin=%d bytes nodes=%d%n", jobId,
+				document.get("topology"), total.inputBytes(), total.outputBytes(), total.pluginBytes(), nodes.size());
 	}
 
 	private void registerCompletedArtifacts(String jobId, Map<String, dev.mechana.api.ArtifactReference> artifacts)
@@ -1896,6 +1937,13 @@ public final class MechanaServer implements AutoCloseable {
 
 	private record DirectClientJob(Map<String, String> taskArtifacts,
 			ConcurrentMap<String, String> acceptedLeaseHashes) {
+	}
+
+	private record TransferTotals(long inputBytes, long outputBytes, long pluginBytes) {
+		TransferTotals plus(TransferTotals other) {
+			return new TransferTotals(Math.addExact(inputBytes, other.inputBytes),
+					Math.addExact(outputBytes, other.outputBytes), Math.addExact(pluginBytes, other.pluginBytes));
+		}
 	}
 
 	private record WorkerActivity(String jobId, String plugin, int progress) {
