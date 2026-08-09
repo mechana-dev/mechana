@@ -1,6 +1,6 @@
 # Media plugin
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-09
 
 The first local media-plugin slice is the reference partitioned-workload plugin.
 Its implementation lives in `plugins/video-ffmpeg-plugin`. It invokes FFprobe and
@@ -15,11 +15,14 @@ artifact only for the local video demo/composition entry points.
 3. Partition tasks invoke FFmpeg with one identical normalized runtime signature
    for the entire video job.
 4. Each successful partition publishes an ordered, content-verifiable artifact.
-5. Local assembly concatenates video-only Matroska intermediates, copies the one
-   optional audio stream as a separate whole-stream artifact, and remuxes both into
-   MP4 or Matroska.
+5. Distributed assembly opens every independently encoded Matroska partition as a
+   separate decoder input and emits one coherent HEVC stream. It never stream-copy
+   concatenates HEVC produced by heterogeneous workers. The one optional audio
+   stream is selected once from the requested source range and copied into the
+   final MP4 or Matroska container.
 6. FFprobe validates container, HEVC codec, duration tolerance, dimensions, and
-   expected video/audio stream presence.
+   expected video/audio stream presence; FFmpeg then decodes every final video
+   frame and treats any decoder diagnostic as validation failure.
 
 The separate audio path is an intentional first-pass reliability choice: segment
 workers do not independently cut audio, avoiding timestamp gaps and overlaps at
@@ -36,6 +39,11 @@ the target duration; the preceding segment also cannot exceed one and a half tim
 the target. Sparse or badly clustered source keyframes may therefore
 produce fewer segments, including a single segment, rather than misleadingly
 creating tiny or severely unbalanced work units.
+
+Submissions may select a nonnegative start offset in seconds. Zero is the default.
+Both server-local and client-local preparation use the same plugin-owned clip
+command before keyframe-aware planning, and client-local audio assembly applies
+the same offset to the original source.
 
 ## Runtime and process invariants
 

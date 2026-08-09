@@ -18,6 +18,9 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
   information, and resource guidance from server-provided descriptors.
 - Includes descriptors for sleep, FFmpeg video, fractal render, Tesseract OCR,
   and Blender render and submits through their existing server endpoints.
+- FFmpeg video includes `Start offset in seconds`, default `0`, which selects the
+  beginning of the requested compression range for server-local and client-local
+  jobs. Duration is measured from that offset.
 - Presents every capability with the same `Tasks (0 = fleet)` control. Zero
   creates one task per currently compatible worker, capped by finite work such as
   pages, images, or frames; a positive value requests that explicit task count.

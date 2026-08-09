@@ -114,9 +114,9 @@ public final class TwoHostVideoJobMain {
 		executeSegments(input, plan, commands, runner, remoteHost, remotePort, localAddress, remoteAddress, bitrate,
 				monitor);
 		monitor.onStage("ASSEMBLING");
-		new VideoAssembler(commands, runner).assemble(input, output, plan, CancellationToken.NEVER);
+		new VideoAssembler(commands, runner).assembleDistributed(input, output, plan, bitrate, CancellationToken.NEVER);
 		monitor.onStage("VALIDATING");
-		new FinalValidator(probe).validateSmallerThanInput(output, plan);
+		new FinalValidator(probe, commands, runner).validateSmallerThanInput(output, plan);
 		monitor.onStage("SUCCEEDED");
 		cleanupRemote(remoteHost, remotePort, runner, options.processTimeout());
 	}

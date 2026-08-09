@@ -787,11 +787,13 @@ public final class MechanaServer implements AutoCloseable {
 		try {
 			int taskCount = request.segmentCount() > 0 ? request.segmentCount() : compatibleWorkerCount("video-ffmpeg");
 			ExternalProcessRunner runner = new ExternalProcessRunner();
-			runner.run(
-					List.of("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", source.toString(), "-t",
-							Double.toString(request.durationSeconds()), "-c", "copy", preparedInput.toString()),
-					Duration.ofMinutes(15), CancellationToken.NEVER, ignored -> {
+			FfmpegCommands commands = new FfmpegCommands("ffmpeg", "ffprobe");
+			var prepared = runner.run(commands.prepareClip(source, request.startOffsetSeconds(),
+					request.durationSeconds(), preparedInput), Duration.ofMinutes(15), CancellationToken.NEVER,
+					ignored -> {
 					});
+			if (prepared.exitCode() != 0 || !prepared.stderr().isBlank())
+				throw new IOException("Video input preparation failed: " + prepared.stderr().strip());
 			if (uploadedSource != null)
 				deleteArtifactQuietly(uploadedSource);
 			dev.mechana.api.ArtifactReference sourceArtifact;
@@ -799,7 +801,6 @@ public final class MechanaServer implements AutoCloseable {
 				sourceArtifact = defaultArtifactStore.put("video-staging/" + workToken + "/input/source.mp4", bytes);
 			}
 			stageArtifact(sourceArtifact, input);
-			FfmpegCommands commands = new FfmpegCommands("ffmpeg", "ffprobe");
 			MediaProbe probe = new MediaProbe(commands, runner);
 			VideoTypes.MediaInfo info = probe.inspect(input, Duration.ofMinutes(5));
 			VideoTypes.Options options = new VideoTypes.Options(VideoTypes.Container.MKV,
@@ -837,8 +838,9 @@ public final class MechanaServer implements AutoCloseable {
 						Map.of("range", segment.startSeconds() + "–" + segment.endSeconds() + "s")));
 			}
 			String jobId = scheduler.submitVideo(work,
-					Map.of("source", source.toString(), "inputDuration", "%.1fs".formatted(info.durationSeconds()),
-							"targetSizeRatio", Double.toString(request.targetSizeRatio())),
+					Map.of("source", source.toString(), "startOffset", "%.1fs".formatted(request.startOffsetSeconds()),
+							"inputDuration", "%.1fs".formatted(info.durationSeconds()), "targetSizeRatio",
+							Double.toString(request.targetSizeRatio())),
 					videoPluginLocation);
 			videoJobs.put(jobId,
 					new VideoJob(List.copyOf(inputTokens), sourceArtifact, List.copyOf(workerInputs), input, output,
@@ -888,8 +890,9 @@ public final class MechanaServer implements AutoCloseable {
 		}
 		VideoTypes.Plan plan = new VideoTypes.Plan(info, options, List.copyOf(segments), scratch);
 		String jobId = scheduler.submitVideo(work,
-				Map.of("source", request.sourcePath(), "inputDuration", "%.1fs".formatted(request.durationSeconds()),
-						"targetSizeRatio", Double.toString(request.targetSizeRatio()), "dataPlane", "client-direct"),
+				Map.of("source", request.sourcePath(), "startOffset", "%.1fs".formatted(request.startOffsetSeconds()),
+						"inputDuration", "%.1fs".formatted(request.durationSeconds()), "targetSizeRatio",
+						Double.toString(request.targetSizeRatio()), "dataPlane", "client-direct"),
 				videoPluginLocation);
 		Map<String, String> taskArtifacts = new HashMap<>();
 		for (int index = 0; index < segments.size(); index++)
@@ -1276,9 +1279,12 @@ public final class MechanaServer implements AutoCloseable {
 			}
 			FfmpegCommands commands = new FfmpegCommands("ffmpeg", "ffprobe");
 			ExternalProcessRunner runner = new ExternalProcessRunner();
-			new VideoAssembler(commands, runner).assemble(video.input(), video.output(), video.plan(),
-					CancellationToken.NEVER);
-			new FinalValidator(new MediaProbe(commands, runner)).validateSmallerThanInput(video.output(), video.plan());
+			long bitrate = targetVideoBitrate(video.plan().input(),
+					Double.parseDouble(scheduler.dashboard(jobId).details().get("targetSizeRatio")));
+			new VideoAssembler(commands, runner).assembleDistributed(video.input(), video.output(), video.plan(),
+					bitrate, CancellationToken.NEVER);
+			new FinalValidator(new MediaProbe(commands, runner), commands, runner)
+					.validateSmallerThanInput(video.output(), video.plan());
 			try (InputStream bytes = Files.newInputStream(video.output())) {
 				video.finalArtifact(
 						defaultArtifactStore.put("jobs/" + jobId + "/artifacts/compressed-first-minute.mkv", bytes));

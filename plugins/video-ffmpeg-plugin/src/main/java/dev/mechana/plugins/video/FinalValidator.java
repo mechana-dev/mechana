@@ -22,8 +22,12 @@ import java.nio.file.Path;
 
 public final class FinalValidator {
 	private final MediaProbe probe;
-	public FinalValidator(MediaProbe probe) {
+	private final FfmpegCommands commands;
+	private final ExternalProcessRunner runner;
+	public FinalValidator(MediaProbe probe, FfmpegCommands commands, ExternalProcessRunner runner) {
 		this.probe = probe;
+		this.commands = commands;
+		this.runner = runner;
 	}
 
 	public VideoTypes.MediaInfo validate(Path output, VideoTypes.Plan plan) throws IOException, InterruptedException {
@@ -42,6 +46,11 @@ public final class FinalValidator {
 			fail("Output duration outside tolerance");
 		if (!Files.isRegularFile(output) || Files.size(output) == 0)
 			fail("Output is empty");
+		var decoded = runner.run(commands.decodeValidate(output), plan.options().processTimeout(),
+				CancellationToken.NEVER, ignored -> {
+				});
+		if (decoded.exitCode() != 0 || !decoded.stderr().isBlank())
+			fail("Output video does not decode cleanly: " + decoded.stderr().strip());
 		return actual;
 	}
 

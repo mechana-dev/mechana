@@ -1400,3 +1400,20 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Counters intentionally exclude HTTP/TLS framing, small control messages, and
   local preparation/assembly disk I/O. They include only accepted task attempts,
   so stale completion reports cannot affect the durable totals.
+
+## 2026-08-09 06:25 EDT — Prevent distributed HEVC assembly corruption
+
+- Diagnosed three nominally successful client-local FFmpeg outputs containing
+  1,201 video packets but only 217, 892, and 788 decodable frames. FFmpeg reported
+  invalid HEVC alignment bits and missing reference-picture state.
+- Replaced stream-copy concatenation of independently encoded worker HEVC streams
+  with assembly that decodes each partition through its own input context and
+  emits one coherent, size-constrained HEVC stream. The same safe assembly command
+  is used by coordinator and client placement.
+- Added full-frame final decode validation. Decoder diagnostics now fail assembly
+  even when FFmpeg returns a successful process exit code, closing the validation
+  gap that allowed corrupt outputs into completed history.
+- Added a nonnegative `Start offset in seconds` video option, default `0`. The
+  plugin-owned preparation command applies the range consistently for server-local
+  and client-local splitting, while client-local final audio selection uses the
+  same offset.

@@ -76,7 +76,7 @@ public final class LocalVideoCompression {
 		observer.onStage("ASSEMBLING");
 		new VideoAssembler(commands, runner).assemble(input, output, plan, cancellation);
 		observer.onStage("VALIDATING");
-		VideoTypes.MediaInfo result = new FinalValidator(probe).validate(output, plan);
+		VideoTypes.MediaInfo result = new FinalValidator(probe, commands, runner).validate(output, plan);
 		observer.onStage("SUCCEEDED");
 		return result;
 	}

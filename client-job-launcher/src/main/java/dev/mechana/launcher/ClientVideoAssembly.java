@@ -9,10 +9,12 @@ package dev.mechana.launcher;
 import dev.mechana.protocol.Messages.ArtifactReference;
 import dev.mechana.protocol.Messages.ClientAssemblyCompletion;
 import dev.mechana.protocol.Messages.VideoAssemblyManifest;
+import dev.mechana.plugins.video.FfmpegCommands;
+import dev.mechana.plugins.video.CancellationToken;
+import dev.mechana.plugins.video.ExternalProcessRunner;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -36,7 +38,8 @@ final class ClientVideoAssembly {
 	}
 
 	Path assemble(URI server, String jobId, Path source, Path scratchDirectory, Path outputDirectory,
-			double durationSeconds) throws IOException, InterruptedException {
+			double startOffsetSeconds, double durationSeconds, long videoBitrate)
+			throws IOException, InterruptedException {
 		Files.createDirectories(scratchDirectory);
 		Files.createDirectories(outputDirectory);
 		Path jobScratch = scratchDirectory.resolve(jobId).toAbsolutePath().normalize();
@@ -51,27 +54,13 @@ final class ClientVideoAssembly {
 			verify(destination, artifact);
 			segments.add(destination);
 		}
-		Path concatManifest = jobScratch.resolve("segments.ffconcat");
-		StringBuilder text = new StringBuilder("ffconcat version 1.0\n");
-		for (Path segment : segments)
-			text.append("file '").append(segment.toString().replace("'", "'\\''")).append("'\n");
-		Files.writeString(concatManifest, text, StandardCharsets.UTF_8);
-		String ffmpeg = ffmpegExecutable();
-		Path video = jobScratch.resolve("video.mkv");
-		run(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i",
-				concatManifest.toString(), "-map", "0:v:0", "-c", "copy", video.toString()));
-		Path output = finalOutputPath(outputDirectory, jobId);
-		run(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", video.toString(), "-i",
-				source.toAbsolutePath().normalize().toString(), "-map", "0:v:0", "-map", "1:a:0?", "-t",
-				Double.toString(durationSeconds), "-c", "copy", "-f", "matroska", output.toString()));
-		String sha256 = sha256(output);
-		client.completeClientAssembly(server, jobId, new ClientAssemblyCompletion("client-local", output.toString(),
-				Objects.requireNonNull(output.getFileName()).toString(), Files.size(output), sha256));
-		return output;
+		return assemblePaths(server, jobId, source, outputDirectory, startOffsetSeconds, durationSeconds, videoBitrate,
+				jobScratch, segments);
 	}
 
 	Path assembleDirect(URI server, String jobId, Path source, Path scratchDirectory, Path outputDirectory,
-			double durationSeconds, ClientArtifactDataPlane dataPlane) throws IOException, InterruptedException {
+			double startOffsetSeconds, double durationSeconds, long videoBitrate, ClientArtifactDataPlane dataPlane)
+			throws IOException, InterruptedException {
 		Files.createDirectories(scratchDirectory);
 		Files.createDirectories(outputDirectory);
 		Path jobScratch = scratchDirectory.resolve(jobId).toAbsolutePath().normalize();
@@ -87,7 +76,8 @@ final class ClientVideoAssembly {
 				verify(artifact.path(), identity);
 				segments.add(artifact.path());
 			}
-			return assemblePaths(server, jobId, source, outputDirectory, durationSeconds, jobScratch, segments);
+			return assemblePaths(server, jobId, source, outputDirectory, startOffsetSeconds, durationSeconds,
+					videoBitrate, jobScratch, segments);
 		} finally {
 			deleteTree(jobScratch);
 		}
@@ -115,21 +105,19 @@ final class ClientVideoAssembly {
 		});
 	}
 
-	private Path assemblePaths(URI server, String jobId, Path source, Path outputDirectory, double durationSeconds,
-			Path jobScratch, List<Path> segments) throws IOException, InterruptedException {
-		Path concatManifest = jobScratch.resolve("segments.ffconcat");
-		StringBuilder text = new StringBuilder("ffconcat version 1.0\n");
-		for (Path segment : segments)
-			text.append("file '").append(segment.toString().replace("'", "'\\''")).append("'\n");
-		Files.writeString(concatManifest, text, StandardCharsets.UTF_8);
+	private Path assemblePaths(URI server, String jobId, Path source, Path outputDirectory, double startOffsetSeconds,
+			double durationSeconds, long videoBitrate, Path jobScratch, List<Path> segments)
+			throws IOException, InterruptedException {
 		String ffmpeg = ffmpegExecutable();
 		Path video = jobScratch.resolve("video.mkv");
-		run(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i",
-				concatManifest.toString(), "-map", "0:v:0", "-c", "copy", video.toString()));
+		FfmpegCommands commands = new FfmpegCommands(ffmpeg, "ffprobe");
+		run(commands.safeConcat(segments, video, videoBitrate, "slow"));
 		Path output = finalOutputPath(outputDirectory, jobId);
-		run(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", video.toString(), "-i",
-				source.toAbsolutePath().normalize().toString(), "-map", "0:v:0", "-map", "1:a:0?", "-t",
-				Double.toString(durationSeconds), "-c", "copy", "-f", "matroska", output.toString()));
+		run(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", video.toString(), "-ss",
+				Double.toString(startOffsetSeconds), "-i", source.toAbsolutePath().normalize().toString(), "-map",
+				"0:v:0", "-map", "1:a:0?", "-t", Double.toString(durationSeconds), "-c", "copy", "-f", "matroska",
+				output.toString()));
+		validateDecode(commands, output);
 		String sha256 = sha256(output);
 		client.completeClientAssembly(server, jobId, new ClientAssemblyCompletion("client-local", output.toString(),
 				Objects.requireNonNull(output.getFileName()).toString(), Files.size(output), sha256));
@@ -166,6 +154,14 @@ final class ClientVideoAssembly {
 		} finally {
 			Files.deleteIfExists(log);
 		}
+	}
+
+	private static void validateDecode(FfmpegCommands commands, Path output) throws IOException, InterruptedException {
+		var decoded = new ExternalProcessRunner().run(commands.decodeValidate(output), Duration.ofHours(6),
+				CancellationToken.NEVER, ignored -> {
+				});
+		if (decoded.exitCode() != 0 || !decoded.stderr().isBlank())
+			throw new IOException("Final video does not decode cleanly: " + decoded.stderr().strip());
 	}
 
 	@SuppressFBWarnings(value = "DMI_HARDCODED_ABSOLUTE_FILENAME", justification = "Standard Homebrew FFmpeg locations")

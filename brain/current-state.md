@@ -33,6 +33,12 @@
   16,717,070 output bytes directly to the client, and the server supplied 438,616
   plugin bytes. The server relayed none of the 46,350,899 measured video-artifact
   bytes; client-local assembly produced a 19,118,980-byte final MKV.
+- Distributed FFmpeg assembly no longer stream-copy concatenates independently
+  encoded HEVC partitions. Each partition is decoded in its own input context and
+  assembly emits one coherent HEVC stream, preventing heterogeneous worker codec
+  parameters/reference state from corrupting later frames. Final validation fully
+  decodes the video and rejects any decoder error. Video submissions also expose a
+  nonnegative start offset in seconds, defaulting to zero, for both placements.
 
 Verified: 2026-08-09
 

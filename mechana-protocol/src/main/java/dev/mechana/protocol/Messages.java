@@ -144,16 +144,16 @@ public final class Messages {
 
 	public record VideoJobSubmitRequest(String sourcePath, double durationSeconds, int segmentCount,
 			double targetSizeRatio, String storageProvider, String sourceUploadToken,
-			List<ClientVideoChunk> clientChunks, String clientOutputUrl, long videoBitrate) {
+			List<ClientVideoChunk> clientChunks, String clientOutputUrl, long videoBitrate, double startOffsetSeconds) {
 		public VideoJobSubmitRequest(String sourcePath, double durationSeconds, int segmentCount,
 				double targetSizeRatio) {
-			this(sourcePath, durationSeconds, segmentCount, targetSizeRatio, "server-local", "", List.of(), "", 0);
+			this(sourcePath, durationSeconds, segmentCount, targetSizeRatio, "server-local", "", List.of(), "", 0, 0);
 		}
 
 		public VideoJobSubmitRequest(String sourcePath, double durationSeconds, int segmentCount,
 				double targetSizeRatio, String storageProvider, String sourceUploadToken) {
 			this(sourcePath, durationSeconds, segmentCount, targetSizeRatio, storageProvider, sourceUploadToken,
-					List.of(), "", 0);
+					List.of(), "", 0, 0);
 		}
 
 		public VideoJobSubmitRequest {
@@ -162,7 +162,8 @@ public final class Messages {
 			sourceUploadToken = sourceUploadToken == null ? "" : sourceUploadToken;
 			clientChunks = clientChunks == null ? List.of() : List.copyOf(clientChunks);
 			clientOutputUrl = clientOutputUrl == null ? "" : clientOutputUrl;
-			if (durationSeconds <= 0 || segmentCount < 0 || targetSizeRatio <= 0 || targetSizeRatio >= 1)
+			if (durationSeconds <= 0 || startOffsetSeconds < 0 || segmentCount < 0 || targetSizeRatio <= 0
+					|| targetSizeRatio >= 1)
 				throw new IllegalArgumentException("Invalid video job options");
 			if (!Set.of("server-local", "client-local").contains(storageProvider))
 				throw new IllegalArgumentException("Unsupported video storage provider: " + storageProvider);

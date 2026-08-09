@@ -57,7 +57,9 @@ class MessagesTest {
 		var chunks = java.util.List.of(new ClientVideoChunk("http://client:49000/client-video/token/chunks/0", 0, 5,
 				100, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
 		assertDoesNotThrow(() -> new VideoJobSubmitRequest("input.mp4", 5, 1, 0.75, "client-local", "", chunks,
-				"http://client:49000/client-video/token/outputs/{index}", 1_000_000));
+				"http://client:49000/client-video/token/outputs/{index}", 1_000_000, 12.5));
+		assertThrows(IllegalArgumentException.class, () -> new VideoJobSubmitRequest("input.mp4", 5, 1, 0.75,
+				"client-local", "", chunks, "http://client:49000/client-video/token/outputs/{index}", 1_000_000, -1));
 	}
 
 	@Test
