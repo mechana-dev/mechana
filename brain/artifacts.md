@@ -67,17 +67,17 @@ assembly. Those SCP operations are explicit test scaffolding: they do not provid
 stable artifact identities, checksums, atomic publication, or provider-managed
 retention.
 
-The distributed sleep/server slice now has a small server-local retention adapter:
-each terminal job owns a directory containing an atomically published dashboard
-snapshot and an `artifacts/` subtree. The detailed dashboard enumerates regular
-files in that subtree as downloads, and purge deletes the whole owned job directory.
-This establishes restart persistence and ownership-aware cleanup, but it is not yet
-the storage-neutral, checksum-addressed artifact provider accepted above.
+The distributed Sleep slice publishes its terminal `job-summary.json` through
+`ArtifactStore`; completed history reports the same provider/key/size/SHA-256
+shape as every other artifact while the dashboard snapshot remains control-plane
+state. Purge still deletes the server-owned job directory.
 
-The Blender slice uses a server-local packed `.blend` as immutable input,
-server-mediated HTTP copies as task inputs, lease-fenced ZIP batches as partition
-outputs, and a validated MP4 as the retained final artifact. The input is currently
-downloaded once per work unit rather than addressed and cached once per worker.
+Fractal, OCR, and Blender publish lease-fenced ZIP batches as artifact references,
+stage and verify them into private assembly scratch, and publish final result trees
+through the output store. OCR rasterized page inputs and the packed Blender scene
+are immutable artifacts served with size/SHA metadata; workers verify those values
+while staging local tool inputs. Inputs are still downloaded once per work unit
+rather than cached once per worker.
 # Launcher presentation
 
 Client job history presents artifacts as provider, stable key, size, and an

@@ -4,9 +4,12 @@
 
 - The seven-file storage foundation is rebased on the post-sandbox `main` line.
 - `server-local` remains the default input/intermediate/output provider.
-- Scheduler-managed FFmpeg video is the first workload migrated end to end across
-  source ingest, worker inputs, lease-fenced output publication, assembly staging,
-  final publication, and completed-artifact metadata.
+- All five concrete workloads use the server-local artifact provider at their
+  applicable platform boundaries. FFmpeg, Fractal, OCR, and Blender publish
+  lease-fenced intermediates, verify references during assembly staging, and
+  retain provider/key/size/SHA-256 final metadata. OCR page images and Blender
+  scenes are artifact-backed inputs; Sleep publishes its terminal summary through
+  the same completion artifact path.
 - Plugin code and scheduler work specifications still receive URLs and staged
   local paths, never server-local keys or provider APIs.
 - FFmpeg jobs may alternatively select `client-local` in the Client Job Launcher.
@@ -14,10 +17,12 @@
   URLs directly to compatible workers, accepts lease-identified worker outputs into
   client scratch, verifies the accepted outputs, assembles with local FFmpeg, and
   publishes provider/key/size/SHA-256 metadata for the client-owned result.
-- Direct client-local FFmpeg jobs require updated workers advertising
-  `storage.client-direct-video.v1`; older workers remain compatible with other jobs
-  but cannot lease these tasks. Google Drive, S3, restart-resumable launcher
-  assembly, and client-local support for other workloads remain future work.
+- Direct client-local FFmpeg jobs require updated workers advertising the generic
+  `storage.client-direct-artifacts.v1` capability; the legacy video capability is
+  still advertised for compatibility. Older workers remain compatible with
+  server-local jobs but cannot lease direct tasks. Google Drive, S3,
+  restart-resumable launcher assembly, and client-local assembly adapters for
+  Fractal, OCR, and Blender remain future work.
 
 Verified: 2026-08-08
 
@@ -58,8 +63,9 @@ This file reports repository evidence, not desired future status.
   and provider-aware artifact references, aborts jobs, and purges
   selected or all completed server-owned history after confirmation. Descriptors
   currently come from a server-side composition catalog rather than plugin manifests.
-  FFmpeg client-local submissions upload their selected source; other file fields
-  remain server-readable paths, and remote authenticated operation is not established.
+  FFmpeg client-local submissions serve prepared chunks directly to compatible
+  workers; other file fields remain server-readable paths, and remote authenticated
+  operation is not established.
 - Launcher capability labels omit transient worker counts. All five submission
   forms expose `Tasks (0 = fleet)` consistently; zero resolves server-side to one
   task per currently compatible worker, capped by the job's finite work units.
@@ -248,16 +254,16 @@ This file reports repository evidence, not desired future status.
   deterministically divides a requested image count across an explicit or
   fleet-derived task count, renders batched Mandelbrot/Julia PNGs on compatible
   workers, and reports scanline/image progress through the generic dashboard.
-  Lease-fenced batch ZIPs are assembled and validated server-side through plugin
-  code. Completed jobs publish every PNG plus a manifest, contact sheet, and
-  complete collection ZIP as durable downloadable artifacts.
-- A scheduler-managed `ocr-tesseract` path accepts a server-local PDF, rasterizes
-  grayscale pages server-side with PDFBox, deterministically batches pages, sends
-  workers only their assigned images, invokes external Tesseract with cancellation
+  Lease-fenced batch ZIP artifact references are staged, assembled, and validated
+  server-side through plugin code. Completed jobs publish every PNG plus a manifest,
+  contact sheet, and complete collection ZIP with provider/key/size/SHA metadata.
+- A scheduler-managed `ocr-tesseract` path accepts a server-readable PDF, rasterizes
+  grayscale pages server-side with PDFBox, publishes them as input artifacts,
+  deterministically batches pages, sends workers only their assigned staged images, invokes external Tesseract with cancellation
   and timeout handling, and assembles ordered Markdown, Unicode LaTeX source,
   and raw page text as durable artifacts.
-- A scheduler-managed `blender-render` path accepts one server-local packed
-  `.blend`, deterministically batches an explicit frame range, renders PNG frames
+- A scheduler-managed `blender-render` path ingests one server-readable packed
+  `.blend` as an immutable artifact, deterministically batches an explicit frame range, renders PNG frames
   through headless CPU-only Cycles on workers, validates the complete ordered frame
   set, assembles an H.265 MP4 with FFmpeg, and archives the final movie. A
   three-worker MBA proof rendered one Junkshop frame per worker and completed

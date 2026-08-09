@@ -1344,3 +1344,19 @@ cloud providers remain future direction; see `brain/current-state.md` and
   now have the form `<selected-output>/<job-id>/compressed-<job-id>.mkv`.
 - Applied the same layout to both direct and legacy client-local assembly paths,
   and added regression coverage for the layout and traversal rejection.
+
+## 2026-08-09 03:35:00 EDT — Migrate remaining plugins to artifact storage
+
+- Extracted the requester-hosted direct transfer service from the FFmpeg-specific
+  class into a generic client artifact data plane. Updated workers advertise
+  `storage.client-direct-artifacts.v1`, restrict destinations to the authorized
+  origin and safe artifact namespace, and retain the legacy video capability.
+- Migrated Fractal batches and result trees, OCR page inputs/batches/results, and
+  Blender scene inputs/frame batches/results through `ArtifactStore` and
+  `ArtifactReference` boundaries. Assembly stages verified size/SHA-256 bytes into
+  private scratch before plugin or native-tool use.
+- Published Sleep's completed `job-summary.json` through the same artifact store
+  so completed history consistently records provider/key/size/SHA-256 metadata.
+- Preserved `server-local` as the default and existing-worker compatibility for
+  those jobs. Direct client-local assembly remains implemented only for FFmpeg;
+  Fractal, OCR, and Blender launcher assembly adapters are explicitly deferred.

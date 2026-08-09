@@ -141,8 +141,7 @@ final class ClientArtifactDataPlane implements AutoCloseable {
 
 	private void handle(HttpExchange exchange) throws IOException {
 		try {
-			String suffix = exchange.getRequestURI().getPath()
-					.substring(("/client-artifacts/" + token + "/").length());
+			String suffix = exchange.getRequestURI().getPath().substring(("/client-artifacts/" + token + "/").length());
 			if ("GET".equals(exchange.getRequestMethod()) && suffix.startsWith("chunks/")) {
 				int index = Integer.parseInt(suffix.substring("chunks/".length()));
 				Path chunk = chunks.get(index);

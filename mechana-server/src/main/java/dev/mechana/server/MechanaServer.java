@@ -717,8 +717,7 @@ public final class MechanaServer implements AutoCloseable {
 			else
 				throw new IllegalArgumentException("Unexpected task artifact");
 			try (InputStream input = exchange.getRequestBody()) {
-				publications.put(name,
-						defaultArtifactStore.put("jobs/" + jobId + "/intermediate/" + name, input));
+				publications.put(name, defaultArtifactStore.put("jobs/" + jobId + "/intermediate/" + name, input));
 			}
 			sendEmpty(exchange, 204);
 		}
@@ -1142,8 +1141,7 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private void serveMappedArtifact(HttpExchange exchange, String prefix,
-			Map<String, dev.mechana.api.ArtifactReference> inputs,
-			String contentType) throws IOException {
+			Map<String, dev.mechana.api.ArtifactReference> inputs, String contentType) throws IOException {
 		if (!"GET".equals(exchange.getRequestMethod())) {
 			sendEmpty(exchange, 405);
 			return;
@@ -1250,8 +1248,8 @@ public final class MechanaServer implements AutoCloseable {
 			List<Path> batches = stagePublishedBatches(fractal.batches(), fractal.scratch().resolve("batches"));
 			FractalJobSubmitRequest request = fractal.request();
 			Path result = fractal.scratch().resolve("result");
-			new FractalCollectionAssembler().assemble(batches, result,
-					request.imageCount(), request.width(), request.height(), request.maxIterations(), request.seed());
+			new FractalCollectionAssembler().assemble(batches, result, request.imageCount(), request.width(),
+					request.height(), request.maxIterations(), request.seed());
 			publishResultTree(jobId, result, fractal.outputs());
 			scheduler.finishAssembly(jobId, null);
 		} catch (IOException failure) {
@@ -1266,8 +1264,8 @@ public final class MechanaServer implements AutoCloseable {
 		try {
 			List<Path> batches = stagePublishedBatches(ocr.batches(), ocr.scratch().resolve("batches"));
 			Path result = ocr.scratch().resolve("result");
-			new OcrMarkdownAssembler().assemble(batches, result, ocr.firstPage(),
-					ocr.pageCount(), ocr.request().title());
+			new OcrMarkdownAssembler().assemble(batches, result, ocr.firstPage(), ocr.pageCount(),
+					ocr.request().title());
 			publishResultTree(jobId, result, ocr.outputs());
 			scheduler.finishAssembly(jobId, null);
 		} catch (IOException failure) {
@@ -1283,8 +1281,8 @@ public final class MechanaServer implements AutoCloseable {
 			List<Path> batches = stagePublishedBatches(blender.batches(), blender.scratch().resolve("batches"));
 			BlenderJobSubmitRequest request = blender.request();
 			Path result = blender.scratch().resolve("result");
-			new BlenderMovieAssembler().assemble(batches, result, request.firstFrame(),
-					request.lastFrame(), request.width(), request.height(), request.fps(), "ffmpeg");
+			new BlenderMovieAssembler().assemble(batches, result, request.firstFrame(), request.lastFrame(),
+					request.width(), request.height(), request.fps(), "ffmpeg");
 			publishResultTree(jobId, result, blender.outputs());
 			scheduler.finishAssembly(jobId, null);
 		} catch (IOException | InterruptedException failure) {
@@ -1294,8 +1292,8 @@ public final class MechanaServer implements AutoCloseable {
 		}
 	}
 
-	private List<Path> stagePublishedBatches(Map<String, dev.mechana.api.ArtifactReference> artifacts,
-			Path directory) throws IOException {
+	private List<Path> stagePublishedBatches(Map<String, dev.mechana.api.ArtifactReference> artifacts, Path directory)
+			throws IOException {
 		Files.createDirectories(directory);
 		List<Path> staged = new java.util.ArrayList<>(artifacts.size());
 		for (var entry : artifacts.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList()) {
@@ -1308,8 +1306,8 @@ public final class MechanaServer implements AutoCloseable {
 		return List.copyOf(staged);
 	}
 
-	private void publishResultTree(String jobId, Path result,
-			Map<String, dev.mechana.api.ArtifactReference> outputs) throws IOException {
+	private void publishResultTree(String jobId, Path result, Map<String, dev.mechana.api.ArtifactReference> outputs)
+			throws IOException {
 		try (var paths = Files.walk(result)) {
 			for (Path path : paths.filter(Files::isRegularFile).sorted().toList()) {
 				String name = result.relativize(path).toString().replace('\\', '/');
@@ -1408,8 +1406,8 @@ public final class MechanaServer implements AutoCloseable {
 		}
 	}
 
-	private void registerCompletedArtifacts(String jobId,
-			Map<String, dev.mechana.api.ArtifactReference> artifacts) throws IOException {
+	private void registerCompletedArtifacts(String jobId, Map<String, dev.mechana.api.ArtifactReference> artifacts)
+			throws IOException {
 		for (var entry : artifacts.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList()) {
 			dev.mechana.api.ArtifactReference artifact = entry.getValue();
 			if (dev.mechana.api.StorageSelection.SERVER_LOCAL.equals(artifact.providerId()))

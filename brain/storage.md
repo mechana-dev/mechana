@@ -19,22 +19,23 @@ Last reviewed: 2026-08-08
 
 `server-local` is now the zero-configuration provider for input, intermediate,
 and output roles, backed by `ArtifactStore`, `ArtifactReference`,
-`StorageSelection`, and `ArtifactStoreRegistry`. The scheduler-managed FFmpeg
-video workload uses this abstraction end to end: source ingest, worker input
-segments, lease-fenced worker publications, verified assembly staging, final
-publication, and completed-job presentation all retain provider/key/size/SHA-256
-identity. Native FFmpeg still receives private staged paths inside server or
-worker workspaces.
+`StorageSelection`, and `ArtifactStoreRegistry`. All current workloads now use
+this abstraction at their applicable server-local input, intermediate, assembly,
+final-publication, and completion boundaries. Native tools still receive private
+staged paths inside server or worker workspaces.
 
-Only the FFmpeg workload is migrated end to end. Its Client Job Launcher can also
+FFmpeg's Client Job Launcher can additionally
 select `client-local`, split input into keyframe-aligned chunks in chosen client
 scratch, serve those chunks directly to compatible workers, accept lease-identified
 worker outputs directly into client scratch, SHA-256-verify the accepted outputs,
 assemble locally with FFmpeg, and retain final provider/key/size/SHA-256 metadata
-without copying the result into server history. The server coordinates references,
+without copying the result into server history. The generic client artifact data
+plane and `storage.client-direct-artifacts.v1` worker capability own this transport;
+FFmpeg-specific preparation and assembly remain adapters. The server coordinates references,
 leases, and accepted-attempt identities but does not relay these large bytes. Other
-workloads, Google Drive, S3, generalized provider publication, and restart-resumable
-client assembly remain future work.
+Google Drive, S3, generalized provider publication, and restart-resumable client
+assembly remain future work. Client-local assembly adapters for Fractal, OCR, and
+Blender are not implemented in this checkpoint.
 
 ## First-class storage model
 
@@ -137,7 +138,7 @@ See [artifacts](artifacts.md), [architecture](architecture.md), and
 # Client launcher integration
 
 The launcher treats output selection and completed artifacts as provider-aware.
-`server-local` remains the implemented default. Provider-specific browsing,
-authorization, client-local transfer, Google Drive, and S3 are future provider
-work; the generic launcher contract preserves a provider/key identity and an
+`server-local` remains the implemented default. Direct client-local transfer and
+assembly are currently implemented only for FFmpeg. Provider-specific browsing,
+authorization, Google Drive, and S3 are future provider work; the generic launcher contract preserves a provider/key identity and an
 ownership flag so purge and open actions need not assume server storage.

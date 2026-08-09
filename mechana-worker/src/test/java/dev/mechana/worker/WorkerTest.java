@@ -87,8 +87,8 @@ class WorkerTest {
 
 	@Test
 	void directArtifactOutputMustMatchTheAuthorizedTransferOrigin() {
-		TaskLease accepted = lease(Map.of("artifactTransferOrigin", "http://client.example:49152",
-				"artifactUploadUrl", "http://client.example:49152/client-artifacts/token/outputs/0"));
+		TaskLease accepted = lease(Map.of("artifactTransferOrigin", "http://client.example:49152", "artifactUploadUrl",
+				"http://client.example:49152/client-artifacts/token/outputs/0"));
 		assertEquals(URI.create("http://client.example:49152/client-artifacts/token/outputs/0"),
 				WorkerAgent.directArtifactDestination(accepted, "segment-00000.mkv").orElseThrow());
 

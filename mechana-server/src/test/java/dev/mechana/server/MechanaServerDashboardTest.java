@@ -513,19 +513,19 @@ class MechanaServerDashboardTest {
 			port = socket.getLocalPort();
 		}
 		try (MechanaServer server = new MechanaServer(port, "http://127.0.0.1:" + port, plugin, plugin, plugin, plugin,
-				plugin,
-				5_000, data); HttpClient client = HttpClient.newHttpClient()) {
+				plugin, 5_000, data); HttpClient client = HttpClient.newHttpClient()) {
 			server.start();
 			URI base = URI.create("http://127.0.0.1:" + server.port());
 			String request = json.writeValueAsString(Map.of("sourcePath", scene.toString(), "firstFrame", 1,
 					"lastFrame", 1, "taskCount", 1, "width", 64, "height", 64, "samples", 1, "fps", 24));
-			String jobId = json.readValue(client.send(HttpRequest.newBuilder(base.resolve("/api/jobs/blender"))
-					.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(request)).build(),
+			String jobId = json.readValue(client.send(
+					HttpRequest.newBuilder(base.resolve("/api/jobs/blender")).header("Content-Type", "application/json")
+							.POST(HttpRequest.BodyPublishers.ofString(request)).build(),
 					HttpResponse.BodyHandlers.ofString()).body(), JobSubmission.class).jobId();
-			TaskLease lease = json.readValue(client.send(HttpRequest.newBuilder(base.resolve("/api/workers/worker-1/lease"))
-					.header("Content-Type", "application/json")
-					.POST(HttpRequest.BodyPublishers.ofString(
-							"{\"workerAddress\":\"192.0.2.10\",\"supportedPlugins\":[\"blender-render\"]}"))
+			TaskLease lease = json.readValue(client.send(HttpRequest
+					.newBuilder(base.resolve("/api/workers/worker-1/lease")).header("Content-Type", "application/json")
+					.POST(HttpRequest.BodyPublishers
+							.ofString("{\"workerAddress\":\"192.0.2.10\",\"supportedPlugins\":[\"blender-render\"]}"))
 					.build(), HttpResponse.BodyHandlers.ofString()).body(), TaskLease.class);
 			HttpResponse<byte[]> stagedScene = client.send(
 					HttpRequest.newBuilder(URI.create(lease.parameters().get("inputUrl"))).build(),
@@ -535,9 +535,11 @@ class MechanaServerDashboardTest {
 			assertTrue(stagedScene.headers().firstValue("X-Checksum-Sha256").orElseThrow().matches("[0-9a-f]{64}"));
 
 			byte[] frames = "frame archive".getBytes(java.nio.charset.StandardCharsets.UTF_8);
-			HttpRequest upload = HttpRequest.newBuilder(base.resolve(
-					"/api/workers/worker-1/tasks/" + lease.taskId() + "/artifacts/frames-00000.zip"))
-					.header("X-Mechana-Lease", lease.leaseToken()).PUT(HttpRequest.BodyPublishers.ofByteArray(frames)).build();
+			HttpRequest upload = HttpRequest
+					.newBuilder(base
+							.resolve("/api/workers/worker-1/tasks/" + lease.taskId() + "/artifacts/frames-00000.zip"))
+					.header("X-Mechana-Lease", lease.leaseToken()).PUT(HttpRequest.BodyPublishers.ofByteArray(frames))
+					.build();
 			assertEquals(204, client.send(upload, HttpResponse.BodyHandlers.discarding()).statusCode());
 			assertArrayEquals(frames,
 					Files.readAllBytes(data.resolve("jobs/" + jobId + "/intermediate/frames-00000.zip")));

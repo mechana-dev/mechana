@@ -36,9 +36,13 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
 - Retains the last successful capability view during a disconnect and labels it
   stale rather than presenting it as fresh scheduling state.
 
-The current server is still a loopback-oriented development server. File fields
-therefore select paths readable by that server; the picker does not upload bytes.
-Server-local remains the only implemented artifact provider.
+The current server is still a loopback-oriented development server. OCR and
+Blender file fields therefore select paths readable by that server; their inputs
+are ingested into server-local artifact storage before worker execution. FFmpeg
+also offers `client-local`: the generic launcher artifact data plane serves
+prepared chunks and receives lease-identified outputs directly, while the video
+adapter assembles accepted outputs locally. Fractal, OCR, and Blender do not yet
+have client-local launcher assembly adapters.
 
 The Blender form defaults to `samples/blender/mechana-camera-orbit-2s.blend`, a
 packed lightweight geometry scene with a continuously orbiting camera. Frames

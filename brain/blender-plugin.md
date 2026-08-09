@@ -2,8 +2,8 @@
 
 Last reviewed: 2026-08-03
 
-The first `blender-render` slice accepts one server-local, packed `.blend` file and
-an explicit inclusive frame range. Planning deterministically divides that range
+The `blender-render` slice accepts one server-readable, packed `.blend` file,
+publishes it as an immutable server-local artifact, and uses an explicit inclusive frame range. Planning deterministically divides that range
 into contiguous batches. Capability-matched workers download the immutable scene,
 invoke configurable Blender in background mode with embedded script auto-execution
 disabled, force Cycles CPU rendering, retain persistent scene data across frames
@@ -33,7 +33,8 @@ scene engine to Cycles rather than relying on the packed file's saved engine.
 
 The initial contract excludes external asset trees, linked libraries, embedded
 scripts, GPU rendering, simulation baking, audio, multiple scenes/cameras, and
-arbitrary passes. It does not yet probe scene metadata server-side or prove Blender
+arbitrary passes. It does not yet provide client-local scene ingestion, direct
+frame publication, or client movie assembly. It also does not probe scene metadata server-side or prove Blender
 availability at worker registration. Every batch independently downloads the full
 packed scene; caching and content-addressed distribution remain future work.
 

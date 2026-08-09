@@ -2,8 +2,9 @@
 
 Last reviewed: 2026-08-04
 
-The initial `ocr-tesseract` path accepts a server-local PDF, rasterizes each page
-server-side with PDFBox, and distributes only grayscale PNG pages to workers. Each
+The `ocr-tesseract` path accepts a server-readable PDF, rasterizes each page
+server-side with PDFBox, publishes each grayscale PNG through the default
+artifact provider, and distributes only verified staged page images to workers. Each
 work unit invokes external Tesseract over a deterministic contiguous page range
 and publishes one lease-fenced ZIP of numbered UTF-8 page text. Server assembly
 validates every page, preserves order, and publishes Markdown, Unicode LaTeX, and
@@ -23,7 +24,8 @@ language availability.
 Current limitations:
 
 - Input PDF paths are server-local and submission is loopback-only.
-- Rasterized pages are ephemeral server-mediated URLs, not durable content-addressed artifacts.
+- Rasterized pages are ephemeral server-local artifacts served by reference; worker caching is not implemented.
+- Client-local input, direct batch publication, and ordered client assembly are not yet implemented.
 - Markdown and LaTeX preserve page boundaries but do not infer semantic document structure.
 - LaTeX compilation is not currently part of the job.
 - Mid-page checkpoints and generic artifact-backed resume are not implemented.

@@ -68,8 +68,8 @@ final class CompletedJobStore {
 		writeAtomically(jobDirectory.resolve(SNAPSHOT_FILE), snapshot);
 		byte[] summary = json.writeValueAsBytes(snapshot);
 		try (InputStream bytes = new java.io.ByteArrayInputStream(summary)) {
-			ArtifactReference published = artifactStore
-					.put("jobs/" + snapshot.jobId() + "/artifacts/job-summary.json", bytes);
+			ArtifactReference published = artifactStore.put("jobs/" + snapshot.jobId() + "/artifacts/job-summary.json",
+					bytes);
 			if (published.sizeBytes() != summary.length)
 				throw new IOException("Completed summary publication size mismatch");
 		}
