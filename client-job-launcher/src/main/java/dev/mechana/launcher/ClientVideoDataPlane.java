@@ -53,7 +53,7 @@ final class ClientVideoDataPlane implements AutoCloseable {
 		Files.createDirectories(root.resolve("chunks"));
 		Files.createDirectories(root.resolve("worker-outputs"));
 		advertisedHost = configuredHost == null || configuredHost.isBlank()
-				? InetAddress.getLocalHost().getHostName()
+				? automaticHost(InetAddress.getLocalHost().getHostName())
 				: configuredHost.strip();
 		http = HttpServer.create(new InetSocketAddress("0.0.0.0", 0), 0);
 		http.createContext("/client-video/" + token + "/", this::handle);
@@ -118,6 +118,13 @@ final class ClientVideoDataPlane implements AutoCloseable {
 
 	private String baseUrl() {
 		return "http://" + advertisedHost + ":" + http.getAddress().getPort() + "/client-video/" + token;
+	}
+
+	static String automaticHost(String localHostName) {
+		String host = localHostName.strip();
+		return host.toLowerCase(java.util.Locale.ROOT).endsWith(".local")
+				? host.substring(0, host.length() - ".local".length())
+				: host;
 	}
 
 	private void handle(HttpExchange exchange) throws IOException {
