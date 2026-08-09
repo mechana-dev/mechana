@@ -28,6 +28,7 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Objects;
 
 /**
  * Default artifact store preserving Mechana's existing server-owned storage
@@ -50,8 +51,9 @@ public final class ServerLocalArtifactStore implements ArtifactStore {
 	@Override
 	public ArtifactReference put(String key, InputStream content) throws IOException {
 		Path destination = resolve(key);
-		Files.createDirectories(destination.getParent());
-		Path temporary = Files.createTempFile(destination.getParent(), ".upload-", ".tmp");
+		Path parent = Objects.requireNonNull(destination.getParent(), "Artifact destination must have a parent");
+		Files.createDirectories(parent);
+		Path temporary = Files.createTempFile(parent, ".upload-", ".tmp");
 		try {
 			MessageDigest digest = sha256();
 			try (DigestInputStream verified = new DigestInputStream(content, digest)) {

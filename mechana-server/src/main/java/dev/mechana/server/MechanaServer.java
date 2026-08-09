@@ -1226,8 +1226,9 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private void stageArtifact(dev.mechana.api.ArtifactReference artifact, Path destination) throws IOException {
-		Files.createDirectories(Objects.requireNonNull(destination.getParent()));
-		Path temporary = Files.createTempFile(destination.getParent(), ".artifact-stage-", ".tmp");
+		Path parent = Objects.requireNonNull(destination.getParent(), "Artifact staging path must have a parent");
+		Files.createDirectories(parent);
+		Path temporary = Files.createTempFile(parent, ".artifact-stage-", ".tmp");
 		try (InputStream input = artifactStores.require(artifact.providerId()).open(artifact)) {
 			Files.copy(input, temporary, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 		}
