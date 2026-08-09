@@ -128,7 +128,9 @@ public final class Scheduler {
 		register(workerId, supportedPlugins);
 		for (Job job : jobs.values()) {
 			for (Task task : job.tasks) {
-				if (task.state == TaskState.QUEUED && supportedPlugins.contains(task.pluginId)) {
+				String requiredCapability = task.parameters.getOrDefault("requiredWorkerCapability", "");
+				if (task.state == TaskState.QUEUED && supportedPlugins.contains(task.pluginId)
+						&& (requiredCapability.isBlank() || supportedPlugins.contains(requiredCapability))) {
 					task.state = TaskState.RUNNING;
 					task.workerId = workerId;
 					task.leaseToken = UUID.randomUUID().toString();

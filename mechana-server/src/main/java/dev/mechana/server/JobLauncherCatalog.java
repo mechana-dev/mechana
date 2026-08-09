@@ -53,6 +53,7 @@ final class JobLauncherCatalog {
 						file("sourcePath", "Input video"),
 						directory("clientScratchDirectory", "Client scratch directory"),
 						directory("clientOutputDirectory", "Client output directory"),
+						text("clientTransferHost", "Client transfer host (blank = this Mac)", ""),
 						decimal("durationSeconds", "Duration (seconds)", "60", 0.01, 86400),
 						integer("segmentCount", "Tasks (0 = fleet)", "0", 0, 10000),
 						decimal("targetSizeRatio", "Target size ratio", "0.75", 0.01, 0.99)),

@@ -1304,3 +1304,22 @@ cloud providers remain future direction; see `brain/current-state.md` and
   through temporary server-local staging; restart-resumable launcher assembly,
   Google Drive, S3, direct worker-to-requester publication, and client-local
   support for other workloads remain future work.
+
+## 2026-08-08 22:45:37 EDT — Make client-local FFmpeg a direct data plane
+
+- Changed client-local FFmpeg submission so the launcher probes and splits the
+  source into keyframe-aligned chunks in its selected scratch directory rather
+  than uploading the source to temporary server storage.
+- Added a tokenized launcher data endpoint: compatible workers fetch their chunks
+  directly into worker scratch and publish lease-identified output attempts directly
+  into client scratch. The server coordinates URLs, integrity metadata, scheduling,
+  and accepted lease identities without relaying the large artifact bytes.
+- Added `storage.client-direct-video.v1` capability matching so only updated workers
+  can lease direct client-local video tasks. Worker publication is restricted to the
+  same tokenized client-video origin and output namespace as the corresponding input.
+- The launcher verifies the server-selected attempt outputs by size/SHA-256, assembles
+  the final video in the selected client output directory, and reports client-local
+  completed-artifact metadata. Server-local video behavior remains unchanged.
+- This direct topology remains FFmpeg-only. Restart-resumable client assembly,
+  client-local support for other workloads, generalized external providers, Google
+  Drive, and S3 remain future work.

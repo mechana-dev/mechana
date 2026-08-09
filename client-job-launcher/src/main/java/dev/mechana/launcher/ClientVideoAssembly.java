@@ -70,6 +70,46 @@ final class ClientVideoAssembly {
 		return output;
 	}
 
+	Path assembleDirect(URI server, String jobId, Path source, Path scratchDirectory, Path outputDirectory,
+			double durationSeconds, ClientVideoDataPlane dataPlane) throws IOException, InterruptedException {
+		Files.createDirectories(scratchDirectory);
+		Files.createDirectories(outputDirectory);
+		Path jobScratch = scratchDirectory.resolve(jobId).toAbsolutePath().normalize();
+		Files.createDirectories(jobScratch);
+		VideoAssemblyManifest manifest = client.videoAssemblyManifest(server, jobId);
+		List<Path> segments = new ArrayList<>(manifest.segments().size());
+		for (int index = 0; index < manifest.segments().size(); index++) {
+			ArtifactReference accepted = manifest.segments().get(index);
+			ClientVideoDataPlane.LocalArtifact artifact = dataPlane.acceptedOutput(index, accepted.key());
+			ArtifactReference identity = new ArtifactReference("client-local", artifact.path().toString(),
+					artifact.size(), "", true, artifact.sha256());
+			verify(artifact.path(), identity);
+			segments.add(artifact.path());
+		}
+		return assemblePaths(server, jobId, source, outputDirectory, durationSeconds, jobScratch, segments);
+	}
+
+	private Path assemblePaths(URI server, String jobId, Path source, Path outputDirectory, double durationSeconds,
+			Path jobScratch, List<Path> segments) throws IOException, InterruptedException {
+		Path concatManifest = jobScratch.resolve("segments.ffconcat");
+		StringBuilder text = new StringBuilder("ffconcat version 1.0\n");
+		for (Path segment : segments)
+			text.append("file '").append(segment.toString().replace("'", "'\\''")).append("'\n");
+		Files.writeString(concatManifest, text, StandardCharsets.UTF_8);
+		String ffmpeg = ffmpegExecutable();
+		Path video = jobScratch.resolve("video.mkv");
+		run(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i",
+				concatManifest.toString(), "-map", "0:v:0", "-c", "copy", video.toString()));
+		Path output = outputDirectory.resolve("compressed-" + jobId + ".mkv").toAbsolutePath().normalize();
+		run(List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", video.toString(), "-i",
+				source.toAbsolutePath().normalize().toString(), "-map", "0:v:0", "-map", "1:a:0?", "-t",
+				Double.toString(durationSeconds), "-c", "copy", "-f", "matroska", output.toString()));
+		String sha256 = sha256(output);
+		client.completeClientAssembly(server, jobId, new ClientAssemblyCompletion("client-local", output.toString(),
+				Objects.requireNonNull(output.getFileName()).toString(), Files.size(output), sha256));
+		return output;
+	}
+
 	static void verify(Path file, ArtifactReference artifact) throws IOException {
 		if (Files.size(file) != artifact.size() || !sha256(file).equalsIgnoreCase(artifact.sha256())) {
 			Files.deleteIfExists(file);

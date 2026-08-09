@@ -182,6 +182,18 @@ class SchedulerTest {
 		assertEquals("0", video.parameters().get("segmentIndex"));
 	}
 
+	@Test
+	void directClientVideoWaitsForAnUpdatedWorkerCapability() {
+		Scheduler scheduler = new Scheduler(1_000);
+		scheduler.submitVideo(
+				List.of(new WorkSpec(1_000, Map.of("requiredWorkerCapability", "storage.client-direct-video.v1"))),
+				Map.of(), PLUGIN);
+
+		assertTrue(scheduler.lease("old-worker", Set.of("video-ffmpeg"), PLUGIN).isEmpty());
+		assertTrue(scheduler.lease("updated-worker", Set.of("video-ffmpeg", "storage.client-direct-video.v1"), PLUGIN)
+				.isPresent());
+	}
+
 	private static final class MutableClock extends Clock {
 		private long millis;
 

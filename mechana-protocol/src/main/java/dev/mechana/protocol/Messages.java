@@ -127,23 +127,53 @@ public final class Messages {
 		}
 	}
 
+	public record ClientVideoChunk(String inputUrl, double startSeconds, double endSeconds, long size, String sha256) {
+		public ClientVideoChunk {
+			Objects.requireNonNull(inputUrl, "inputUrl");
+			Objects.requireNonNull(sha256, "sha256");
+			if (!inputUrl.startsWith("http://") && !inputUrl.startsWith("https://"))
+				throw new IllegalArgumentException("Client video chunk URL must use HTTP or HTTPS");
+			if (startSeconds < 0 || endSeconds <= startSeconds || size < 0 || !sha256.matches("[0-9a-fA-F]{64}"))
+				throw new IllegalArgumentException("Invalid client video chunk metadata");
+		}
+
+		public double durationSeconds() {
+			return endSeconds - startSeconds;
+		}
+	}
+
 	public record VideoJobSubmitRequest(String sourcePath, double durationSeconds, int segmentCount,
-			double targetSizeRatio, String storageProvider, String sourceUploadToken) {
+			double targetSizeRatio, String storageProvider, String sourceUploadToken,
+			List<ClientVideoChunk> clientChunks, String clientOutputUrl, long videoBitrate) {
 		public VideoJobSubmitRequest(String sourcePath, double durationSeconds, int segmentCount,
 				double targetSizeRatio) {
-			this(sourcePath, durationSeconds, segmentCount, targetSizeRatio, "server-local", "");
+			this(sourcePath, durationSeconds, segmentCount, targetSizeRatio, "server-local", "", List.of(), "", 0);
+		}
+
+		public VideoJobSubmitRequest(String sourcePath, double durationSeconds, int segmentCount,
+				double targetSizeRatio, String storageProvider, String sourceUploadToken) {
+			this(sourcePath, durationSeconds, segmentCount, targetSizeRatio, storageProvider, sourceUploadToken,
+					List.of(), "", 0);
 		}
 
 		public VideoJobSubmitRequest {
 			Objects.requireNonNull(sourcePath, "sourcePath");
 			storageProvider = storageProvider == null || storageProvider.isBlank() ? "server-local" : storageProvider;
 			sourceUploadToken = sourceUploadToken == null ? "" : sourceUploadToken;
+			clientChunks = clientChunks == null ? List.of() : List.copyOf(clientChunks);
+			clientOutputUrl = clientOutputUrl == null ? "" : clientOutputUrl;
 			if (durationSeconds <= 0 || segmentCount < 0 || targetSizeRatio <= 0 || targetSizeRatio >= 1)
 				throw new IllegalArgumentException("Invalid video job options");
 			if (!Set.of("server-local", "client-local").contains(storageProvider))
 				throw new IllegalArgumentException("Unsupported video storage provider: " + storageProvider);
-			if ("client-local".equals(storageProvider) && sourceUploadToken.isBlank())
-				throw new IllegalArgumentException("Client-local video requires an uploaded input token");
+			if ("client-local".equals(storageProvider) && sourceUploadToken.isBlank() && clientChunks.isEmpty())
+				throw new IllegalArgumentException("Client-local video requires uploaded input or client chunks");
+			if (!clientChunks.isEmpty()) {
+				if (clientChunks.size() != segmentCount || clientOutputUrl.isBlank() || videoBitrate <= 0)
+					throw new IllegalArgumentException("Direct client-local video metadata is incomplete");
+				if (!clientOutputUrl.startsWith("http://") && !clientOutputUrl.startsWith("https://"))
+					throw new IllegalArgumentException("Client output URL must use HTTP or HTTPS");
+			}
 		}
 	}
 
