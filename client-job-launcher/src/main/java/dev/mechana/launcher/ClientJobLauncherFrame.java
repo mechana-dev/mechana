@@ -171,7 +171,7 @@ final class ClientJobLauncherFrame extends JFrame {
 						values.put("videoBitrate", prepared.videoBitrate());
 						String jobId = client.submit(serverUri(), form.descriptor(), values);
 						return new SubmissionResult(jobId, new ClientVideoContext(clientVideo.source(),
-								clientVideo.scratch(), clientVideo.output(), prepared.durationSeconds(), plane));
+								plane.scratchDirectory(), clientVideo.output(), prepared.durationSeconds(), plane));
 					} catch (java.io.IOException | InterruptedException | RuntimeException failure) {
 						plane.close();
 						throw failure;
@@ -259,7 +259,7 @@ final class ClientJobLauncherFrame extends JFrame {
 				|| !"client-local".equals(String.valueOf(values.get("storageProvider"))))
 			return null;
 		Path source = Path.of(String.valueOf(values.get("sourcePath"))).toAbsolutePath().normalize();
-		Path scratch = requiredDirectory(values, "clientScratchDirectory", "Client scratch directory");
+		Path scratch = optionalDirectory(values, "clientScratchDirectory");
 		Path output = requiredDirectory(values, "clientOutputDirectory", "Client output directory");
 		if (!Files.isRegularFile(source))
 			throw new IllegalArgumentException("Input video does not exist: " + source);
@@ -277,6 +277,11 @@ final class ClientJobLauncherFrame extends JFrame {
 		return Path.of(value).toAbsolutePath().normalize();
 	}
 
+	private static Path optionalDirectory(Map<String, Object> values, String name) {
+		String value = String.valueOf(values.getOrDefault(name, "")).strip();
+		return value.isBlank() ? null : Path.of(value).toAbsolutePath().normalize();
+	}
+
 	private void continueClientAssemblies() {
 		for (LauncherJob job : jobItems) {
 			ClientVideoContext context = clientVideoJobs.get(job.jobId());
@@ -292,10 +297,10 @@ final class ClientJobLauncherFrame extends JFrame {
 				}
 			}).whenComplete((ignored, failure) -> SwingUtilities.invokeLater(() -> {
 				assemblingClientJobs.remove(job.jobId());
+				ClientVideoContext finished = clientVideoJobs.remove(job.jobId());
+				if (finished != null)
+					finished.dataPlane().close();
 				if (failure == null) {
-					ClientVideoContext completed = clientVideoJobs.remove(job.jobId());
-					if (completed != null)
-						completed.dataPlane().close();
 					connectionState.setText("Client assembly completed for " + job.jobId());
 					refreshJobs();
 				} else {

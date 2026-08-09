@@ -1323,3 +1323,16 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - This direct topology remains FFmpeg-only. Restart-resumable client assembly,
   client-local support for other workloads, generalized external providers, Google
   Drive, and S3 remain future work.
+
+## 2026-08-08 23:26:08 EDT — Clarify and clean client-local scratch
+
+- Made the Client Job Launcher output summary follow the selected FFmpeg placement,
+  showing the client-selected output directory for `client-local` instead of the
+  static server-artifact description.
+- Made client scratch optional. A blank value creates a temporary launcher-side
+  staging directory; an explicit value uses an owned per-transfer subdirectory.
+  Neither choice changes worker placement: every worker still downloads, processes,
+  and cleans its attempt in scratch local to that worker machine.
+- Added best-effort cleanup of launcher transfer files after success, failure, or
+  cancellation and deterministic cleanup of assembly intermediates. The selected
+  final output and completed-artifact metadata are retained.

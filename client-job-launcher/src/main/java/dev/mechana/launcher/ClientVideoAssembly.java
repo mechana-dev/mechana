@@ -76,17 +76,43 @@ final class ClientVideoAssembly {
 		Files.createDirectories(outputDirectory);
 		Path jobScratch = scratchDirectory.resolve(jobId).toAbsolutePath().normalize();
 		Files.createDirectories(jobScratch);
-		VideoAssemblyManifest manifest = client.videoAssemblyManifest(server, jobId);
-		List<Path> segments = new ArrayList<>(manifest.segments().size());
-		for (int index = 0; index < manifest.segments().size(); index++) {
-			ArtifactReference accepted = manifest.segments().get(index);
-			ClientVideoDataPlane.LocalArtifact artifact = dataPlane.acceptedOutput(index, accepted.key());
-			ArtifactReference identity = new ArtifactReference("client-local", artifact.path().toString(),
-					artifact.size(), "", true, artifact.sha256());
-			verify(artifact.path(), identity);
-			segments.add(artifact.path());
+		try {
+			VideoAssemblyManifest manifest = client.videoAssemblyManifest(server, jobId);
+			List<Path> segments = new ArrayList<>(manifest.segments().size());
+			for (int index = 0; index < manifest.segments().size(); index++) {
+				ArtifactReference accepted = manifest.segments().get(index);
+				ClientVideoDataPlane.LocalArtifact artifact = dataPlane.acceptedOutput(index, accepted.key());
+				ArtifactReference identity = new ArtifactReference("client-local", artifact.path().toString(),
+						artifact.size(), "", true, artifact.sha256());
+				verify(artifact.path(), identity);
+				segments.add(artifact.path());
+			}
+			return assemblePaths(server, jobId, source, outputDirectory, durationSeconds, jobScratch, segments);
+		} finally {
+			deleteTree(jobScratch);
 		}
-		return assemblePaths(server, jobId, source, outputDirectory, durationSeconds, jobScratch, segments);
+	}
+
+	private static void deleteTree(Path directory) throws IOException {
+		if (!Files.exists(directory))
+			return;
+		Files.walkFileTree(directory, new java.nio.file.SimpleFileVisitor<>() {
+			@Override
+			public java.nio.file.FileVisitResult visitFile(Path file,
+					java.nio.file.attribute.BasicFileAttributes attributes) throws IOException {
+				Files.deleteIfExists(file);
+				return java.nio.file.FileVisitResult.CONTINUE;
+			}
+
+			@Override
+			public java.nio.file.FileVisitResult postVisitDirectory(Path current, IOException failure)
+					throws IOException {
+				if (failure != null)
+					throw failure;
+				Files.deleteIfExists(current);
+				return java.nio.file.FileVisitResult.CONTINUE;
+			}
+		});
 	}
 
 	private Path assemblePaths(URI server, String jobId, Path source, Path outputDirectory, double durationSeconds,

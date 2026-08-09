@@ -36,6 +36,7 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 final class DescriptorForm extends JPanel {
 	private static final long serialVersionUID = 1L;
 	private final transient JobLauncherDescriptor descriptor;
+	private final JLabel outputSummary = new JLabel();
 	@SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "Swing panels are not deserialized")
 	private final transient Map<SubmissionField, JComponent> editors = new LinkedHashMap<>();
 
@@ -74,8 +75,26 @@ final class DescriptorForm extends JPanel {
 		fieldScroller.setBorder(BorderFactory.createEmptyBorder());
 		fieldScroller.getVerticalScrollBar().setUnitIncrement(16);
 		add(fieldScroller, BorderLayout.CENTER);
-		add(new JLabel("Output: " + descriptor.output().label() + " (" + descriptor.output().provider() + ") — "
-				+ descriptor.resourceEstimate()), BorderLayout.SOUTH);
+		JComponent storage = editors.entrySet().stream()
+				.filter(entry -> "storageProvider".equals(entry.getKey().name())).map(Map.Entry::getValue).findFirst()
+				.orElse(null);
+		if (storage instanceof JComboBox<?> choice)
+			choice.addActionListener(event -> updateOutputSummary());
+		updateOutputSummary();
+		add(outputSummary, BorderLayout.SOUTH);
+	}
+
+	String outputSummary() {
+		return outputSummary.getText();
+	}
+
+	private void updateOutputSummary() {
+		String provider = editors.entrySet().stream().filter(entry -> "storageProvider".equals(entry.getKey().name()))
+				.map(entry -> editorValue(entry.getValue())).findFirst().orElse(descriptor.output().provider());
+		String label = "client-local".equals(provider)
+				? "Client-selected output directory"
+				: descriptor.output().label();
+		outputSummary.setText("Output: " + label + " (" + provider + ") — " + descriptor.resourceEstimate());
 	}
 
 	JobLauncherDescriptor descriptor() {

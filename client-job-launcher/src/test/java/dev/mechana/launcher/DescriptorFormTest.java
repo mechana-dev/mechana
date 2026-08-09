@@ -77,4 +77,16 @@ class DescriptorFormTest {
 		Preferences settings = Preferences.userRoot().node("dev/mechana/test/" + UUID.randomUUID());
 		assertEquals("", new DescriptorForm(descriptor, settings).values().get("clientTransferHost"));
 	}
+
+	@Test
+	void presentsClientLocalOutputWhenSelected() {
+		var descriptor = new JobLauncherDescriptor("video", "Video", "/api/jobs/video",
+				List.of(new SubmissionField("storageProvider", "Storage", "choice", true, "server-local", null, null,
+						List.of("server-local", "client-local"), "")),
+				new OutputDescriptor("server-local", "directory", "Server job artifacts", false), "FFmpeg", 1, "now");
+		Preferences settings = Preferences.userRoot().node("dev/mechana/test/" + UUID.randomUUID());
+		settings.put("storageProvider", "client-local");
+		assertEquals("Output: Client-selected output directory (client-local) — FFmpeg",
+				new DescriptorForm(descriptor, settings).outputSummary());
+	}
 }

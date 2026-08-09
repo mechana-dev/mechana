@@ -42,6 +42,8 @@ final class ClientVideoDataPlane implements AutoCloseable {
 	}
 
 	private final Path root;
+	private final Path scratchDirectory;
+	private final boolean temporaryScratch;
 	private final String token = UUID.randomUUID().toString();
 	private final String advertisedHost;
 	private final HttpServer http;
@@ -49,7 +51,11 @@ final class ClientVideoDataPlane implements AutoCloseable {
 	private List<Path> chunks = List.of();
 
 	ClientVideoDataPlane(Path scratchDirectory, String configuredHost) throws IOException {
-		root = scratchDirectory.resolve("client-transfer-" + token).toAbsolutePath().normalize();
+		this.temporaryScratch = scratchDirectory == null;
+		this.scratchDirectory = temporaryScratch
+				? Files.createTempDirectory("mechana-client-video-").toAbsolutePath().normalize()
+				: scratchDirectory.toAbsolutePath().normalize();
+		root = this.scratchDirectory.resolve("client-transfer-" + token).toAbsolutePath().normalize();
 		Files.createDirectories(root.resolve("chunks"));
 		Files.createDirectories(root.resolve("worker-outputs"));
 		advertisedHost = configuredHost == null || configuredHost.isBlank()
@@ -107,6 +113,10 @@ final class ClientVideoDataPlane implements AutoCloseable {
 
 	String outputUrl(int index) {
 		return baseUrl() + "/outputs/" + index;
+	}
+
+	Path scratchDirectory() {
+		return scratchDirectory;
 	}
 
 	LocalArtifact acceptedOutput(int index, String leaseHash) throws IOException {
@@ -231,5 +241,34 @@ final class ClientVideoDataPlane implements AutoCloseable {
 	@Override
 	public void close() {
 		http.stop(0);
+		deleteTree(root);
+		if (temporaryScratch)
+			deleteTree(scratchDirectory);
+	}
+
+	private static void deleteTree(Path directory) {
+		if (directory == null || !Files.exists(directory))
+			return;
+		try {
+			Files.walkFileTree(directory, new java.nio.file.SimpleFileVisitor<>() {
+				@Override
+				public java.nio.file.FileVisitResult visitFile(Path file,
+						java.nio.file.attribute.BasicFileAttributes attributes) throws IOException {
+					Files.deleteIfExists(file);
+					return java.nio.file.FileVisitResult.CONTINUE;
+				}
+
+				@Override
+				public java.nio.file.FileVisitResult postVisitDirectory(Path current, IOException failure)
+						throws IOException {
+					if (failure != null)
+						throw failure;
+					Files.deleteIfExists(current);
+					return java.nio.file.FileVisitResult.CONTINUE;
+				}
+			});
+		} catch (IOException ignored) {
+			// Scratch cleanup is best-effort and must not hide the job result.
+		}
 	}
 }
