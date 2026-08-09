@@ -56,4 +56,18 @@ class ServerMainTest {
 			}
 		}
 	}
+
+	@Test
+	void launchdManagedServerReliesOnSupervisorForRestart() throws Exception {
+		String original = System.getProperty("mechana.launchd.managed");
+		try {
+			System.setProperty("mechana.launchd.managed", "true");
+			assertTrue(ServerMain.replacementCommand(8787, "http://localhost:8787", Path.of("data")).isEmpty());
+		} finally {
+			if (original == null)
+				System.clearProperty("mechana.launchd.managed");
+			else
+				System.setProperty("mechana.launchd.managed", original);
+		}
+	}
 }

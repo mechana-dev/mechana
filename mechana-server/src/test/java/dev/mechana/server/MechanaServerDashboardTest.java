@@ -258,6 +258,9 @@ class MechanaServerDashboardTest {
 			assertTrue(detail.contains("\"completed\":true"));
 			assertTrue(detail.contains("\"completedAt\":"));
 			assertTrue(detail.contains("job-summary.json"));
+			assertTrue(detail.contains("\"provider\":\"server-local\""));
+			assertTrue(detail.contains("\"key\":\"jobs/" + jobId + "/artifacts/job-summary.json\""));
+			assertTrue(detail.contains("\"sha256\":"));
 			HttpResponse<String> page = client.send(
 					HttpRequest.newBuilder(base.resolve("/dashboard/jobs/" + jobId)).build(),
 					HttpResponse.BodyHandlers.ofString());

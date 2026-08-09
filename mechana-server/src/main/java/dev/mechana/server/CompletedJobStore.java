@@ -18,6 +18,8 @@ package dev.mechana.server;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mechana.coordinator.InMemoryJobMonitor;
+import dev.mechana.api.ArtifactReference;
+import dev.mechana.api.StorageSelection;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -33,11 +35,12 @@ import java.util.Optional;
 
 /** Durable terminal-job snapshots and server-owned downloadable artifacts. */
 final class CompletedJobStore {
-	record Artifact(String name, long size) {
+	record Artifact(String name, long size, String provider, String key, String sha256) {
 	}
 
 	private static final String SNAPSHOT_FILE = "snapshot.json";
 	private static final String ARTIFACTS_DIRECTORY = "artifacts";
+	private static final String EXTERNAL_ARTIFACTS_FILE = ".external-artifacts.json";
 	private final Path jobsRoot;
 	private final ObjectMapper json;
 	private final Map<String, InMemoryJobMonitor.Snapshot> snapshots = new LinkedHashMap<>();
@@ -75,9 +78,14 @@ final class CompletedJobStore {
 		Path root = jobDirectory(jobId).resolve(ARTIFACTS_DIRECTORY);
 		if (!Files.isDirectory(root))
 			return List.of();
+		List<Artifact> artifacts = new ArrayList<>();
 		try (var files = Files.walk(root)) {
-			return files.filter(Files::isRegularFile).sorted().map(file -> artifact(root, file)).toList();
+			artifacts.addAll(files.filter(Files::isRegularFile).filter(
+					file -> !EXTERNAL_ARTIFACTS_FILE.equals(Objects.requireNonNull(file.getFileName()).toString()))
+					.sorted().map(file -> artifact(root, file)).toList());
 		}
+		artifacts.addAll(readExternalArtifacts(jobId));
+		return List.copyOf(artifacts);
 	}
 
 	synchronized Path artifact(String jobId, String name) throws IOException {
@@ -102,6 +110,35 @@ final class CompletedJobStore {
 			throw new IllegalArgumentException("Invalid artifact name: " + name);
 		Files.createDirectories(Objects.requireNonNull(destination.getParent()));
 		Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+	}
+
+	synchronized void registerArtifact(String jobId, String name, ArtifactReference artifact) throws IOException {
+		requireKnown(jobId);
+		String expectedKey = "jobs/" + jobId + "/artifacts/" + name;
+		if (!expectedKey.equals(artifact.key()))
+			throw new IllegalArgumentException("Completed artifact key does not match job history location");
+		Path path = artifact(jobId, name);
+		if (Files.size(path) != artifact.sizeBytes())
+			throw new IOException("Completed artifact size does not match publication metadata");
+	}
+
+	synchronized void registerExternalArtifact(String jobId, String name, ArtifactReference artifact)
+			throws IOException {
+		requireKnown(jobId);
+		if (StorageSelection.SERVER_LOCAL.equals(artifact.providerId()))
+			throw new IllegalArgumentException("Server-local artifacts must be registered from stored bytes");
+		List<Artifact> artifacts = new ArrayList<>(readExternalArtifacts(jobId));
+		artifacts.removeIf(existing -> existing.name().equals(name));
+		artifacts.add(
+				new Artifact(name, artifact.sizeBytes(), artifact.providerId(), artifact.key(), artifact.sha256()));
+		writeAtomically(jobDirectory(jobId).resolve(ARTIFACTS_DIRECTORY).resolve(EXTERNAL_ARTIFACTS_FILE), artifacts);
+	}
+
+	private List<Artifact> readExternalArtifacts(String jobId) throws IOException {
+		Path file = jobDirectory(jobId).resolve(ARTIFACTS_DIRECTORY).resolve(EXTERNAL_ARTIFACTS_FILE);
+		if (!Files.isRegularFile(file))
+			return List.of();
+		return json.readValue(file.toFile(), json.getTypeFactory().constructCollectionType(List.class, Artifact.class));
 	}
 
 	synchronized boolean purge(String jobId) throws IOException {
@@ -174,9 +211,27 @@ final class CompletedJobStore {
 
 	private static Artifact artifact(Path root, Path file) {
 		try {
-			return new Artifact(root.relativize(file).toString().replace('\\', '/'), Files.size(file));
+			String name = root.relativize(file).toString().replace('\\', '/');
+			return new Artifact(name, Files.size(file), "server-local",
+					"jobs/" + Objects.requireNonNull(root.getParent().getFileName()) + "/artifacts/" + name,
+					sha256(file));
 		} catch (IOException failure) {
 			throw new java.io.UncheckedIOException(failure);
+		}
+	}
+
+	private static String sha256(Path file) throws IOException {
+		try {
+			var digest = java.security.MessageDigest.getInstance("SHA-256");
+			try (InputStream input = Files.newInputStream(file)) {
+				byte[] buffer = new byte[64 * 1024];
+				for (int read; (read = input.read(buffer)) >= 0;)
+					if (read > 0)
+						digest.update(buffer, 0, read);
+			}
+			return java.util.HexFormat.of().formatHex(digest.digest());
+		} catch (java.security.NoSuchAlgorithmException impossible) {
+			throw new IllegalStateException(impossible);
 		}
 	}
 

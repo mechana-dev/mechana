@@ -1,5 +1,22 @@
 # Current state
 
+## Storage abstraction checkpoint (2026-08-08)
+
+- The seven-file storage foundation is rebased on the post-sandbox `main` line.
+- `server-local` remains the default input/intermediate/output provider.
+- Scheduler-managed FFmpeg video is the first workload migrated end to end across
+  source ingest, worker inputs, lease-fenced output publication, assembly staging,
+  final publication, and completed-artifact metadata.
+- Plugin code and scheduler work specifications still receive URLs and staged
+  local paths, never server-local keys or provider APIs.
+- FFmpeg jobs may alternatively select `client-local` in the Client Job Launcher.
+  The launcher uploads the selected input, chooses client scratch/output directories,
+  downloads and verifies lease-fenced segments, assembles with local FFmpeg, and
+  publishes provider/key/size/SHA-256 metadata for the client-owned result.
+- The client-local FFmpeg path currently relays source and segment bytes through
+  temporary server-local staging. Google Drive, S3, direct worker-to-requester
+  publication, and client-local support for other workloads remain future work.
+
 Verified: 2026-08-08
 
 This file reports repository evidence, not desired future status.
@@ -36,11 +53,11 @@ This file reports repository evidence, not desired future status.
   server, lists only capabilities advertised by connected workers, renders
   descriptor-defined forms for the five existing plugins, submits through their
   existing endpoints, refreshes live/completed job state, shows worker assignments
-  and provider-aware server-local artifact references, aborts jobs, and purges
+  and provider-aware artifact references, aborts jobs, and purges
   selected or all completed server-owned history after confirmation. Descriptors
-  currently come from a server-side
-  composition catalog rather than plugin manifests; file fields are server-readable
-  paths rather than uploads, and remote authenticated operation is not established.
+  currently come from a server-side composition catalog rather than plugin manifests.
+  FFmpeg client-local submissions upload their selected source; other file fields
+  remain server-readable paths, and remote authenticated operation is not established.
 - Launcher capability labels omit transient worker counts. All five submission
   forms expose `Tasks (0 = fleet)` consistently; zero resolves server-side to one
   task per currently compatible worker, capped by the job's finite work units.

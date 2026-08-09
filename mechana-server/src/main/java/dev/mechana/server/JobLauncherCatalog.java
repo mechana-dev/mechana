@@ -47,7 +47,12 @@ final class JobLauncherCatalog {
 						integer("taskCount", "Tasks (0 = fleet)", "0", 0, 10000),
 						integer("durationMillis", "Duration (ms)", "1000", 1, 86400000)),
 				descriptor("video-ffmpeg", "FFmpeg video", "/api/jobs/video", serverFiles,
-						"FFmpeg runtime and scratch proportional to the source", file("sourcePath", "Input video"),
+						"FFmpeg runtime and scratch proportional to the source",
+						choice("storageProvider", "Storage and assembly", "server-local", "server-local",
+								"client-local"),
+						file("sourcePath", "Input video"),
+						directory("clientScratchDirectory", "Client scratch directory"),
+						directory("clientOutputDirectory", "Client output directory"),
 						decimal("durationSeconds", "Duration (seconds)", "60", 0.01, 86400),
 						integer("segmentCount", "Tasks (0 = fleet)", "0", 0, 10000),
 						decimal("targetSizeRatio", "Target size ratio", "0.75", 0.01, 0.99)),
@@ -98,6 +103,15 @@ final class JobLauncherCatalog {
 
 	private static SubmissionField text(String name, String label, String value) {
 		return new SubmissionField(name, label, "text", true, value, null, null, List.of(), "");
+	}
+
+	private static SubmissionField choice(String name, String label, String value, String... choices) {
+		return new SubmissionField(name, label, "choice", true, value, null, null, List.of(choices), "");
+	}
+
+	private static SubmissionField directory(String name, String label) {
+		return new SubmissionField(name, label, "directory", false, "", null, null, List.of(),
+				"Directory on the computer running Client Job Launcher");
 	}
 
 	private static SubmissionField integer(String name, String label, String value, long min, long max) {

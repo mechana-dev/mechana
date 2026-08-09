@@ -100,11 +100,17 @@ public final class Messages {
 		}
 	}
 
-	public record ArtifactReference(String provider, String key, long size, String url, boolean locallyOwned) {
+	public record ArtifactReference(String provider, String key, long size, String url, boolean locallyOwned,
+			String sha256) {
+		public ArtifactReference(String provider, String key, long size, String url, boolean locallyOwned) {
+			this(provider, key, size, url, locallyOwned, "");
+		}
+
 		public ArtifactReference {
 			Objects.requireNonNull(provider, "provider");
 			Objects.requireNonNull(key, "key");
 			url = url == null ? "" : url;
+			sha256 = sha256 == null ? "" : sha256;
 		}
 	}
 
@@ -122,11 +128,40 @@ public final class Messages {
 	}
 
 	public record VideoJobSubmitRequest(String sourcePath, double durationSeconds, int segmentCount,
-			double targetSizeRatio) {
+			double targetSizeRatio, String storageProvider, String sourceUploadToken) {
+		public VideoJobSubmitRequest(String sourcePath, double durationSeconds, int segmentCount,
+				double targetSizeRatio) {
+			this(sourcePath, durationSeconds, segmentCount, targetSizeRatio, "server-local", "");
+		}
+
 		public VideoJobSubmitRequest {
 			Objects.requireNonNull(sourcePath, "sourcePath");
+			storageProvider = storageProvider == null || storageProvider.isBlank() ? "server-local" : storageProvider;
+			sourceUploadToken = sourceUploadToken == null ? "" : sourceUploadToken;
 			if (durationSeconds <= 0 || segmentCount < 0 || targetSizeRatio <= 0 || targetSizeRatio >= 1)
 				throw new IllegalArgumentException("Invalid video job options");
+			if (!Set.of("server-local", "client-local").contains(storageProvider))
+				throw new IllegalArgumentException("Unsupported video storage provider: " + storageProvider);
+			if ("client-local".equals(storageProvider) && sourceUploadToken.isBlank())
+				throw new IllegalArgumentException("Client-local video requires an uploaded input token");
+		}
+	}
+
+	public record VideoAssemblyManifest(String jobId, List<ArtifactReference> segments) {
+		public VideoAssemblyManifest {
+			Objects.requireNonNull(jobId, "jobId");
+			segments = List.copyOf(segments);
+		}
+	}
+
+	public record ClientAssemblyCompletion(String provider, String key, String name, long size, String sha256) {
+		public ClientAssemblyCompletion {
+			Objects.requireNonNull(provider, "provider");
+			Objects.requireNonNull(key, "key");
+			Objects.requireNonNull(name, "name");
+			Objects.requireNonNull(sha256, "sha256");
+			if (!"client-local".equals(provider) || size < 0 || !sha256.matches("[0-9a-fA-F]{64}"))
+				throw new IllegalArgumentException("Invalid client assembly artifact metadata");
 		}
 	}
 

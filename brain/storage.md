@@ -1,6 +1,6 @@
 # Storage and artifact fabric
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-08
 
 ## Status
 
@@ -14,6 +14,25 @@ Last reviewed: 2026-08-04
   requester-controlled keys.
 - **Deferred:** concrete key management, recovery, rotation, delegation, and
   revocation protocols.
+
+## Implemented slice
+
+`server-local` is now the zero-configuration provider for input, intermediate,
+and output roles, backed by `ArtifactStore`, `ArtifactReference`,
+`StorageSelection`, and `ArtifactStoreRegistry`. The scheduler-managed FFmpeg
+video workload uses this abstraction end to end: source ingest, worker input
+segments, lease-fenced worker publications, verified assembly staging, final
+publication, and completed-job presentation all retain provider/key/size/SHA-256
+identity. Native FFmpeg still receives private staged paths inside server or
+worker workspaces.
+
+Only the FFmpeg workload is migrated end to end. Its Client Job Launcher can also
+select `client-local`, upload an input, use chosen client scratch/output directories,
+download and SHA-256-verify worker segments, assemble locally with FFmpeg, and retain
+the final provider/key/size/SHA-256 metadata without copying the result into server
+history. This first client-local topology still relays input and segment bytes through
+temporary server-local staging. Other workloads, Google Drive, S3, direct
+worker-to-requester publication, and restart-resumable client assembly remain future work.
 
 ## First-class storage model
 

@@ -1274,3 +1274,33 @@ cloud providers remain future direction; see `brain/current-state.md` and
   reactor successfully before submitting PR #39 for final review.
 - Local app images remain unsigned development builds. Distribution outside the
   owner's Macs will require Apple Developer signing and notarization.
+
+## 2026-08-08 20:45:00 EDT — Migrate server-local video to artifact references
+
+- Replayed the seven storage-foundation commits cleanly onto current `main`,
+  preserving server-local defaults for input, intermediate, and output roles.
+- Migrated scheduler-managed FFmpeg video source ingest, worker input staging,
+  lease-fenced segment publication, verified assembly staging, final publication,
+  and completed-job metadata to `ArtifactReference`/`ArtifactStore` boundaries.
+- Preserved the existing HTTP transfer path and FFmpeg local-path interface while
+  adding provider/key/size/SHA-256 ownership and integrity semantics.
+- This is intentionally limited to server-local FFmpeg video. Client-local,
+  Google Drive, S3, direct worker-to-requester publication, client-side assembly,
+  and migration of the other workloads remain future work.
+
+## 2026-08-08 21:25:00 EDT — Add client-local FFmpeg assembly
+
+- Added a Client Job Launcher storage choice for FFmpeg jobs. `server-local`
+  remains the zero-configuration default; `client-local` adds input upload plus
+  client scratch and output directory selectors.
+- Client-local jobs retain the existing worker protocol: the server temporarily
+  stages the input, workers publish lease-fenced segments, and the launcher
+  downloads each segment by artifact reference with size/SHA-256 verification.
+- The launcher assembles locally with FFmpeg, writes the final Matroska artifact
+  into the selected output directory, and reports client-local provider/key/size/
+  SHA-256 metadata. Completed history persists that metadata without copying the
+  client-owned bytes into server storage.
+- This option is FFmpeg-only. The initial topology still relays artifact bytes
+  through temporary server-local staging; restart-resumable launcher assembly,
+  Google Drive, S3, direct worker-to-requester publication, and client-local
+  support for other workloads remain future work.

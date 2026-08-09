@@ -24,6 +24,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 
 /** Starts the continuously running Mechana server and scheduler. */
@@ -58,11 +59,10 @@ public final class ServerMain {
 	@SuppressFBWarnings(value = "DM_EXIT", justification = "The restart action replaces this dedicated server JVM")
 	private static void restart(MechanaServer server, int port, String publicUrl, Path dataDirectory) {
 		server.close();
-		if (Boolean.getBoolean("mechana.launchd.managed")) {
-			System.exit(0);
-		}
 		try {
-			new ProcessBuilder(restartCommand(port, publicUrl, dataDirectory)).inheritIO().start();
+			Optional<List<String>> replacement = replacementCommand(port, publicUrl, dataDirectory);
+			if (replacement.isPresent())
+				new ProcessBuilder(replacement.orElseThrow()).inheritIO().start();
 			System.exit(0);
 		} catch (IOException | URISyntaxException failure) {
 			System.err.printf("Could not restart Mechana server: %s%n", failure.getMessage());
@@ -90,6 +90,13 @@ public final class ServerMain {
 		}
 		server.close();
 		System.exit(0);
+	}
+
+	static Optional<List<String>> replacementCommand(int port, String publicUrl, Path dataDirectory)
+			throws URISyntaxException {
+		return Boolean.getBoolean("mechana.launchd.managed")
+				? Optional.empty()
+				: Optional.of(restartCommand(port, publicUrl, dataDirectory));
 	}
 
 	static List<String> restartCommand(int port, String publicUrl, Path dataDirectory) throws URISyntaxException {

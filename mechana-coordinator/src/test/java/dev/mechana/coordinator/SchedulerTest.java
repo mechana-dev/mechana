@@ -62,6 +62,7 @@ class SchedulerTest {
 		Scheduler scheduler = new Scheduler(1_000, clock);
 		scheduler.submit(1, 100);
 		TaskLease abandoned = scheduler.lease("lost-worker", Set.of("sleep"), PLUGIN).orElseThrow();
+		assertTrue(scheduler.acceptsArtifact("lost-worker", abandoned.taskId(), abandoned.leaseToken()));
 
 		clock.advance(1_001);
 
@@ -69,6 +70,8 @@ class SchedulerTest {
 		assertEquals(abandoned.taskId(), retried.taskId());
 		assertEquals(2, retried.attempt());
 		assertFalse(scheduler.complete("lost-worker", abandoned.taskId(), abandoned.leaseToken()));
+		assertFalse(scheduler.acceptsArtifact("lost-worker", abandoned.taskId(), abandoned.leaseToken()));
+		assertTrue(scheduler.acceptsArtifact("replacement", retried.taskId(), retried.leaseToken()));
 		assertTrue(scheduler.complete("replacement", retried.taskId(), retried.leaseToken()));
 	}
 

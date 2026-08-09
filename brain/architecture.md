@@ -1,5 +1,16 @@
 # Architecture
 
+## Implemented storage boundary (2026-08-08)
+
+The server registers `server-local` behind the storage-neutral artifact-store
+contract. Scheduler-managed video uses references at platform boundaries and
+verified local staging at FFmpeg boundaries. HTTP worker transfer remains the
+compatible byte path; control-plane task messages continue to carry URLs and
+metadata rather than embedding large artifacts. FFmpeg also has an initial
+client-local option: temporary server relay, verified segment download, launcher-side
+FFmpeg assembly, and a client-owned completed reference. This remains one workload
+with two placement modes, not yet the general distributed-storage topology below.
+
 Last reviewed: 2026-08-06
 
 ## Stable shape
@@ -57,11 +68,13 @@ transport must adapt the same domain boundaries rather than redefine them.
   contract. Infrastructure does not depend on concrete plugins except at explicit
   composition/demo entry points.
 - Artifact service: identity and transfer; no domain-specific transformation.
-- The initial distributed-video data plane is server-mediated: the server
+- The default distributed-video data plane is server-mediated: the server
   stream-copies keyframe-aligned input chunks, each worker downloads only its
   assigned chunk and publishes its encoded segment under the live lease, and the
-  server performs final assembly and validation. This is not yet the intended
-  content-addressed, cache-aware artifact service.
+  server performs final assembly and validation. Client-local selection preserves
+  that relay through segment publication, then the launcher downloads verified
+  segments and performs final assembly into its chosen output directory. Direct
+  worker-to-requester publication is not yet implemented.
 - The fractal reference path has no input data plane. Planning creates immutable,
   deterministic image-index ranges; workers publish one batch artifact per work
   unit, and plugin-owned server composition validates and collects those batches
