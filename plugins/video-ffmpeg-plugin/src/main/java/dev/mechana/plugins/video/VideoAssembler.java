@@ -52,11 +52,32 @@ public final class VideoAssembler {
 				"final mux");
 	}
 
+	public void assembleDistributed(Path input, Path output, VideoTypes.Plan plan, long videoBitrate,
+			CancellationToken cancellation) throws IOException, InterruptedException {
+		Path assembly = plan.scratchRoot().resolve("assembly");
+		Files.createDirectories(assembly);
+		List<Path> segments = plan.segments().stream().map(VideoTypes.Segment::output).toList();
+		Path video = assembly.resolve("video.mkv");
+		run(commands.safeConcat(segments, video, videoBitrate, plan.options().preset()), plan, cancellation,
+				"safe video assembly");
+		Path audio = assembly.resolve("audio.mka");
+		boolean hasAudio = plan.input().audioStreams() == 1;
+		if (hasAudio)
+			run(commands.extractAudio(input, audio), plan, cancellation, "audio extraction");
+		Path parent = output.toAbsolutePath().getParent();
+		if (parent != null)
+			Files.createDirectories(parent);
+		run(commands.mux(video, audio, output, hasAudio, plan.options().outputContainer()), plan, cancellation,
+				"final mux");
+	}
+
 	private void run(List<String> command, VideoTypes.Plan plan, CancellationToken cancellation, String name)
 			throws IOException, InterruptedException {
 		var result = runner.run(command, plan.options().processTimeout(), cancellation, ignored -> {
 		});
 		MediaProbe.requireSuccess(result, name);
+		if (!result.stderr().isBlank())
+			throw new IOException(name + " reported media errors: " + result.stderr().strip());
 	}
 	private static String escape(String path) {
 		return path.replace("'", "'\\''");

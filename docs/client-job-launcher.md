@@ -18,6 +18,9 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
   information, and resource guidance from server-provided descriptors.
 - Includes descriptors for sleep, FFmpeg video, fractal render, Tesseract OCR,
   and Blender render and submits through their existing server endpoints.
+- FFmpeg video includes `Start offset in seconds`, default `0`, which selects the
+  beginning of the requested compression range for server-local and client-local
+  jobs. Duration is measured from that offset.
 - Presents every capability with the same `Tasks (0 = fleet)` control. Zero
   creates one task per currently compatible worker, capped by finite work such as
   pages, images, or frames; a positive value requests that explicit task count.
@@ -43,6 +46,16 @@ The same plugin-owned split/planning and assembly code used by server-local jobs
 runs on the requester for client-local jobs. OCR rasterizes its PDF locally;
 Blender serves one packed scene reference; Fractal has no input artifact. Large
 intermediate batches do not traverse the coordinator.
+
+For client-local video, the launcher clips and keyframe-splits the requested range
+before transfer, so workers receive only their assigned chunks rather than the
+whole source. Worker video partitions return concurrently to launcher scratch;
+the launcher verifies them, performs safe final video assembly, and copies the
+requested audio range once from the original local source. Multiple workers can
+therefore contribute their independent upload bandwidth, bounded by the launcher's
+own network, storage, and local assembly capacity. The launcher and source must
+remain available until completion. Server-local remains preferable when the source
+is already server-resident/cached or the job must outlive the launcher.
 
 The Blender form defaults to `samples/blender/mechana-camera-orbit-2s.blend`, a
 packed lightweight geometry scene with a continuously orbiting camera. Frames

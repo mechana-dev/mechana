@@ -45,6 +45,15 @@ client-worker. These are application-payload counters: small HTTP/control-plane
 messages, protocol headers, retries that never complete authoritatively, and
 local preparation/assembly disk I/O are intentionally outside the totals.
 
+An observed eight-work-unit FFmpeg job demonstrates the topology rather than a
+general throughput promise. A 119,175,998-byte client source was locally clipped
+from a 50-second offset and split into 26,019,987 bytes of assigned worker inputs;
+workers returned 16,944,666 bytes of compressed partitions and downloaded 459,192
+bytes of plugin packages. Two launcher-local workers accounted for 4,531,442 bytes
+of loopback payload, leaving approximately 38.9 MB crossing machines. The final
+18,883,570-byte MKV was assembled locally, including a single copy of source audio,
+without traversing the coordinator.
+
 ## First-class storage model
 
 A job may select different providers for each artifact role:
@@ -95,6 +104,16 @@ coordinator retains authoritative scheduling and job state, workers compute
 results rather than anonymously replicate them, and destinations are explicitly
 authorized. The comparison describes aggregate transfer topology, not a
 peer-to-peer protocol commitment.
+
+Concurrency improves transfer time only until a shared limit is reached. The
+requester's network interface, Wi-Fi/uplink, storage, HTTP handling, or router may
+become the aggregate ceiling, and workers behind one uplink share that capacity.
+Direct transfer removes the coordinator's network and storage relay but does not
+remove the requester as an endpoint. Server-mediated placement can be more
+efficient when the source is already server-resident or cached, the requester is
+poorly connected, several jobs reuse one source, or execution must survive a
+launcher disconnect. Placement should therefore follow artifact and consumer
+locality rather than treating either topology as universally superior.
 
 Direct publication also lets workers release attempt scratch after verified
 upload and places results at the destination needed for final use or assembly.

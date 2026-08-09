@@ -47,6 +47,15 @@ public final class FfmpegCommands {
 				"frame=best_effort_timestamp_time", "-of", "csv=p=0", input.toString());
 	}
 
+	public List<String> prepareClip(Path input, double startOffsetSeconds, double durationSeconds, Path output) {
+		if (startOffsetSeconds < 0 || durationSeconds <= 0)
+			throw new IllegalArgumentException("Invalid video clip range");
+		List<String> c = base();
+		c.addAll(List.of("-ss", decimal(startOffsetSeconds), "-i", input.toString(), "-t", decimal(durationSeconds),
+				"-c", "copy", "-avoid_negative_ts", "make_zero", output.toString()));
+		return List.copyOf(c);
+	}
+
 	public List<String> segment(Path input, VideoTypes.Segment segment, VideoTypes.Options options) {
 		List<String> c = base();
 		c.addAll(List.of("-ss", decimal(segment.startSeconds()), "-i", input.toString(), "-t",
@@ -91,6 +100,36 @@ public final class FfmpegCommands {
 		c.addAll(List.of("-f", "concat", "-safe", "0", "-i", manifest.toString(), "-map", "0:v:0", "-c", "copy",
 				"-progress", "pipe:1", "-nostats", output.toString()));
 		return List.copyOf(c);
+	}
+
+	/**
+	 * Decodes each independently encoded partition in its own input context, then
+	 * emits one coherent HEVC stream. Stream-copy concatenation is unsafe when
+	 * heterogeneous workers produced different HEVC parameter sets.
+	 */
+	public List<String> safeConcat(List<Path> segments, Path output, long videoBitrate, String preset) {
+		if (segments.isEmpty() || videoBitrate <= 0)
+			throw new IllegalArgumentException("Safe video assembly requires segments and a positive bitrate");
+		List<String> c = base();
+		c.add("-xerror");
+		segments.forEach(segment -> c.addAll(List.of("-i", segment.toString())));
+		StringBuilder filter = new StringBuilder();
+		StringBuilder inputs = new StringBuilder();
+		for (int index = 0; index < segments.size(); index++) {
+			filter.append('[').append(index).append(":v:0]setpts=PTS-STARTPTS[v").append(index).append("];");
+			inputs.append("[v").append(index).append(']');
+		}
+		filter.append(inputs).append("concat=n=").append(segments.size()).append(":v=1:a=0[v]");
+		c.addAll(List.of("-filter_complex", filter.toString(), "-map", "[v]", "-an", "-sn", "-c:v", "libx265",
+				"-preset", blankToDefault(preset, "slow"), "-b:v", Long.toString(videoBitrate), "-maxrate",
+				Long.toString(videoBitrate), "-bufsize", Long.toString(Math.multiplyExact(videoBitrate, 2)),
+				"-progress", "pipe:1", "-nostats", "-f", "matroska", output.toString()));
+		return List.copyOf(c);
+	}
+
+	public List<String> decodeValidate(Path input) {
+		return List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-xerror", "-i", input.toString(), "-map", "0:v:0",
+				"-f", "hash", "-hash", "sha256", "-");
 	}
 
 	public List<String> mux(Path video, Path audio, Path output, boolean hasAudio, VideoTypes.Container container) {

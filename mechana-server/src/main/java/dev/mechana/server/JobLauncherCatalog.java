@@ -56,6 +56,7 @@ final class JobLauncherCatalog {
 						directory("clientOutputDirectory", "Client output directory"),
 						optionalText("clientTransferHost", "Client transfer host (blank = this computer)", ""),
 						file("sourcePath", "Input video"),
+						decimal("startOffsetSeconds", "Start offset in seconds", "0", 0, 86400),
 						decimal("durationSeconds", "Duration (seconds)", "60", 0.01, 86400),
 						integer("segmentCount", "Tasks (0 = fleet)", "0", 0, 10000),
 						decimal("targetSizeRatio", "Target size ratio", "0.75", 0.01, 0.99)),

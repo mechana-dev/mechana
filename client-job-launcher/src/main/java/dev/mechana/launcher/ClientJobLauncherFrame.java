@@ -165,8 +165,8 @@ final class ClientJobLauncherFrame extends JFrame {
 							clientVideo.transferHost());
 					try {
 						ClientArtifactDataPlane.Prepared prepared = plane.prepare(clientVideo.source(),
-								clientVideo.durationSeconds(), clientVideo.segmentCount(),
-								clientVideo.targetSizeRatio());
+								clientVideo.startOffsetSeconds(), clientVideo.durationSeconds(),
+								clientVideo.segmentCount(), clientVideo.targetSizeRatio());
 						values.put("durationSeconds", prepared.durationSeconds());
 						values.put("segmentCount", prepared.chunks().size());
 						values.put("clientChunks", prepared.chunks());
@@ -174,8 +174,10 @@ final class ClientJobLauncherFrame extends JFrame {
 						values.put("videoBitrate", prepared.videoBitrate());
 						removeClientControls(values);
 						String jobId = client.submit(serverUri(), form.descriptor(), values);
-						return new SubmissionResult(jobId, new ClientVideoContext(clientVideo.source(),
-								plane.scratchDirectory(), clientVideo.output(), prepared.durationSeconds(), plane),
+						return new SubmissionResult(jobId,
+								new ClientVideoContext(clientVideo.source(), plane.scratchDirectory(),
+										clientVideo.output(), clientVideo.startOffsetSeconds(),
+										prepared.durationSeconds(), prepared.videoBitrate(), plane),
 								null);
 					} catch (java.io.IOException | InterruptedException | RuntimeException failure) {
 						plane.close();
@@ -289,8 +291,10 @@ final class ClientJobLauncherFrame extends JFrame {
 			throw new IllegalArgumentException("Input video does not exist: " + source);
 		int requestedTasks = ((Number) values.get("segmentCount")).intValue();
 		int segmentCount = requestedTasks > 0 ? requestedTasks : Math.max(1, descriptor.availableWorkers());
-		return new ClientVideoRequest(source, scratch, output, ((Number) values.get("durationSeconds")).doubleValue(),
-				segmentCount, ((Number) values.get("targetSizeRatio")).doubleValue(),
+		return new ClientVideoRequest(source, scratch, output,
+				((Number) values.get("startOffsetSeconds")).doubleValue(),
+				((Number) values.get("durationSeconds")).doubleValue(), segmentCount,
+				((Number) values.get("targetSizeRatio")).doubleValue(),
 				String.valueOf(values.getOrDefault("clientTransferHost", "")));
 	}
 
@@ -339,7 +343,8 @@ final class ClientJobLauncherFrame extends JFrame {
 			CompletableFuture.runAsync(() -> {
 				try {
 					new ClientVideoAssembly(client).assembleDirect(serverUri(), job.jobId(), context.source(),
-							context.scratch(), context.output(), context.durationSeconds(), context.dataPlane());
+							context.scratch(), context.output(), context.startOffsetSeconds(),
+							context.durationSeconds(), context.videoBitrate(), context.dataPlane());
 				} catch (java.io.IOException | InterruptedException failure) {
 					throw new java.util.concurrent.CompletionException(failure);
 				}
@@ -472,11 +477,11 @@ final class ClientJobLauncherFrame extends JFrame {
 	}
 	private record Refresh(List<JobLauncherDescriptor> capabilities, List<LauncherJob> jobs) {
 	}
-	private record ClientVideoRequest(Path source, Path scratch, Path output, double durationSeconds, int segmentCount,
-			double targetSizeRatio, String transferHost) {
+	private record ClientVideoRequest(Path source, Path scratch, Path output, double startOffsetSeconds,
+			double durationSeconds, int segmentCount, double targetSizeRatio, String transferHost) {
 	}
-	private record ClientVideoContext(Path source, Path scratch, Path output, double durationSeconds,
-			ClientArtifactDataPlane dataPlane) {
+	private record ClientVideoContext(Path source, Path scratch, Path output, double startOffsetSeconds,
+			double durationSeconds, long videoBitrate, ClientArtifactDataPlane dataPlane) {
 	}
 	private record SubmissionResult(String jobId, ClientVideoContext clientVideo, ClientPluginContext clientPlugin) {
 	}

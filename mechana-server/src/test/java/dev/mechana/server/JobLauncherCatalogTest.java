@@ -79,5 +79,8 @@ class JobLauncherCatalogTest {
 		assertEquals(List.of("server-local", "client-local"), fields.get("storageProvider").choices());
 		assertEquals("directory", fields.get("clientScratchDirectory").type());
 		assertEquals("directory", fields.get("clientOutputDirectory").type());
+		assertEquals("Start offset in seconds", fields.get("startOffsetSeconds").label());
+		assertEquals("0", fields.get("startOffsetSeconds").defaultValue());
+		assertEquals(0d, fields.get("startOffsetSeconds").minimum());
 	}
 }

@@ -1,14 +1,15 @@
 # Distributed storage and artifact flow
 
-**Status:** Accepted architectural direction (pre-implementation)
+**Status:** Implemented server-local foundation and initial direct client-local adapter
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-09
 
 Mechana treats storage as a first-class abstraction while keeping the coordinator
-primarily a control plane. This document describes the intended topology; it does
-not claim that the generic provider contracts, direct publication, encryption, or
-placement policies are implemented. Current evidence is recorded in
-[`brain/current-state.md`](../../brain/current-state.md).
+primarily a control plane. `server-local` and the generic requester-hosted direct
+adapter are implemented; FFmpeg, Fractal, OCR, and Blender support both placements,
+while Sleep has no bulk data plane. General external providers, encryption, caching,
+and automatic placement policy remain future work. Current evidence is recorded
+in [`brain/current-state.md`](../../brain/current-state.md).
 
 ## Architectural commitments
 
@@ -62,6 +63,13 @@ worker C ----/
 The second topology allows simultaneous uploads to aggregate independent worker
 bandwidth. It is BitTorrent-like only in this throughput property: it is not an
 anonymous peer network, and the coordinator remains authoritative.
+
+The requester remains an aggregate endpoint: its connection, storage, HTTP
+handling, and router cap the benefit, while workers sharing one uplink do not add
+independent capacity. Direct publication is most efficient when the source and
+final consumer are already at the requester. Server-mediated transfer remains
+valuable when input is server-resident or cached, reused across jobs, or execution
+must survive requester disconnection.
 
 ## End-to-end lifecycle
 

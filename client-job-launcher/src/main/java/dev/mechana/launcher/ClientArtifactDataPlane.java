@@ -74,19 +74,19 @@ final class ClientArtifactDataPlane implements AutoCloseable {
 		http.start();
 	}
 
-	Prepared prepare(Path source, double requestedDuration, int segmentCount, double targetSizeRatio)
-			throws IOException, InterruptedException {
+	Prepared prepare(Path source, double startOffsetSeconds, double requestedDuration, int segmentCount,
+			double targetSizeRatio) throws IOException, InterruptedException {
 		String ffmpeg = executable("ffmpeg");
 		String ffprobe = executable("ffprobe");
 		ExternalProcessRunner runner = new ExternalProcessRunner();
 		FfmpegCommands commands = new FfmpegCommands(ffmpeg, ffprobe);
 		MediaProbe probe = new MediaProbe(commands, runner);
 		VideoTypes.MediaInfo original = probe.inspect(source, Duration.ofMinutes(5));
-		double duration = Math.min(requestedDuration, original.durationSeconds());
+		if (startOffsetSeconds < 0 || startOffsetSeconds >= original.durationSeconds())
+			throw new IllegalArgumentException("Start offset must be within the input duration");
+		double duration = Math.min(requestedDuration, original.durationSeconds() - startOffsetSeconds);
 		Path prepared = root.resolve("prepared-input.mp4");
-		var clipped = runner.run(
-				List.of(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", source.toString(), "-t",
-						Double.toString(duration), "-c", "copy", prepared.toString()),
+		var clipped = runner.run(commands.prepareClip(source, startOffsetSeconds, duration, prepared),
 				Duration.ofMinutes(15), CancellationToken.NEVER, ignored -> {
 				});
 		if (clipped.exitCode() != 0)

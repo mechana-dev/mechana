@@ -84,4 +84,30 @@ class FfmpegCommandsTest {
 				"copy", "input-00002.mp4")));
 		assertFalse(command.contains("libx265"));
 	}
+
+	@Test
+	void preparesTheSameOffsetClipWithoutReencodingForEitherPlacement() {
+		var command = new FfmpegCommands("ffmpeg", "ffprobe").prepareClip(Path.of("source.mp4"), 12.5, 30,
+				Path.of("prepared.mp4"));
+		assertTrue(command.containsAll(java.util.List.of("-ss", "12.500000", "-i", "source.mp4", "-t", "30.000000",
+				"-c", "copy", "-avoid_negative_ts", "make_zero", "prepared.mp4")));
+	}
+
+	@Test
+	void safelyAssemblesIndependentHevcInputsThroughSeparateDecoderContexts() {
+		var command = new FfmpegCommands("ffmpeg", "ffprobe").safeConcat(
+				java.util.List.of(Path.of("worker-a.mkv"), Path.of("worker-b.mkv")), Path.of("joined.mkv"), 1_500_000,
+				"slow");
+		assertTrue(command.containsAll(java.util.List.of("-i", "worker-a.mkv", "worker-b.mkv", "-filter_complex",
+				"[0:v:0]setpts=PTS-STARTPTS[v0];[1:v:0]setpts=PTS-STARTPTS[v1];[v0][v1]concat=n=2:v=1:a=0[v]", "-map",
+				"[v]", "libx265")));
+		assertFalse(command.contains("-c"));
+		assertFalse(command.contains("copy"));
+	}
+
+	@Test
+	void fullDecodeValidationTreatsDecoderErrorsAsFatal() {
+		var command = new FfmpegCommands("ffmpeg", "ffprobe").decodeValidate(Path.of("output.mkv"));
+		assertTrue(command.containsAll(java.util.List.of("-xerror", "-map", "0:v:0", "hash", "sha256", "output.mkv")));
+	}
 }
