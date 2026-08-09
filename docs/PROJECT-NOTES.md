@@ -1287,3 +1287,20 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - This is intentionally limited to server-local FFmpeg video. Client-local,
   Google Drive, S3, direct worker-to-requester publication, client-side assembly,
   and migration of the other workloads remain future work.
+
+## 2026-08-08 21:25:00 EDT — Add client-local FFmpeg assembly
+
+- Added a Client Job Launcher storage choice for FFmpeg jobs. `server-local`
+  remains the zero-configuration default; `client-local` adds input upload plus
+  client scratch and output directory selectors.
+- Client-local jobs retain the existing worker protocol: the server temporarily
+  stages the input, workers publish lease-fenced segments, and the launcher
+  downloads each segment by artifact reference with size/SHA-256 verification.
+- The launcher assembles locally with FFmpeg, writes the final Matroska artifact
+  into the selected output directory, and reports client-local provider/key/size/
+  SHA-256 metadata. Completed history persists that metadata without copying the
+  client-owned bytes into server storage.
+- This option is FFmpeg-only. The initial topology still relays artifact bytes
+  through temporary server-local staging; restart-resumable launcher assembly,
+  Google Drive, S3, direct worker-to-requester publication, and client-local
+  support for other workloads remain future work.

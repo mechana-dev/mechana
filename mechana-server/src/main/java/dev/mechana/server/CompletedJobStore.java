@@ -19,6 +19,7 @@ package dev.mechana.server;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mechana.coordinator.InMemoryJobMonitor;
 import dev.mechana.api.ArtifactReference;
+import dev.mechana.api.StorageSelection;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -39,6 +40,7 @@ final class CompletedJobStore {
 
 	private static final String SNAPSHOT_FILE = "snapshot.json";
 	private static final String ARTIFACTS_DIRECTORY = "artifacts";
+	private static final String EXTERNAL_ARTIFACTS_FILE = ".external-artifacts.json";
 	private final Path jobsRoot;
 	private final ObjectMapper json;
 	private final Map<String, InMemoryJobMonitor.Snapshot> snapshots = new LinkedHashMap<>();
@@ -76,9 +78,14 @@ final class CompletedJobStore {
 		Path root = jobDirectory(jobId).resolve(ARTIFACTS_DIRECTORY);
 		if (!Files.isDirectory(root))
 			return List.of();
+		List<Artifact> artifacts = new ArrayList<>();
 		try (var files = Files.walk(root)) {
-			return files.filter(Files::isRegularFile).sorted().map(file -> artifact(root, file)).toList();
+			artifacts.addAll(files.filter(Files::isRegularFile).filter(
+					file -> !EXTERNAL_ARTIFACTS_FILE.equals(Objects.requireNonNull(file.getFileName()).toString()))
+					.sorted().map(file -> artifact(root, file)).toList());
 		}
+		artifacts.addAll(readExternalArtifacts(jobId));
+		return List.copyOf(artifacts);
 	}
 
 	synchronized Path artifact(String jobId, String name) throws IOException {
@@ -113,6 +120,25 @@ final class CompletedJobStore {
 		Path path = artifact(jobId, name);
 		if (Files.size(path) != artifact.sizeBytes())
 			throw new IOException("Completed artifact size does not match publication metadata");
+	}
+
+	synchronized void registerExternalArtifact(String jobId, String name, ArtifactReference artifact)
+			throws IOException {
+		requireKnown(jobId);
+		if (StorageSelection.SERVER_LOCAL.equals(artifact.providerId()))
+			throw new IllegalArgumentException("Server-local artifacts must be registered from stored bytes");
+		List<Artifact> artifacts = new ArrayList<>(readExternalArtifacts(jobId));
+		artifacts.removeIf(existing -> existing.name().equals(name));
+		artifacts.add(
+				new Artifact(name, artifact.sizeBytes(), artifact.providerId(), artifact.key(), artifact.sha256()));
+		writeAtomically(jobDirectory(jobId).resolve(ARTIFACTS_DIRECTORY).resolve(EXTERNAL_ARTIFACTS_FILE), artifacts);
+	}
+
+	private List<Artifact> readExternalArtifacts(String jobId) throws IOException {
+		Path file = jobDirectory(jobId).resolve(ARTIFACTS_DIRECTORY).resolve(EXTERNAL_ARTIFACTS_FILE);
+		if (!Files.isRegularFile(file))
+			return List.of();
+		return json.readValue(file.toFile(), json.getTypeFactory().constructCollectionType(List.class, Artifact.class));
 	}
 
 	synchronized boolean purge(String jobId) throws IOException {

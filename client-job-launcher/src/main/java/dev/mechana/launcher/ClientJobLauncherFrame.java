@@ -24,7 +24,13 @@ import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.FlowLayout;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.prefs.Preferences;
 import javax.swing.*;
@@ -47,6 +53,10 @@ final class ClientJobLauncherFrame extends JFrame {
 	private final JTable jobs = new JTable(jobsModel);
 	@SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "Swing frames are not deserialized")
 	private transient List<LauncherJob> jobItems = List.of();
+	@SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "Swing frames are not deserialized")
+	private final transient Map<String, ClientVideoContext> clientVideoJobs = new ConcurrentHashMap<>();
+	@SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "Swing frames are not deserialized")
+	private final transient Set<String> assemblingClientJobs = ConcurrentHashMap.newKeySet();
 	private Timer refreshTimer;
 	private boolean busy;
 
@@ -143,8 +153,21 @@ final class ClientJobLauncherFrame extends JFrame {
 			return;
 		try {
 			var values = form.values();
-			run(() -> client.submit(serverUri(), form.descriptor(), values), jobId -> {
-				connectionState.setText("Submitted " + jobId);
+			ClientVideoContext clientVideo = clientVideoContext(form.descriptor(), values);
+			values.remove("clientScratchDirectory");
+			values.remove("clientOutputDirectory");
+			run(() -> {
+				if (clientVideo != null) {
+					String token = UUID.randomUUID().toString();
+					client.uploadVideoInput(serverUri(), token, clientVideo.source());
+					values.put("sourceUploadToken", token);
+				}
+				String jobId = client.submit(serverUri(), form.descriptor(), values);
+				return new SubmissionResult(jobId, clientVideo);
+			}, submission -> {
+				if (submission.clientVideo() != null)
+					clientVideoJobs.put(submission.jobId(), submission.clientVideo());
+				connectionState.setText("Submitted " + submission.jobId());
 				refreshJobs();
 			});
 		} catch (IllegalArgumentException invalid) {
@@ -207,6 +230,53 @@ final class ClientJobLauncherFrame extends JFrame {
 		for (LauncherJob job : jobItems)
 			jobsModel.addRow(new Object[]{job.jobId(), job.plugin(), job.status(), job.progress() + "%",
 					String.join(", ", job.workerAssignments()), job.completedAt(), artifactSummary(job.artifacts())});
+		continueClientAssemblies();
+	}
+
+	private ClientVideoContext clientVideoContext(JobLauncherDescriptor descriptor, Map<String, Object> values) {
+		if (!"video-ffmpeg".equals(descriptor.capabilityId())
+				|| !"client-local".equals(String.valueOf(values.get("storageProvider"))))
+			return null;
+		Path source = Path.of(String.valueOf(values.get("sourcePath"))).toAbsolutePath().normalize();
+		Path scratch = requiredDirectory(values, "clientScratchDirectory", "Client scratch directory");
+		Path output = requiredDirectory(values, "clientOutputDirectory", "Client output directory");
+		if (!Files.isRegularFile(source))
+			throw new IllegalArgumentException("Input video does not exist: " + source);
+		return new ClientVideoContext(source, scratch, output, ((Number) values.get("durationSeconds")).doubleValue());
+	}
+
+	private static Path requiredDirectory(Map<String, Object> values, String name, String label) {
+		String value = String.valueOf(values.getOrDefault(name, "")).strip();
+		if (value.isBlank())
+			throw new IllegalArgumentException(label + " is required for client-local storage");
+		return Path.of(value).toAbsolutePath().normalize();
+	}
+
+	private void continueClientAssemblies() {
+		for (LauncherJob job : jobItems) {
+			ClientVideoContext context = clientVideoJobs.get(job.jobId());
+			if (context == null || !"ASSEMBLING".equals(job.status()) || !assemblingClientJobs.add(job.jobId()))
+				continue;
+			connectionState.setText("Assembling " + job.jobId() + " on this client…");
+			CompletableFuture.runAsync(() -> {
+				try {
+					new ClientVideoAssembly(client).assemble(serverUri(), job.jobId(), context.source(),
+							context.scratch(), context.output(), context.durationSeconds());
+				} catch (java.io.IOException | InterruptedException failure) {
+					throw new java.util.concurrent.CompletionException(failure);
+				}
+			}).whenComplete((ignored, failure) -> SwingUtilities.invokeLater(() -> {
+				assemblingClientJobs.remove(job.jobId());
+				if (failure == null) {
+					clientVideoJobs.remove(job.jobId());
+					connectionState.setText("Client assembly completed for " + job.jobId());
+					refreshJobs();
+				} else {
+					connectionState.setText("Client assembly failed");
+					showError(failure.getCause());
+				}
+			}));
+		}
 	}
 
 	private static String artifactSummary(List<ArtifactReference> artifacts) {
@@ -256,6 +326,10 @@ final class ClientJobLauncherFrame extends JFrame {
 		T run() throws java.io.IOException, InterruptedException;
 	}
 	private record Refresh(List<JobLauncherDescriptor> capabilities, List<LauncherJob> jobs) {
+	}
+	private record ClientVideoContext(Path source, Path scratch, Path output, double durationSeconds) {
+	}
+	private record SubmissionResult(String jobId, ClientVideoContext clientVideo) {
 	}
 	private static final class ReadOnlyTableModel extends DefaultTableModel {
 		private static final long serialVersionUID = 1L;

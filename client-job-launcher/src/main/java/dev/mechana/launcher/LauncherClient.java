@@ -21,12 +21,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mechana.protocol.Messages.JobLauncherDescriptor;
 import dev.mechana.protocol.Messages.JobSubmission;
 import dev.mechana.protocol.Messages.LauncherJob;
+import dev.mechana.protocol.Messages.ArtifactReference;
+import dev.mechana.protocol.Messages.ClientAssemblyCompletion;
+import dev.mechana.protocol.Messages.VideoAssemblyManifest;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -61,6 +66,37 @@ final class LauncherClient {
 		HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
 		requireSuccess(response);
 		return json.readValue(response.body(), JobSubmission.class).jobId();
+	}
+
+	void uploadVideoInput(URI server, String token, Path source) throws IOException, InterruptedException {
+		HttpRequest request = HttpRequest.newBuilder(server.resolve("/api/client/video-inputs/" + token))
+				.timeout(Duration.ofHours(1)).PUT(HttpRequest.BodyPublishers.ofFile(source)).build();
+		requireSuccess(http.send(request, HttpResponse.BodyHandlers.ofByteArray()));
+	}
+
+	VideoAssemblyManifest videoAssemblyManifest(URI server, String jobId) throws IOException, InterruptedException {
+		return read(server.resolve("/api/jobs/" + jobId + "/client-assembly"), new TypeReference<>() {
+		});
+	}
+
+	void downloadArtifact(URI server, ArtifactReference artifact, Path destination)
+			throws IOException, InterruptedException {
+		HttpResponse<Path> response = http.send(
+				HttpRequest.newBuilder(server.resolve(artifact.url())).timeout(Duration.ofHours(1)).build(),
+				HttpResponse.BodyHandlers.ofFile(destination));
+		if (response.statusCode() < 200 || response.statusCode() >= 300) {
+			Files.deleteIfExists(destination);
+			throw new IOException(
+					"Server returned HTTP " + response.statusCode() + " while downloading " + artifact.key());
+		}
+	}
+
+	void completeClientAssembly(URI server, String jobId, ClientAssemblyCompletion completion)
+			throws IOException, InterruptedException {
+		HttpRequest request = HttpRequest.newBuilder(server.resolve("/api/jobs/" + jobId + "/client-assembly/complete"))
+				.timeout(Duration.ofSeconds(30)).header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofByteArray(json.writeValueAsBytes(completion))).build();
+		requireSuccess(http.send(request, HttpResponse.BodyHandlers.ofByteArray()));
 	}
 
 	void abort(URI server, String jobId) throws IOException, InterruptedException {

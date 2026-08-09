@@ -37,7 +37,7 @@ final class DescriptorForm extends JPanel {
 	private static final long serialVersionUID = 1L;
 	private final transient JobLauncherDescriptor descriptor;
 	@SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "Swing panels are not deserialized")
-	private final transient Map<SubmissionField, JTextField> editors = new LinkedHashMap<>();
+	private final transient Map<SubmissionField, JComponent> editors = new LinkedHashMap<>();
 
 	DescriptorForm(JobLauncherDescriptor descriptor, Preferences settings) {
 		super(new BorderLayout(8, 8));
@@ -52,32 +52,15 @@ final class DescriptorForm extends JPanel {
 			constraints.weightx = 0;
 			constraints.fill = GridBagConstraints.NONE;
 			fields.add(new JLabel(field.label()), constraints);
-			JTextField editor = new JTextField(settings.get(field.name(), field.defaultValue()), 28);
+			JComponent editor = createEditor(field, settings);
 			editor.setToolTipText(field.help());
-			editor.getDocument().addDocumentListener(new DocumentListener() {
-				@Override
-				public void insertUpdate(DocumentEvent event) {
-					remember();
-				}
-				@Override
-				public void removeUpdate(DocumentEvent event) {
-					remember();
-				}
-				@Override
-				public void changedUpdate(DocumentEvent event) {
-					remember();
-				}
-				private void remember() {
-					settings.put(field.name(), editor.getText());
-				}
-			});
 			constraints.gridx = 1;
 			constraints.weightx = 1;
 			constraints.fill = GridBagConstraints.HORIZONTAL;
 			fields.add(editor, constraints);
-			if ("file".equals(field.type())) {
+			if ("file".equals(field.type()) || "directory".equals(field.type())) {
 				JButton browse = new JButton("Choose…");
-				browse.addActionListener(event -> chooseFile(field, editor));
+				browse.addActionListener(event -> chooseFile(field, (JTextField) editor));
 				constraints.gridx = 2;
 				constraints.weightx = 0;
 				constraints.fill = GridBagConstraints.NONE;
@@ -101,8 +84,45 @@ final class DescriptorForm extends JPanel {
 
 	Map<String, Object> values() {
 		Map<String, Object> values = new LinkedHashMap<>();
-		editors.forEach((field, editor) -> values.put(field.name(), parse(field, editor.getText().strip())));
+		editors.forEach((field, editor) -> values.put(field.name(), parse(field, editorValue(editor).strip())));
 		return values;
+	}
+
+	private static JComponent createEditor(SubmissionField field, Preferences settings) {
+		String saved = settings.get(field.name(), field.defaultValue());
+		if ("choice".equals(field.type())) {
+			JComboBox<String> choice = new JComboBox<>(field.choices().toArray(String[]::new));
+			choice.setSelectedItem(saved);
+			choice.addActionListener(event -> settings.put(field.name(), editorValue(choice)));
+			return choice;
+		}
+		JTextField text = new JTextField(saved, 28);
+		text.getDocument().addDocumentListener(new DocumentListener() {
+			@Override
+			public void insertUpdate(DocumentEvent event) {
+				remember();
+			}
+			@Override
+			public void removeUpdate(DocumentEvent event) {
+				remember();
+			}
+			@Override
+			public void changedUpdate(DocumentEvent event) {
+				remember();
+			}
+			private void remember() {
+				settings.put(field.name(), text.getText());
+			}
+		});
+		return text;
+	}
+
+	private static String editorValue(JComponent editor) {
+		if (editor instanceof JTextField text)
+			return text.getText();
+		if (editor instanceof JComboBox<?> choice)
+			return String.valueOf(choice.getSelectedItem());
+		throw new IllegalArgumentException("Unsupported form editor");
 	}
 
 	private static Object parse(SubmissionField field, String text) {
@@ -138,6 +158,8 @@ final class DescriptorForm extends JPanel {
 
 	private void chooseFile(SubmissionField field, JTextField editor) {
 		JFileChooser chooser = new JFileChooser();
+		if ("directory".equals(field.type()))
+			chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
 		if (!field.acceptedExtensions().isEmpty())
 			chooser.setFileFilter(new FileNameExtensionFilter(field.label() + " (" + acceptedTypes(field) + ")",
 					field.acceptedExtensions().toArray(String[]::new)));

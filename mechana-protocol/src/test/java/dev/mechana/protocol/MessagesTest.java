@@ -16,6 +16,7 @@
 package dev.mechana.protocol;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.mechana.protocol.Messages.BlenderJobSubmitRequest;
@@ -37,5 +38,15 @@ class MessagesTest {
 		assertThrows(IllegalArgumentException.class, () -> new VideoJobSubmitRequest("input.mp4", 10, -1, 0.75));
 		assertThrows(IllegalArgumentException.class,
 				() -> new BlenderJobSubmitRequest("scene.blend", 1, 48, -1, 640, 360, 32, 24));
+	}
+
+	@Test
+	void videoStorageDefaultsToServerLocalAndClientLocalRequiresAnUpload() {
+		VideoJobSubmitRequest compatible = new VideoJobSubmitRequest("input.mp4", 10, 2, 0.75);
+		assertEquals("server-local", compatible.storageProvider());
+		assertEquals("", compatible.sourceUploadToken());
+		assertThrows(IllegalArgumentException.class,
+				() -> new VideoJobSubmitRequest("input.mp4", 10, 2, 0.75, "client-local", ""));
+		assertDoesNotThrow(() -> new VideoJobSubmitRequest("input.mp4", 10, 2, 0.75, "client-local", "upload-token"));
 	}
 }

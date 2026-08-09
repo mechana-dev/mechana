@@ -52,7 +52,10 @@ worker segment output, assembly input, and the retained final video through
 metadata. Worker publication remains behind scheduler lease validation, and the
 assembler stages each referenced segment into its private workspace while
 verifying size and SHA-256 before invoking FFmpeg. Completed-job JSON retains the
-existing download URL while adding provider, key, and SHA-256 metadata.
+existing download URL while adding provider, key, and SHA-256 metadata. For a
+client-local FFmpeg job, the launcher instead stages verified segment references
+into its selected scratch directory, assembles into its selected output directory,
+and reports the client-owned final reference; the server retains metadata only.
 
 The older manual two-host proof copies its input to a fixed remote scratch directory and
 copies completed remote Matroska segments back to the initiating host before
@@ -76,5 +79,5 @@ downloaded once per work unit rather than addressed and cached once per worker.
 Client job history presents artifacts as provider, stable key, size, and an
 optional provider action URL. UI code must not reconstruct local filesystem paths
 from an artifact identity. The first implementation reports durable completed-job
-files as `server-local` references; client-local and cloud references remain
-directional.
+files as `server-local` references and client-assembled FFmpeg results as
+`client-local` references. Cloud references remain directional.

@@ -67,4 +67,15 @@ class JobLauncherCatalogTest {
 		assertEquals(List.of("pdf"), descriptors.getFirst().fields().getFirst().acceptedExtensions());
 		assertEquals(List.of("blend"), descriptors.getLast().fields().getFirst().acceptedExtensions());
 	}
+
+	@Test
+	void ffmpegOffersServerAndClientLocalStorageLocations() {
+		var descriptor = JobLauncherCatalog.available(Map.of("video-ffmpeg", 1)).getFirst();
+		var fields = descriptor.fields().stream()
+				.collect(java.util.stream.Collectors.toMap(field -> field.name(), field -> field));
+		assertEquals("server-local", fields.get("storageProvider").defaultValue());
+		assertEquals(List.of("server-local", "client-local"), fields.get("storageProvider").choices());
+		assertEquals("directory", fields.get("clientScratchDirectory").type());
+		assertEquals("directory", fields.get("clientOutputDirectory").type());
+	}
 }

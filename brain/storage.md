@@ -26,10 +26,13 @@ publication, and completed-job presentation all retain provider/key/size/SHA-256
 identity. Native FFmpeg still receives private staged paths inside server or
 worker workspaces.
 
-Only the FFmpeg workload is migrated end to end. Other distributed workloads
-still use their existing server-owned path adapters. Client-local, Google Drive,
-S3, direct worker-to-requester publication, and client-side assembly remain
-future work.
+Only the FFmpeg workload is migrated end to end. Its Client Job Launcher can also
+select `client-local`, upload an input, use chosen client scratch/output directories,
+download and SHA-256-verify worker segments, assemble locally with FFmpeg, and retain
+the final provider/key/size/SHA-256 metadata without copying the result into server
+history. This first client-local topology still relays input and segment bytes through
+temporary server-local staging. Other workloads, Google Drive, S3, direct
+worker-to-requester publication, and restart-resumable client assembly remain future work.
 
 ## First-class storage model
 
