@@ -158,10 +158,10 @@ final class ClientJobLauncherFrame extends JFrame {
 			values.remove("clientTransferHost");
 			run(() -> {
 				if (clientVideo != null) {
-					ClientVideoDataPlane plane = new ClientVideoDataPlane(clientVideo.scratch(),
+					ClientArtifactDataPlane plane = new ClientArtifactDataPlane(clientVideo.scratch(),
 							clientVideo.transferHost());
 					try {
-						ClientVideoDataPlane.Prepared prepared = plane.prepare(clientVideo.source(),
+						ClientArtifactDataPlane.Prepared prepared = plane.prepare(clientVideo.source(),
 								clientVideo.durationSeconds(), clientVideo.segmentCount(),
 								clientVideo.targetSizeRatio());
 						values.put("durationSeconds", prepared.durationSeconds());
@@ -363,7 +363,7 @@ final class ClientJobLauncherFrame extends JFrame {
 			double targetSizeRatio, String transferHost) {
 	}
 	private record ClientVideoContext(Path source, Path scratch, Path output, double durationSeconds,
-			ClientVideoDataPlane dataPlane) {
+			ClientArtifactDataPlane dataPlane) {
 	}
 	private record SubmissionResult(String jobId, ClientVideoContext clientVideo) {
 	}

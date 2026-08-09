@@ -878,7 +878,8 @@ public final class MechanaServer implements AutoCloseable {
 							Map.entry("endSeconds", Double.toString(chunk.endSeconds())),
 							Map.entry("videoBitrate", Long.toString(request.videoBitrate())),
 							Map.entry("preset", options.preset()),
-							Map.entry("requiredWorkerCapability", "storage.client-direct-video.v1")),
+							Map.entry("requiredWorkerCapability", "storage.client-direct-artifacts.v1"),
+							Map.entry("artifactTransferOrigin", request.clientOutputUrl())),
 					"Segment " + index, Map.of("range", chunk.startSeconds() + "–" + chunk.endSeconds() + "s")));
 		}
 		VideoTypes.Plan plan = new VideoTypes.Plan(info, options, List.copyOf(segments), scratch);

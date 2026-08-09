@@ -281,6 +281,8 @@ public final class WorkerAgent {
 
 	private static Set<String> advertisedCapabilities(Set<String> plugins) {
 		java.util.HashSet<String> advertised = new java.util.HashSet<>(plugins);
+		if (!plugins.isEmpty())
+			advertised.add("storage.client-direct-artifacts.v1");
 		if (plugins.contains("video-ffmpeg"))
 			advertised.add("storage.client-direct-video.v1");
 		if (!sandboxedExecution())
@@ -624,17 +626,19 @@ public final class WorkerAgent {
 		String supplied = lease.parameters().get("artifactUploadUrl");
 		if (supplied == null || supplied.isBlank())
 			return Optional.empty();
-		if (!"video-ffmpeg".equals(lease.pluginId()) || !name.matches("segment-[0-9]{5}\\.mkv"))
-			throw new IllegalArgumentException("Direct artifact publication is limited to FFmpeg segments");
-		URI input = URI.create(Objects.requireNonNull(lease.parameters().get("inputUrl"), "Direct input URL"));
+		if (!name.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))
+			throw new IllegalArgumentException("Direct artifact name is unsafe");
+		String origin = lease.parameters().getOrDefault("artifactTransferOrigin", lease.parameters().get("inputUrl"));
+		URI authority = URI.create(Objects.requireNonNull(origin, "Direct artifact transfer origin"));
 		URI output = URI.create(supplied);
 		boolean sameOrigin = Set.of("http", "https").contains(output.getScheme())
-				&& Objects.equals(input.getScheme(), output.getScheme())
-				&& Objects.equals(input.getHost(), output.getHost()) && effectivePort(input) == effectivePort(output);
+				&& Objects.equals(authority.getScheme(), output.getScheme())
+				&& Objects.equals(authority.getHost(), output.getHost())
+				&& effectivePort(authority) == effectivePort(output);
 		if (!sameOrigin || output.getUserInfo() != null || output.getQuery() != null || output.getFragment() != null
-				|| output.getPath() == null || !output.getPath().contains("/client-video/")
+				|| output.getPath() == null || !output.getPath().contains("/client-artifacts/")
 				|| !output.getPath().contains("/outputs/"))
-			throw new IllegalArgumentException("Direct artifact destination does not match the client input origin");
+			throw new IllegalArgumentException("Direct artifact destination does not match the authorized origin");
 		return Optional.of(output);
 	}
 

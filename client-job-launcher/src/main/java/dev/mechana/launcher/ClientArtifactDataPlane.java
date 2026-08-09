@@ -32,10 +32,12 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Requester-hosted, tokenized HTTP data plane for direct FFmpeg worker
- * transfers.
+ * Requester-hosted, tokenized HTTP data plane for direct worker artifact
+ * transfers. Plugin adapters may prepare inputs and assemble accepted outputs,
+ * but this service owns transport, attempt identity, atomic publication, and
+ * integrity metadata.
  */
-final class ClientVideoDataPlane implements AutoCloseable {
+final class ClientArtifactDataPlane implements AutoCloseable {
 	record Prepared(List<ClientVideoChunk> chunks, long videoBitrate, double durationSeconds) {
 	}
 	record LocalArtifact(Path path, long size, String sha256) {
@@ -50,7 +52,7 @@ final class ClientVideoDataPlane implements AutoCloseable {
 	private final Map<String, LocalArtifact> outputs = new ConcurrentHashMap<>();
 	private List<Path> chunks = List.of();
 
-	ClientVideoDataPlane(Path scratchDirectory, String configuredHost) throws IOException {
+	ClientArtifactDataPlane(Path scratchDirectory, String configuredHost) throws IOException {
 		this.temporaryScratch = scratchDirectory == null;
 		this.scratchDirectory = temporaryScratch
 				? Files.createTempDirectory("mechana-client-video-").toAbsolutePath().normalize()
@@ -62,7 +64,7 @@ final class ClientVideoDataPlane implements AutoCloseable {
 				? automaticHost(InetAddress.getLocalHost().getHostName())
 				: configuredHost.strip();
 		http = HttpServer.create(new InetSocketAddress("0.0.0.0", 0), 0);
-		http.createContext("/client-video/" + token + "/", this::handle);
+		http.createContext("/client-artifacts/" + token + "/", this::handle);
 		http.setExecutor(java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
 		http.start();
 	}
@@ -127,7 +129,7 @@ final class ClientVideoDataPlane implements AutoCloseable {
 	}
 
 	private String baseUrl() {
-		return "http://" + advertisedHost + ":" + http.getAddress().getPort() + "/client-video/" + token;
+		return "http://" + advertisedHost + ":" + http.getAddress().getPort() + "/client-artifacts/" + token;
 	}
 
 	static String automaticHost(String localHostName) {
@@ -139,7 +141,8 @@ final class ClientVideoDataPlane implements AutoCloseable {
 
 	private void handle(HttpExchange exchange) throws IOException {
 		try {
-			String suffix = exchange.getRequestURI().getPath().substring(("/client-video/" + token + "/").length());
+			String suffix = exchange.getRequestURI().getPath()
+					.substring(("/client-artifacts/" + token + "/").length());
 			if ("GET".equals(exchange.getRequestMethod()) && suffix.startsWith("chunks/")) {
 				int index = Integer.parseInt(suffix.substring("chunks/".length()));
 				Path chunk = chunks.get(index);

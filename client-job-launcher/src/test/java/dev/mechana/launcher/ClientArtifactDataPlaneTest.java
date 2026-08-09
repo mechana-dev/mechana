@@ -15,17 +15,17 @@ import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
 
-class ClientVideoDataPlaneTest {
+class ClientArtifactDataPlaneTest {
 	@Test
 	void removesBonjourSuffixFromAutomaticFleetHost() {
-		assertEquals("Marks-MacBook-Air-M4", ClientVideoDataPlane.automaticHost("Marks-MacBook-Air-M4.local"));
-		assertEquals("mechana-client", ClientVideoDataPlane.automaticHost("mechana-client"));
+		assertEquals("Marks-MacBook-Air-M4", ClientArtifactDataPlane.automaticHost("Marks-MacBook-Air-M4.local"));
+		assertEquals("mechana-client", ClientArtifactDataPlane.automaticHost("mechana-client"));
 	}
 
 	@Test
 	void blankScratchUsesAndCleansTemporaryClientStorage() throws Exception {
 		Path scratch;
-		try (ClientVideoDataPlane plane = new ClientVideoDataPlane(null, "127.0.0.1")) {
+		try (ClientArtifactDataPlane plane = new ClientArtifactDataPlane(null, "127.0.0.1")) {
 			scratch = plane.scratchDirectory();
 			assertTrue(Files.isDirectory(scratch));
 		}
