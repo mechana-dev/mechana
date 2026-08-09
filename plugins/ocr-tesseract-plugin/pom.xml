@@ -11,6 +11,11 @@
   <name>Mechana :: Plugin :: OCR Tesseract</name>
   <dependencies>
     <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>${pdfbox.version}</version>
+    </dependency>
+    <dependency>
       <groupId>dev.mechana</groupId>
       <artifactId>mechana-api</artifactId>
       <version>${project.version}</version>

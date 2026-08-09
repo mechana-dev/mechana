@@ -49,6 +49,7 @@ import dev.mechana.plugins.blender.BlenderMovieAssembler;
 import dev.mechana.plugins.blender.FramePlanner;
 import dev.mechana.plugins.fractal.FractalCollectionAssembler;
 import dev.mechana.plugins.ocr.OcrMarkdownAssembler;
+import dev.mechana.plugins.ocr.OcrPageSplitter;
 import dev.mechana.plugins.video.CancellationToken;
 import dev.mechana.plugins.video.ExternalProcessRunner;
 import dev.mechana.plugins.video.FfmpegCommands;
@@ -81,11 +82,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import javax.imageio.ImageIO;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.rendering.ImageType;
-import org.apache.pdfbox.rendering.PDFRenderer;
 
 /** HTTP adapter around the scheduler and authoritative plugin registry. */
 public final class MechanaServer implements AutoCloseable {
@@ -136,6 +132,7 @@ public final class MechanaServer implements AutoCloseable {
 	private final ConcurrentMap<String, OcrJob> ocrJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, dev.mechana.api.ArtifactReference> blenderInputs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, BlenderJob> blenderJobs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, DirectClientJob> directClientJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, WorkerPresence> workers = new ConcurrentHashMap<>();
 	private volatile Runnable restartAction;
 	private volatile Runnable stopAction;
@@ -328,21 +325,24 @@ public final class MechanaServer implements AutoCloseable {
 					return;
 				}
 				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs/fractal".equals(path)) {
-					requireLoopback(exchange);
 					FractalJobSubmitRequest request = read(exchange, FractalJobSubmitRequest.class);
+					if ("server-local".equals(request.storageProvider()))
+						requireLoopback(exchange);
 					String jobId = submitFractal(request);
 					sendJson(exchange, 202, new JobSubmission(jobId));
 					return;
 				}
 				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs/ocr".equals(path)) {
-					requireLoopback(exchange);
 					OcrJobSubmitRequest request = read(exchange, OcrJobSubmitRequest.class);
+					if ("server-local".equals(request.storageProvider()))
+						requireLoopback(exchange);
 					sendJson(exchange, 202, new JobSubmission(submitOcr(request)));
 					return;
 				}
 				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs/blender".equals(path)) {
-					requireLoopback(exchange);
 					BlenderJobSubmitRequest request = read(exchange, BlenderJobSubmitRequest.class);
+					if ("server-local".equals(request.storageProvider()))
+						requireLoopback(exchange);
 					sendJson(exchange, 202, new JobSubmission(submitBlender(request)));
 					return;
 				}
@@ -663,6 +663,8 @@ public final class MechanaServer implements AutoCloseable {
 					if (videoJobs.containsKey(status.jobId())) {
 						if (!videoJobs.get(status.jobId()).clientAssembly())
 							assembleVideo(status.jobId());
+					} else if (directClientJobs.containsKey(status.jobId())) {
+						// The requester owns assembly; the coordinator only fences accepted attempts.
 					} else if (fractalJobs.containsKey(status.jobId()))
 						assembleFractal(status.jobId());
 					else if (ocrJobs.containsKey(status.jobId()))
@@ -894,6 +896,13 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private void recordDirectClientCompletion(String jobId, String taskId, String leaseToken) {
+		DirectClientJob direct = directClientJobs.get(jobId);
+		if (direct != null) {
+			String name = direct.taskArtifacts().get(taskId);
+			if (name != null)
+				direct.acceptedLeaseHashes().put(name,
+						sha256(leaseToken.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+		}
 		VideoJob video = videoJobs.get(jobId);
 		if (video == null || !video.directClient())
 			return;
@@ -916,12 +925,13 @@ public final class MechanaServer implements AutoCloseable {
 			int start = 0;
 			for (int batch = 0; batch < taskCount; batch++) {
 				int count = base + (batch < remainder ? 1 : 0);
-				work.add(new WorkSpec(count,
-						Map.of("startIndex", Integer.toString(start), "imageCount", Integer.toString(count), "width",
-								Integer.toString(request.width()), "height", Integer.toString(request.height()),
-								"maxIterations", Integer.toString(request.maxIterations()), "seed",
-								Long.toString(request.seed()), "batchIndex", Integer.toString(batch)),
-						"Batch " + batch,
+				Map<String, String> parameters = new HashMap<>(Map.of("startIndex", Integer.toString(start),
+						"imageCount", Integer.toString(count), "width", Integer.toString(request.width()), "height",
+						Integer.toString(request.height()), "maxIterations", Integer.toString(request.maxIterations()),
+						"seed", Long.toString(request.seed()), "batchIndex", Integer.toString(batch)));
+				if ("client-local".equals(request.storageProvider()))
+					configureDirectOutput(parameters, request.clientOutputUrl(), batch);
+				work.add(new WorkSpec(count, Map.copyOf(parameters), "Batch " + batch,
 						Map.of("images", start + "–" + (start + count - 1), "count", Integer.toString(count))));
 				start += count;
 			}
@@ -934,6 +944,8 @@ public final class MechanaServer implements AutoCloseable {
 					fractalPluginLocation);
 			fractalJobs.put(jobId,
 					new FractalJob(scratch, request, new ConcurrentHashMap<>(), new ConcurrentHashMap<>()));
+			if ("client-local".equals(request.storageProvider()))
+				directClientJobs.put(jobId, directJob(jobId, taskCount, "batch-%05d.zip"));
 			retained = true;
 			return jobId;
 		} finally {
@@ -943,6 +955,8 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private String submitOcr(OcrJobSubmitRequest request) throws IOException {
+		if ("client-local".equals(request.storageProvider()))
+			return submitDirectClientOcr(request);
 		Path source = Path.of(request.sourcePath()).toAbsolutePath().normalize();
 		if (!Files.isRegularFile(source))
 			throw new IllegalArgumentException("PDF source does not exist: " + source);
@@ -961,25 +975,10 @@ public final class MechanaServer implements AutoCloseable {
 		Files.createDirectories(scratch.resolve("batches"));
 		List<String> inputTokens = new java.util.ArrayList<>();
 		boolean retained = false;
-		try (PDDocument document = Loader.loadPDF(source.toFile())) {
-			int documentPages = document.getNumberOfPages();
-			if (documentPages < 1)
-				throw new IllegalArgumentException("PDF contains no pages");
-			if (request.firstPage() > documentPages)
-				throw new IllegalArgumentException("firstPage exceeds PDF page count");
-			int pageCount = request.pageCount() == 0
-					? documentPages - request.firstPage() + 1
-					: Math.min(request.pageCount(), documentPages - request.firstPage() + 1);
-			PDFRenderer renderer = new PDFRenderer(document);
-			List<Path> rendered = new java.util.ArrayList<>(pageCount);
-			for (int index = 0; index < pageCount; index++) {
-				int documentPage = request.firstPage() + index;
-				Path page = pages.resolve("page-%06d.png".formatted(documentPage));
-				if (!ImageIO.write(renderer.renderImageWithDPI(documentPage - 1, request.dpi(), ImageType.GRAY), "png",
-						page.toFile()))
-					throw new IOException("PNG writer is unavailable");
-				rendered.add(page);
-			}
+		try {
+			List<Path> rendered = new OcrPageSplitter()
+					.split(source, pages, request.firstPage(), request.pageCount(), request.dpi()).pages();
+			int pageCount = rendered.size();
 			int taskCount = request.taskCount() > 0
 					? Math.min(request.taskCount(), pageCount)
 					: Math.min(pageCount, compatibleWorkerCount(OCR_PLUGIN_ID));
@@ -1029,6 +1028,8 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private String submitBlender(BlenderJobSubmitRequest request) throws IOException {
+		if ("client-local".equals(request.storageProvider()))
+			return submitDirectClientBlender(request);
 		Path source = Path.of(request.sourcePath()).toAbsolutePath().normalize();
 		if (!Files.isRegularFile(source) || !Objects.requireNonNull(source.getFileName()).toString()
 				.toLowerCase(java.util.Locale.ROOT).endsWith(".blend"))
@@ -1074,6 +1075,91 @@ public final class MechanaServer implements AutoCloseable {
 				deleteTree(scratch);
 			}
 		}
+	}
+
+	private String submitDirectClientOcr(OcrJobSubmitRequest request) throws IOException {
+		int pageCount = request.clientPages().size();
+		if (request.pageCount() != pageCount)
+			throw new IllegalArgumentException("Client OCR page count does not match the rasterized artifacts");
+		int taskCount = request.taskCount() > 0
+				? Math.min(request.taskCount(), pageCount)
+				: Math.min(pageCount, compatibleWorkerCount(OCR_PLUGIN_ID));
+		List<WorkSpec> work = new java.util.ArrayList<>(taskCount);
+		int base = pageCount / taskCount;
+		int remainder = pageCount % taskCount;
+		int start = 0;
+		for (int batch = 0; batch < taskCount; batch++) {
+			int count = base + (batch < remainder ? 1 : 0);
+			Map<String, String> parameters = new HashMap<>();
+			parameters.put("startPage", Integer.toString(request.firstPage() + start));
+			parameters.put("pageCount", Integer.toString(count));
+			parameters.put("batchIndex", Integer.toString(batch));
+			parameters.put("language", request.language());
+			for (int offset = 0; offset < count; offset++)
+				parameters.put("pageUrl." + offset, request.clientPages().get(start + offset).url());
+			configureDirectOutput(parameters, request.clientOutputUrl(), batch);
+			int first = request.firstPage() + start;
+			work.add(new WorkSpec(count, Map.copyOf(parameters), "Pages " + first + "–" + (first + count - 1),
+					Map.of("pages", first + "–" + (first + count - 1), "language", request.language())));
+			start += count;
+		}
+		String jobId = scheduler.submitPlugin(OCR_PLUGIN_ID, OCR_PLUGIN_VERSION, OCR_PLUGIN_ENTRYPOINT, work,
+				Map.of("source", request.sourcePath(), "pages",
+						request.firstPage() + "–" + (request.firstPage() + pageCount - 1), "taskCount",
+						Integer.toString(taskCount), "dpi", Integer.toString(request.dpi()), "language",
+						request.language(), "title", request.title(), "dataPlane", "client-direct"),
+				ocrPluginLocation);
+		Path scratch = workRoot.resolve(UUID.randomUUID().toString());
+		ocrJobs.put(jobId, new OcrJob(List.of(), scratch, request.firstPage(), pageCount, request,
+				new ConcurrentHashMap<>(), new ConcurrentHashMap<>()));
+		directClientJobs.put(jobId, directJob(jobId, taskCount, "ocr-batch-%05d.zip"));
+		return jobId;
+	}
+
+	private String submitDirectClientBlender(BlenderJobSubmitRequest request) throws IOException {
+		int taskCount = request.taskCount() > 0
+				? request.taskCount()
+				: Math.min(request.lastFrame() - request.firstFrame() + 1, compatibleWorkerCount(BLENDER_PLUGIN_ID));
+		List<FramePlanner.Batch> batches = new FramePlanner().plan(request.firstFrame(), request.lastFrame(),
+				taskCount);
+		List<WorkSpec> work = batches.stream().map(batch -> {
+			Map<String, String> parameters = new HashMap<>(Map.of("inputUrl", request.clientScene().url(), "batchIndex",
+					Integer.toString(batch.index()), "firstFrame", Integer.toString(batch.firstFrame()), "lastFrame",
+					Integer.toString(batch.lastFrame()), "width", Integer.toString(request.width()), "height",
+					Integer.toString(request.height()), "samples", Integer.toString(request.samples()), "threads",
+					"0"));
+			configureDirectOutput(parameters, request.clientOutputUrl(), batch.index());
+			return new WorkSpec(batch.frameCount(), Map.copyOf(parameters),
+					"Frames " + batch.firstFrame() + "–" + batch.lastFrame(),
+					Map.of("frames", batch.firstFrame() + "–" + batch.lastFrame(), "samples",
+							Integer.toString(request.samples())));
+		}).toList();
+		String jobId = scheduler.submitPlugin(BLENDER_PLUGIN_ID, BLENDER_PLUGIN_VERSION, BLENDER_PLUGIN_ENTRYPOINT,
+				work,
+				Map.of("source", request.sourcePath(), "frames", request.firstFrame() + "–" + request.lastFrame(),
+						"dimensions", request.width() + "×" + request.height(), "samples",
+						Integer.toString(request.samples()), "fps", Integer.toString(request.fps()), "dataPlane",
+						"client-direct"),
+				blenderPluginLocation);
+		Path scratch = workRoot.resolve(UUID.randomUUID().toString());
+		blenderJobs.put(jobId,
+				new BlenderJob("", scratch, request, new ConcurrentHashMap<>(), new ConcurrentHashMap<>()));
+		directClientJobs.put(jobId, directJob(jobId, taskCount, "frames-%05d.zip"));
+		return jobId;
+	}
+
+	private static void configureDirectOutput(Map<String, String> parameters, String template, int index) {
+		String output = template.replace("{index}", Integer.toString(index));
+		parameters.put("artifactUploadUrl", output);
+		parameters.put("artifactTransferOrigin", output);
+		parameters.put("requiredWorkerCapability", "storage.client-direct-artifacts.v1");
+	}
+
+	private static DirectClientJob directJob(String jobId, int taskCount, String artifactPattern) {
+		Map<String, String> tasks = new HashMap<>();
+		for (int index = 0; index < taskCount; index++)
+			tasks.put(jobId + "-" + (index + 1), artifactPattern.formatted(index));
+		return new DirectClientJob(Map.copyOf(tasks), new ConcurrentHashMap<>());
 	}
 
 	private int compatibleWorkerCount(String capability) {
@@ -1194,6 +1280,17 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private VideoAssemblyManifest clientAssemblyManifest(String jobId) {
+		DirectClientJob direct = directClientJobs.get(jobId);
+		if (direct != null) {
+			if (!"ASSEMBLING".equals(scheduler.dashboard(jobId).stage()))
+				throw new IllegalArgumentException("Worker artifacts are not ready for client assembly");
+			List<ArtifactReference> artifacts = direct.taskArtifacts().values().stream().sorted().map(name -> {
+				String accepted = Objects.requireNonNull(direct.acceptedLeaseHashes().get(name),
+						"Missing accepted client artifact " + name);
+				return new ArtifactReference("client-local", accepted, 0, "", true, "");
+			}).toList();
+			return new VideoAssemblyManifest(jobId, artifacts);
+		}
 		VideoJob video = videoJobs.get(jobId);
 		if (video == null || !video.clientAssembly())
 			throw new IllegalArgumentException("Job does not use client-side assembly: " + jobId);
@@ -1231,6 +1328,22 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private void completeClientAssembly(String jobId, ClientAssemblyCompletion completion) {
+		DirectClientJob direct = directClientJobs.get(jobId);
+		if (direct != null && "ASSEMBLING".equals(scheduler.dashboard(jobId).stage())) {
+			dev.mechana.api.ArtifactReference finalArtifact = new dev.mechana.api.ArtifactReference(
+					completion.provider(), completion.key(), completion.size(), completion.sha256());
+			if (fractalJobs.containsKey(jobId))
+				fractalJobs.get(jobId).outputs().put(completion.name(), finalArtifact);
+			else if (ocrJobs.containsKey(jobId))
+				ocrJobs.get(jobId).outputs().put(completion.name(), finalArtifact);
+			else if (blenderJobs.containsKey(jobId))
+				blenderJobs.get(jobId).outputs().put(completion.name(), finalArtifact);
+			else
+				throw new IllegalArgumentException("Unknown direct client job: " + jobId);
+			scheduler.finishAssembly(jobId, null);
+			archiveIfTerminal(jobId);
+			return;
+		}
 		VideoJob video = videoJobs.get(jobId);
 		if (video == null || !video.clientAssembly() || !"ASSEMBLING".equals(scheduler.dashboard(jobId).stage()))
 			throw new IllegalArgumentException("Job is not awaiting client assembly: " + jobId);
@@ -1377,6 +1490,7 @@ public final class MechanaServer implements AutoCloseable {
 		} catch (IOException failure) {
 			System.err.printf("Could not archive completed job %s: %s%n", jobId, failure.getMessage());
 		} finally {
+			directClientJobs.remove(jobId);
 			VideoJob video = videoJobs.remove(jobId);
 			if (video != null) {
 				video.inputTokens().forEach(videoInputs::remove);
@@ -1778,6 +1892,10 @@ public final class MechanaServer implements AutoCloseable {
 	private record BlenderJob(String inputToken, Path scratch, BlenderJobSubmitRequest request,
 			ConcurrentMap<String, dev.mechana.api.ArtifactReference> batches,
 			ConcurrentMap<String, dev.mechana.api.ArtifactReference> outputs) {
+	}
+
+	private record DirectClientJob(Map<String, String> taskArtifacts,
+			ConcurrentMap<String, String> acceptedLeaseHashes) {
 	}
 
 	private record WorkerActivity(String jobId, String plugin, int progress) {
