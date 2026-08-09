@@ -7,9 +7,12 @@ contract. Scheduler-managed video uses references at platform boundaries and
 verified local staging at FFmpeg boundaries. HTTP worker transfer remains the
 compatible byte path; control-plane task messages continue to carry URLs and
 metadata rather than embedding large artifacts. FFmpeg also has an initial
-client-local option: temporary server relay, verified segment download, launcher-side
-FFmpeg assembly, and a client-owned completed reference. This remains one workload
-with two placement modes, not yet the general distributed-storage topology below.
+client-local option: launcher-side input chunking, tokenized direct worker transfer,
+lease-identified direct worker output publication, verified launcher-side FFmpeg
+assembly, and a client-owned completed reference. The scheduler requires an explicit
+direct-video worker capability, so old workers cannot accidentally lease these tasks.
+This remains one workload with two placement modes, not yet the general
+distributed-storage topology below.
 
 Last reviewed: 2026-08-06
 

@@ -7,7 +7,9 @@
 package dev.mechana.launcher;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mechana.protocol.Messages.ArtifactReference;
 import java.io.IOException;
@@ -19,6 +21,23 @@ import org.junit.jupiter.api.io.TempDir;
 class ClientVideoAssemblyTest {
 	@TempDir
 	Path temporaryDirectory;
+
+	@Test
+	void placesFinalOutputInJobSpecificDirectory() throws Exception {
+		Path outputRoot = temporaryDirectory.resolve("outputs");
+
+		Path output = ClientVideoAssembly.finalOutputPath(outputRoot, "job-123");
+
+		assertEquals(outputRoot.resolve("job-123/compressed-job-123.mkv").toAbsolutePath(), output);
+		assertTrue(Files.isDirectory(output.getParent()));
+	}
+
+	@Test
+	void rejectsJobIdThatEscapesOutputDirectory() {
+		Path outputRoot = temporaryDirectory.resolve("outputs");
+
+		assertThrows(IOException.class, () -> ClientVideoAssembly.finalOutputPath(outputRoot, "../elsewhere"));
+	}
 
 	@Test
 	void rejectsAndRemovesDownloadedContentThatDoesNotMatchArtifactIdentity() throws Exception {

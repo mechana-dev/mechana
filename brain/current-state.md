@@ -10,12 +10,14 @@
 - Plugin code and scheduler work specifications still receive URLs and staged
   local paths, never server-local keys or provider APIs.
 - FFmpeg jobs may alternatively select `client-local` in the Client Job Launcher.
-  The launcher uploads the selected input, chooses client scratch/output directories,
-  downloads and verifies lease-fenced segments, assembles with local FFmpeg, and
+  The launcher chunks the selected input in client scratch, serves tokenized chunk
+  URLs directly to compatible workers, accepts lease-identified worker outputs into
+  client scratch, verifies the accepted outputs, assembles with local FFmpeg, and
   publishes provider/key/size/SHA-256 metadata for the client-owned result.
-- The client-local FFmpeg path currently relays source and segment bytes through
-  temporary server-local staging. Google Drive, S3, direct worker-to-requester
-  publication, and client-local support for other workloads remain future work.
+- Direct client-local FFmpeg jobs require updated workers advertising
+  `storage.client-direct-video.v1`; older workers remain compatible with other jobs
+  but cannot lease these tasks. Google Drive, S3, restart-resumable launcher
+  assembly, and client-local support for other workloads remain future work.
 
 Verified: 2026-08-08
 

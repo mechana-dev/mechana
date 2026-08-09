@@ -1304,3 +1304,43 @@ cloud providers remain future direction; see `brain/current-state.md` and
   through temporary server-local staging; restart-resumable launcher assembly,
   Google Drive, S3, direct worker-to-requester publication, and client-local
   support for other workloads remain future work.
+
+## 2026-08-08 22:45:37 EDT — Make client-local FFmpeg a direct data plane
+
+- Changed client-local FFmpeg submission so the launcher probes and splits the
+  source into keyframe-aligned chunks in its selected scratch directory rather
+  than uploading the source to temporary server storage.
+- Added a tokenized launcher data endpoint: compatible workers fetch their chunks
+  directly into worker scratch and publish lease-identified output attempts directly
+  into client scratch. The server coordinates URLs, integrity metadata, scheduling,
+  and accepted lease identities without relaying the large artifact bytes.
+- Added `storage.client-direct-video.v1` capability matching so only updated workers
+  can lease direct client-local video tasks. Worker publication is restricted to the
+  same tokenized client-video origin and output namespace as the corresponding input.
+- The launcher verifies the server-selected attempt outputs by size/SHA-256, assembles
+  the final video in the selected client output directory, and reports client-local
+  completed-artifact metadata. Server-local video behavior remains unchanged.
+- This direct topology remains FFmpeg-only. Restart-resumable client assembly,
+  client-local support for other workloads, generalized external providers, Google
+  Drive, and S3 remain future work.
+
+## 2026-08-08 23:26:08 EDT — Clarify and clean client-local scratch
+
+- Made the Client Job Launcher output summary follow the selected FFmpeg placement,
+  showing the client-selected output directory for `client-local` instead of the
+  static server-artifact description.
+- Made client scratch optional. A blank value creates a temporary launcher-side
+  staging directory; an explicit value uses an owned per-transfer subdirectory.
+  Neither choice changes worker placement: every worker still downloads, processes,
+  and cleans its attempt in scratch local to that worker machine.
+- Added best-effort cleanup of launcher transfer files after success, failure, or
+  cancellation and deterministic cleanup of assembly intermediates. The selected
+  final output and completed-artifact metadata are retained.
+
+## 2026-08-08 23:34:00 EDT — Isolate client-local final outputs by job
+
+- Changed client-local FFmpeg assembly to create a job-ID subdirectory beneath
+  the selected output directory and publish the final video there. Final paths
+  now have the form `<selected-output>/<job-id>/compressed-<job-id>.mkv`.
+- Applied the same layout to both direct and legacy client-local assembly paths,
+  and added regression coverage for the layout and traversal rejection.

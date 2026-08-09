@@ -18,16 +18,19 @@ package dev.mechana.worker;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sun.net.httpserver.HttpServer;
 import dev.mechana.api.JobId;
 import dev.mechana.protocol.ExecutionRequest;
+import dev.mechana.protocol.Messages.TaskLease;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
@@ -80,5 +83,23 @@ class WorkerTest {
 				WorkerAgent.resolveCoordinatorUri(coordinator, "http://localhost:8787/api/plugins/ocr/1.0?token=abc"));
 		assertEquals(URI.create("https://cdn.example/plugin.jar"),
 				WorkerAgent.resolveCoordinatorUri(coordinator, "https://cdn.example/plugin.jar"));
+	}
+
+	@Test
+	void directVideoOutputMustMatchTheTokenizedClientInputOrigin() {
+		TaskLease accepted = lease(Map.of("inputUrl", "http://client.example:49152/client-video/token/chunks/0",
+				"artifactUploadUrl", "http://client.example:49152/client-video/token/outputs/0"));
+		assertEquals(URI.create("http://client.example:49152/client-video/token/outputs/0"),
+				WorkerAgent.directArtifactDestination(accepted, "segment-00000.mkv").orElseThrow());
+
+		TaskLease exfiltration = lease(Map.of("inputUrl", "http://client.example:49152/client-video/token/chunks/0",
+				"artifactUploadUrl", "https://unrelated.example/client-video/token/outputs/0"));
+		assertThrows(IllegalArgumentException.class,
+				() -> WorkerAgent.directArtifactDestination(exfiltration, "segment-00000.mkv"));
+	}
+
+	private static TaskLease lease(java.util.Map<String, String> parameters) {
+		return new TaskLease("job", "job-1", "video-ffmpeg", "1.0.0", "Plugin", "http://server/plugin.jar", "sha", 1000,
+				"lease", 30_000, 1, parameters);
 	}
 }

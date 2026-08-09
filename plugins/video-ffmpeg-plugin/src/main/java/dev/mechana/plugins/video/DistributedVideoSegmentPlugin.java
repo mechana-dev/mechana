@@ -28,7 +28,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.HexFormat;
 import java.util.Map;
 
 /** Worker entry point for one server-planned HEVC video segment. */
@@ -49,6 +52,7 @@ public final class DistributedVideoSegmentPlugin implements TaskPlugin {
 			Path input = directory.resolve("input.mp4");
 			Path output = directory.resolve("segment.mkv");
 			stageInput(parameters, input, context);
+			verifyInput(parameters, input);
 			double duration = Double.parseDouble(parameters.get("durationSeconds"));
 			long bitrate = Long.parseLong(parameters.get("videoBitrate"));
 			VideoTypes.Options options = new VideoTypes.Options(VideoTypes.Container.MKV,
@@ -71,6 +75,31 @@ public final class DistributedVideoSegmentPlugin implements TaskPlugin {
 			throw new PluginExecutionException("Distributed video segment failed", failure);
 		} finally {
 			delete(directory);
+		}
+	}
+
+	private static void verifyInput(Map<String, String> parameters, Path input) throws IOException {
+		String expectedSize = parameters.get("inputSize");
+		String expectedSha = parameters.get("inputSha256");
+		if (expectedSize == null && expectedSha == null)
+			return;
+		if (expectedSize == null || expectedSha == null || Files.size(input) != Long.parseLong(expectedSize)
+				|| !sha256(input).equalsIgnoreCase(expectedSha))
+			throw new IOException("Staged video chunk failed size/SHA-256 verification");
+	}
+
+	private static String sha256(Path file) throws IOException {
+		try {
+			MessageDigest digest = MessageDigest.getInstance("SHA-256");
+			try (InputStream input = Files.newInputStream(file)) {
+				byte[] buffer = new byte[64 * 1024];
+				for (int read; (read = input.read(buffer)) >= 0;)
+					if (read > 0)
+						digest.update(buffer, 0, read);
+			}
+			return HexFormat.of().formatHex(digest.digest());
+		} catch (NoSuchAlgorithmException impossible) {
+			throw new IllegalStateException(impossible);
 		}
 	}
 

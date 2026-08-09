@@ -29,7 +29,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.prefs.Preferences;
@@ -153,17 +152,33 @@ final class ClientJobLauncherFrame extends JFrame {
 			return;
 		try {
 			var values = form.values();
-			ClientVideoContext clientVideo = clientVideoContext(form.descriptor(), values);
+			ClientVideoRequest clientVideo = clientVideoRequest(form.descriptor(), values);
 			values.remove("clientScratchDirectory");
 			values.remove("clientOutputDirectory");
+			values.remove("clientTransferHost");
 			run(() -> {
 				if (clientVideo != null) {
-					String token = UUID.randomUUID().toString();
-					client.uploadVideoInput(serverUri(), token, clientVideo.source());
-					values.put("sourceUploadToken", token);
+					ClientVideoDataPlane plane = new ClientVideoDataPlane(clientVideo.scratch(),
+							clientVideo.transferHost());
+					try {
+						ClientVideoDataPlane.Prepared prepared = plane.prepare(clientVideo.source(),
+								clientVideo.durationSeconds(), clientVideo.segmentCount(),
+								clientVideo.targetSizeRatio());
+						values.put("durationSeconds", prepared.durationSeconds());
+						values.put("segmentCount", prepared.chunks().size());
+						values.put("clientChunks", prepared.chunks());
+						values.put("clientOutputUrl", plane.outputUrl(0).replace("/outputs/0", "/outputs/{index}"));
+						values.put("videoBitrate", prepared.videoBitrate());
+						String jobId = client.submit(serverUri(), form.descriptor(), values);
+						return new SubmissionResult(jobId, new ClientVideoContext(clientVideo.source(),
+								plane.scratchDirectory(), clientVideo.output(), prepared.durationSeconds(), plane));
+					} catch (java.io.IOException | InterruptedException | RuntimeException failure) {
+						plane.close();
+						throw failure;
+					}
 				}
 				String jobId = client.submit(serverUri(), form.descriptor(), values);
-				return new SubmissionResult(jobId, clientVideo);
+				return new SubmissionResult(jobId, null);
 			}, submission -> {
 				if (submission.clientVideo() != null)
 					clientVideoJobs.put(submission.jobId(), submission.clientVideo());
@@ -226,6 +241,12 @@ final class ClientJobLauncherFrame extends JFrame {
 
 	private void showJobs(List<LauncherJob> items) {
 		jobItems = List.copyOf(items);
+		for (LauncherJob job : jobItems)
+			if (Set.of("FAILED", "CANCELLED").contains(job.status())) {
+				ClientVideoContext abandoned = clientVideoJobs.remove(job.jobId());
+				if (abandoned != null)
+					abandoned.dataPlane().close();
+			}
 		jobsModel.setRowCount(0);
 		for (LauncherJob job : jobItems)
 			jobsModel.addRow(new Object[]{job.jobId(), job.plugin(), job.status(), job.progress() + "%",
@@ -233,16 +254,20 @@ final class ClientJobLauncherFrame extends JFrame {
 		continueClientAssemblies();
 	}
 
-	private ClientVideoContext clientVideoContext(JobLauncherDescriptor descriptor, Map<String, Object> values) {
+	private ClientVideoRequest clientVideoRequest(JobLauncherDescriptor descriptor, Map<String, Object> values) {
 		if (!"video-ffmpeg".equals(descriptor.capabilityId())
 				|| !"client-local".equals(String.valueOf(values.get("storageProvider"))))
 			return null;
 		Path source = Path.of(String.valueOf(values.get("sourcePath"))).toAbsolutePath().normalize();
-		Path scratch = requiredDirectory(values, "clientScratchDirectory", "Client scratch directory");
+		Path scratch = optionalDirectory(values, "clientScratchDirectory");
 		Path output = requiredDirectory(values, "clientOutputDirectory", "Client output directory");
 		if (!Files.isRegularFile(source))
 			throw new IllegalArgumentException("Input video does not exist: " + source);
-		return new ClientVideoContext(source, scratch, output, ((Number) values.get("durationSeconds")).doubleValue());
+		int requestedTasks = ((Number) values.get("segmentCount")).intValue();
+		int segmentCount = requestedTasks > 0 ? requestedTasks : Math.max(1, descriptor.availableWorkers());
+		return new ClientVideoRequest(source, scratch, output, ((Number) values.get("durationSeconds")).doubleValue(),
+				segmentCount, ((Number) values.get("targetSizeRatio")).doubleValue(),
+				String.valueOf(values.getOrDefault("clientTransferHost", "")));
 	}
 
 	private static Path requiredDirectory(Map<String, Object> values, String name, String label) {
@@ -250,6 +275,11 @@ final class ClientJobLauncherFrame extends JFrame {
 		if (value.isBlank())
 			throw new IllegalArgumentException(label + " is required for client-local storage");
 		return Path.of(value).toAbsolutePath().normalize();
+	}
+
+	private static Path optionalDirectory(Map<String, Object> values, String name) {
+		String value = String.valueOf(values.getOrDefault(name, "")).strip();
+		return value.isBlank() ? null : Path.of(value).toAbsolutePath().normalize();
 	}
 
 	private void continueClientAssemblies() {
@@ -260,15 +290,17 @@ final class ClientJobLauncherFrame extends JFrame {
 			connectionState.setText("Assembling " + job.jobId() + " on this client…");
 			CompletableFuture.runAsync(() -> {
 				try {
-					new ClientVideoAssembly(client).assemble(serverUri(), job.jobId(), context.source(),
-							context.scratch(), context.output(), context.durationSeconds());
+					new ClientVideoAssembly(client).assembleDirect(serverUri(), job.jobId(), context.source(),
+							context.scratch(), context.output(), context.durationSeconds(), context.dataPlane());
 				} catch (java.io.IOException | InterruptedException failure) {
 					throw new java.util.concurrent.CompletionException(failure);
 				}
 			}).whenComplete((ignored, failure) -> SwingUtilities.invokeLater(() -> {
 				assemblingClientJobs.remove(job.jobId());
+				ClientVideoContext finished = clientVideoJobs.remove(job.jobId());
+				if (finished != null)
+					finished.dataPlane().close();
 				if (failure == null) {
-					clientVideoJobs.remove(job.jobId());
 					connectionState.setText("Client assembly completed for " + job.jobId());
 					refreshJobs();
 				} else {
@@ -327,7 +359,11 @@ final class ClientJobLauncherFrame extends JFrame {
 	}
 	private record Refresh(List<JobLauncherDescriptor> capabilities, List<LauncherJob> jobs) {
 	}
-	private record ClientVideoContext(Path source, Path scratch, Path output, double durationSeconds) {
+	private record ClientVideoRequest(Path source, Path scratch, Path output, double durationSeconds, int segmentCount,
+			double targetSizeRatio, String transferHost) {
+	}
+	private record ClientVideoContext(Path source, Path scratch, Path output, double durationSeconds,
+			ClientVideoDataPlane dataPlane) {
 	}
 	private record SubmissionResult(String jobId, ClientVideoContext clientVideo) {
 	}

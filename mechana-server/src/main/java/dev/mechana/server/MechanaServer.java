@@ -633,6 +633,7 @@ public final class MechanaServer implements AutoCloseable {
 				throws IOException {
 			requirePost(exchange);
 			markWorkerSeen(workerId, null, Set.of());
+			String[] completedLease = new String[1];
 			boolean accepted = switch (action) {
 				case "heartbeat" -> {
 					TaskHeartbeat heartbeat = read(exchange, TaskHeartbeat.class);
@@ -644,6 +645,7 @@ public final class MechanaServer implements AutoCloseable {
 				}
 				case "complete" -> {
 					TaskCompletion completion = read(exchange, TaskCompletion.class);
+					completedLease[0] = completion.leaseToken();
 					yield scheduler.complete(workerId, taskId, completion.leaseToken());
 				}
 				case "fail" -> {
@@ -654,6 +656,8 @@ public final class MechanaServer implements AutoCloseable {
 			};
 			if (accepted) {
 				JobStatusResponse status = scheduler.statusForTask(taskId);
+				if (completedLease[0] != null)
+					recordDirectClientCompletion(status.jobId(), taskId, completedLease[0]);
 				if ("complete".equals(action) && "ASSEMBLING".equals(scheduler.dashboard(status.jobId()).stage())) {
 					if (videoJobs.containsKey(status.jobId())) {
 						if (!videoJobs.get(status.jobId()).clientAssembly())
@@ -756,6 +760,8 @@ public final class MechanaServer implements AutoCloseable {
 	private String submitVideo(VideoJobSubmitRequest request) throws IOException {
 		String workToken = UUID.randomUUID().toString();
 		Path scratch = workRoot.resolve(workToken);
+		if (!request.clientChunks().isEmpty())
+			return submitDirectClientVideo(request, scratch);
 		dev.mechana.api.ArtifactReference uploadedSource = null;
 		Path source;
 		if ("client-local".equals(request.storageProvider())) {
@@ -845,6 +851,58 @@ public final class MechanaServer implements AutoCloseable {
 			deleteTree(scratch);
 			throw failure;
 		}
+	}
+
+	private String submitDirectClientVideo(VideoJobSubmitRequest request, Path scratch) throws IOException {
+		Files.createDirectories(scratch);
+		VideoTypes.MediaInfo info = new VideoTypes.MediaInfo("client-chunks", request.durationSeconds(), "unknown", 0,
+				0, 1, 0, 0, 0, request.clientChunks().stream().mapToLong(chunk -> chunk.size()).sum());
+		VideoTypes.Options options = new VideoTypes.Options(VideoTypes.Container.MKV,
+				VideoTypes.QualityMode.VISUALLY_LOSSLESS, 28, "slow",
+				Duration.ofMillis(Math.max(1, Math.round(request.durationSeconds() * 1000 / request.segmentCount()))),
+				request.segmentCount(), Duration.ofHours(2));
+		List<VideoTypes.Segment> segments = new java.util.ArrayList<>(request.clientChunks().size());
+		List<WorkSpec> work = new java.util.ArrayList<>(request.clientChunks().size());
+		for (int index = 0; index < request.clientChunks().size(); index++) {
+			var chunk = request.clientChunks().get(index);
+			segments.add(new VideoTypes.Segment(index, chunk.startSeconds(), chunk.endSeconds(),
+					scratch.resolve("segment-%05d.mkv".formatted(index))));
+			String outputUrl = request.clientOutputUrl().replace("{index}", Integer.toString(index));
+			work.add(new WorkSpec(Math.max(1, Math.round(chunk.durationSeconds() * 1000)),
+					Map.ofEntries(Map.entry("inputUrl", chunk.inputUrl()),
+							Map.entry("inputSize", Long.toString(chunk.size())),
+							Map.entry("inputSha256", chunk.sha256()), Map.entry("artifactUploadUrl", outputUrl),
+							Map.entry("segmentIndex", Integer.toString(index)),
+							Map.entry("durationSeconds", Double.toString(chunk.durationSeconds())),
+							Map.entry("startSeconds", Double.toString(chunk.startSeconds())),
+							Map.entry("endSeconds", Double.toString(chunk.endSeconds())),
+							Map.entry("videoBitrate", Long.toString(request.videoBitrate())),
+							Map.entry("preset", options.preset()),
+							Map.entry("requiredWorkerCapability", "storage.client-direct-video.v1")),
+					"Segment " + index, Map.of("range", chunk.startSeconds() + "–" + chunk.endSeconds() + "s")));
+		}
+		VideoTypes.Plan plan = new VideoTypes.Plan(info, options, List.copyOf(segments), scratch);
+		String jobId = scheduler.submitVideo(work,
+				Map.of("source", request.sourcePath(), "inputDuration", "%.1fs".formatted(request.durationSeconds()),
+						"targetSizeRatio", Double.toString(request.targetSizeRatio()), "dataPlane", "client-direct"),
+				videoPluginLocation);
+		Map<String, String> taskArtifacts = new HashMap<>();
+		for (int index = 0; index < segments.size(); index++)
+			taskArtifacts.put(jobId + "-" + (index + 1), "segment-%05d.mkv".formatted(index));
+		videoJobs.put(jobId,
+				new VideoJob(List.of(), null, List.of(), scratch.resolve("input.mp4"), scratch.resolve("result.mkv"),
+						scratch, plan, new ConcurrentHashMap<>(), null, true, true, Map.copyOf(taskArtifacts),
+						new ConcurrentHashMap<>()));
+		return jobId;
+	}
+
+	private void recordDirectClientCompletion(String jobId, String taskId, String leaseToken) {
+		VideoJob video = videoJobs.get(jobId);
+		if (video == null || !video.directClient())
+			return;
+		String name = video.taskArtifacts().get(taskId);
+		if (name != null)
+			video.acceptedLeaseHashes().put(name, sha256(leaseToken.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 	}
 
 	private String submitFractal(FractalJobSubmitRequest request) throws IOException {
@@ -1133,6 +1191,11 @@ public final class MechanaServer implements AutoCloseable {
 			throw new IllegalArgumentException("Video segments are not ready for client assembly");
 		List<ArtifactReference> segments = video.plan().segments().stream().map(segment -> {
 			String name = "segment-%05d.mkv".formatted(segment.index());
+			if (video.directClient()) {
+				String accepted = Objects.requireNonNull(video.acceptedLeaseHashes().get(name),
+						"Missing accepted client segment " + name);
+				return new ArtifactReference("client-local", accepted, 0, "", true, "");
+			}
 			dev.mechana.api.ArtifactReference artifact = Objects.requireNonNull(video.segments().get(name),
 					"Missing segment " + name);
 			return new ArtifactReference(artifact.providerId(), artifact.key(), artifact.sizeBytes(),
@@ -1347,6 +1410,8 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private void deleteArtifactQuietly(dev.mechana.api.ArtifactReference artifact) {
+		if (artifact == null)
+			return;
 		try {
 			artifactStores.require(artifact.providerId()).delete(artifact);
 		} catch (IOException failure) {
@@ -1562,6 +1627,14 @@ public final class MechanaServer implements AutoCloseable {
 		}
 	}
 
+	private static String sha256(byte[] bytes) {
+		try {
+			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+		} catch (NoSuchAlgorithmException impossible) {
+			throw new IllegalStateException("SHA-256 is unavailable", impossible);
+		}
+	}
+
 	private static String stripTrailingSlash(String value) {
 		return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
 	}
@@ -1585,11 +1658,23 @@ public final class MechanaServer implements AutoCloseable {
 		private final ConcurrentMap<String, dev.mechana.api.ArtifactReference> segments;
 		private volatile dev.mechana.api.ArtifactReference finalArtifact;
 		private final boolean clientAssembly;
+		private final boolean directClient;
+		private final Map<String, String> taskArtifacts;
+		private final ConcurrentMap<String, String> acceptedLeaseHashes;
 
 		private VideoJob(List<String> inputTokens, dev.mechana.api.ArtifactReference sourceArtifact,
 				List<dev.mechana.api.ArtifactReference> workerInputs, Path input, Path output, Path scratch,
 				VideoTypes.Plan plan, ConcurrentMap<String, dev.mechana.api.ArtifactReference> segments,
 				dev.mechana.api.ArtifactReference finalArtifact, boolean clientAssembly) {
+			this(inputTokens, sourceArtifact, workerInputs, input, output, scratch, plan, segments, finalArtifact,
+					clientAssembly, false, Map.of(), new ConcurrentHashMap<>());
+		}
+
+		private VideoJob(List<String> inputTokens, dev.mechana.api.ArtifactReference sourceArtifact,
+				List<dev.mechana.api.ArtifactReference> workerInputs, Path input, Path output, Path scratch,
+				VideoTypes.Plan plan, ConcurrentMap<String, dev.mechana.api.ArtifactReference> segments,
+				dev.mechana.api.ArtifactReference finalArtifact, boolean clientAssembly, boolean directClient,
+				Map<String, String> taskArtifacts, ConcurrentMap<String, String> acceptedLeaseHashes) {
 			this.inputTokens = inputTokens;
 			this.sourceArtifact = sourceArtifact;
 			this.workerInputs = workerInputs;
@@ -1600,6 +1685,9 @@ public final class MechanaServer implements AutoCloseable {
 			this.segments = segments;
 			this.finalArtifact = finalArtifact;
 			this.clientAssembly = clientAssembly;
+			this.directClient = directClient;
+			this.taskArtifacts = taskArtifacts;
+			this.acceptedLeaseHashes = acceptedLeaseHashes;
 		}
 		List<String> inputTokens() {
 			return inputTokens;
@@ -1633,6 +1721,15 @@ public final class MechanaServer implements AutoCloseable {
 		}
 		boolean clientAssembly() {
 			return clientAssembly;
+		}
+		boolean directClient() {
+			return directClient;
+		}
+		Map<String, String> taskArtifacts() {
+			return taskArtifacts;
+		}
+		ConcurrentMap<String, String> acceptedLeaseHashes() {
+			return acceptedLeaseHashes;
 		}
 	}
 

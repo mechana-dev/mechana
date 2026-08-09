@@ -63,6 +63,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Enumeration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -279,12 +280,14 @@ public final class WorkerAgent {
 	}
 
 	private static Set<String> advertisedCapabilities(Set<String> plugins) {
+		java.util.HashSet<String> advertised = new java.util.HashSet<>(plugins);
+		if (plugins.contains("video-ffmpeg"))
+			advertised.add("storage.client-direct-video.v1");
 		if (!sandboxedExecution())
-			return Set.copyOf(plugins);
+			return Set.copyOf(advertised);
 		try {
 			SandboxPolicy policy = new SandboxPolicy(TrustMode.SANDBOXED, false, 1, 1, 1, Duration.ofSeconds(1), 1);
 			var capabilities = platformSandbox().capabilities(policy);
-			java.util.HashSet<String> advertised = new java.util.HashSet<>(plugins);
 			advertised.add("sandbox.backend." + capabilities.backend());
 			capabilities.enforced().entrySet().stream().filter(Map.Entry::getValue).map(Map.Entry::getKey)
 					.map(SandboxControl::name).map(String::toLowerCase).map(name -> "sandbox.control." + name)
@@ -617,6 +620,30 @@ public final class WorkerAgent {
 		}
 	}
 
+	static Optional<URI> directArtifactDestination(TaskLease lease, String name) {
+		String supplied = lease.parameters().get("artifactUploadUrl");
+		if (supplied == null || supplied.isBlank())
+			return Optional.empty();
+		if (!"video-ffmpeg".equals(lease.pluginId()) || !name.matches("segment-[0-9]{5}\\.mkv"))
+			throw new IllegalArgumentException("Direct artifact publication is limited to FFmpeg segments");
+		URI input = URI.create(Objects.requireNonNull(lease.parameters().get("inputUrl"), "Direct input URL"));
+		URI output = URI.create(supplied);
+		boolean sameOrigin = Set.of("http", "https").contains(output.getScheme())
+				&& Objects.equals(input.getScheme(), output.getScheme())
+				&& Objects.equals(input.getHost(), output.getHost()) && effectivePort(input) == effectivePort(output);
+		if (!sameOrigin || output.getUserInfo() != null || output.getQuery() != null || output.getFragment() != null
+				|| output.getPath() == null || !output.getPath().contains("/client-video/")
+				|| !output.getPath().contains("/outputs/"))
+			throw new IllegalArgumentException("Direct artifact destination does not match the client input origin");
+		return Optional.of(output);
+	}
+
+	private static int effectivePort(URI uri) {
+		if (uri.getPort() >= 0)
+			return uri.getPort();
+		return "https".equals(uri.getScheme()) ? 443 : 80;
+	}
+
 	private final class RemoteTaskContext implements TaskContext {
 		private final TaskLease lease;
 		private final AtomicBoolean cancelled;
@@ -639,8 +666,10 @@ public final class WorkerAgent {
 		@Override
 		public void publishArtifact(String name, Path file) {
 			try {
-				HttpRequest request = HttpRequest.newBuilder(server.resolve(taskPath(lease, "artifacts/") + name))
-						.timeout(Duration.ofMinutes(10)).header("X-Mechana-Lease", lease.leaseToken())
+				URI destination = directArtifactDestination(lease, name)
+						.orElseGet(() -> server.resolve(taskPath(lease, "artifacts/") + name));
+				HttpRequest request = HttpRequest.newBuilder(destination).timeout(Duration.ofMinutes(10))
+						.header("X-Mechana-Lease", lease.leaseToken()).header("X-Mechana-Artifact-Name", name)
 						.PUT(HttpRequest.BodyPublishers.ofFile(file)).build();
 				HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
 				if (response.statusCode() != 204)

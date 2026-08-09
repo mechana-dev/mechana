@@ -56,6 +56,10 @@ existing download URL while adding provider, key, and SHA-256 metadata. For a
 client-local FFmpeg job, the launcher instead stages verified segment references
 into its selected scratch directory, assembles into its selected output directory,
 and reports the client-owned final reference; the server retains metadata only.
+The launcher itself creates and serves keyframe-aligned input chunks, and compatible
+workers publish attempt outputs directly to its tokenized receiver. The server records
+the hash of the accepted lease token for each segment, allowing the launcher to select
+only accepted attempts even when stale attempt bytes reached client scratch.
 
 The older manual two-host proof copies its input to a fixed remote scratch directory and
 copies completed remote Matroska segments back to the initiating host before
