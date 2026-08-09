@@ -78,10 +78,14 @@ through the output store. OCR rasterized page inputs and the packed Blender scen
 are immutable artifacts served with size/SHA metadata; workers verify those values
 while staging local tool inputs. Inputs are still downloaded once per work unit
 rather than cached once per worker.
+For `client-local`, inputs and accepted ZIP batches travel directly between the
+requester and capability-gated workers; the coordinator retains only task, lease,
+and artifact metadata. Plugin-owned assemblers produce the same logical results
+locally and completed history records provider/key/size/SHA-256.
 # Launcher presentation
 
 Client job history presents artifacts as provider, stable key, size, and an
 optional provider action URL. UI code must not reconstruct local filesystem paths
 from an artifact identity. The first implementation reports durable completed-job
-files as `server-local` references and client-assembled FFmpeg results as
+files as `server-local` references and client-assembled results as
 `client-local` references. Cloud references remain directional.

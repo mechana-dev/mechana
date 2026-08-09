@@ -31,11 +31,11 @@ worker outputs directly into client scratch, SHA-256-verify the accepted outputs
 assemble locally with FFmpeg, and retain final provider/key/size/SHA-256 metadata
 without copying the result into server history. The generic client artifact data
 plane and `storage.client-direct-artifacts.v1` worker capability own this transport;
-FFmpeg-specific preparation and assembly remain adapters. The server coordinates references,
+Plugin-specific preparation and assembly remain adapters. The server coordinates references,
 leases, and accepted-attempt identities but does not relay these large bytes. Other
 Google Drive, S3, generalized provider publication, and restart-resumable client
-assembly remain future work. Client-local assembly adapters for Fractal, OCR, and
-Blender are not implemented in this checkpoint.
+assembly remain future work. Direct client-local assembly is implemented for
+FFmpeg, Fractal, OCR, and Blender; Sleep has no bulk data plane.
 
 ## First-class storage model
 
@@ -139,6 +139,6 @@ See [artifacts](artifacts.md), [architecture](architecture.md), and
 
 The launcher treats output selection and completed artifacts as provider-aware.
 `server-local` remains the implemented default. Direct client-local transfer and
-assembly are currently implemented only for FFmpeg. Provider-specific browsing,
+assembly are implemented for FFmpeg, Fractal, OCR, and Blender. Provider-specific browsing,
 authorization, Google Drive, and S3 are future provider work; the generic launcher contract preserves a provider/key identity and an
 ownership flag so purge and open actions need not assume server storage.

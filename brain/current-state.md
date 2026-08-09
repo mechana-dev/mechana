@@ -17,14 +17,14 @@
   URLs directly to compatible workers, accepts lease-identified worker outputs into
   client scratch, verifies the accepted outputs, assembles with local FFmpeg, and
   publishes provider/key/size/SHA-256 metadata for the client-owned result.
-- Direct client-local FFmpeg jobs require updated workers advertising the generic
+- Direct client-local jobs require updated workers advertising the generic
   `storage.client-direct-artifacts.v1` capability; the legacy video capability is
   still advertised for compatibility. Older workers remain compatible with
   server-local jobs but cannot lease direct tasks. Google Drive, S3,
-  restart-resumable launcher assembly, and client-local assembly adapters for
-  Fractal, OCR, and Blender remain future work.
+  and restart-resumable launcher assembly remain future work. Fractal, OCR, and
+  Blender use the same direct transfer service and plugin-owned assembly model.
 
-Verified: 2026-08-08
+Verified: 2026-08-09
 
 This file reports repository evidence, not desired future status.
 

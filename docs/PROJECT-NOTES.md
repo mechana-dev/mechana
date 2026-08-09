@@ -1360,3 +1360,17 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Preserved `server-local` as the default and existing-worker compatibility for
   those jobs. Direct client-local assembly remains implemented only for FFmpeg;
   Fractal, OCR, and Blender launcher assembly adapters are explicitly deferred.
+
+## 2026-08-09 04:20 EDT — Add universal client-local plugin assembly
+
+- Extended the generic requester-hosted artifact data plane to Fractal, OCR, and
+  Blender without changing the default server-local workflows.
+- Reused plugin-owned planning and assembly on both placement paths. OCR PDF
+  rasterization now lives in the OCR plugin and runs at the selected assembly
+  host; Fractal needs no input; Blender serves its packed scene directly.
+- Capability-gated workers publish lease-fenced ZIP batches directly to client
+  scratch. The coordinator records accepted attempt identities and final
+  provider/key/size/SHA-256 metadata without relaying intermediate bytes.
+- Common launcher controls expose placement, scratch, output, and transfer host;
+  the launcher displays SPLITTING during local preparation and ASSEMBLING while
+  producing the final artifact. Sleep keeps irrelevant controls disabled.
