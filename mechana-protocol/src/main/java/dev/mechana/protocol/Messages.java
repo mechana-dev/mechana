@@ -196,8 +196,15 @@ public final class Messages {
 	}
 
 	public record FractalJobSubmitRequest(int imageCount, int taskCount, int width, int height, int maxIterations,
-			long seed) {
+			long seed, String storageProvider) {
+		public FractalJobSubmitRequest(int imageCount, int taskCount, int width, int height, int maxIterations,
+				long seed) {
+			this(imageCount, taskCount, width, height, maxIterations, seed, "server-local");
+		}
 		public FractalJobSubmitRequest {
+			storageProvider = storageProvider == null || storageProvider.isBlank() ? "server-local" : storageProvider;
+			if (!Set.of("server-local", "client-local").contains(storageProvider))
+				throw new IllegalArgumentException("Unsupported fractal storage provider: " + storageProvider);
 			if (imageCount < 1 || taskCount < 0 || taskCount > imageCount)
 				throw new IllegalArgumentException("Invalid fractal image or task count");
 			if (width < 64 || height < 64 || width > 8192 || height > 8192)
@@ -208,15 +215,22 @@ public final class Messages {
 	}
 
 	public record OcrJobSubmitRequest(String sourcePath, int taskCount, int dpi, String language, String title,
-			int firstPage, int pageCount) {
+			int firstPage, int pageCount, String storageProvider) {
 		public OcrJobSubmitRequest(String sourcePath, int taskCount, int dpi, String language, String title) {
-			this(sourcePath, taskCount, dpi, language, title, 1, 0);
+			this(sourcePath, taskCount, dpi, language, title, 1, 0, "server-local");
+		}
+		public OcrJobSubmitRequest(String sourcePath, int taskCount, int dpi, String language, String title,
+				int firstPage, int pageCount) {
+			this(sourcePath, taskCount, dpi, language, title, firstPage, pageCount, "server-local");
 		}
 
 		public OcrJobSubmitRequest {
 			Objects.requireNonNull(sourcePath, "sourcePath");
 			language = language == null || language.isBlank() ? "eng" : language;
 			title = title == null || title.isBlank() ? "OCR Document" : title;
+			storageProvider = storageProvider == null || storageProvider.isBlank() ? "server-local" : storageProvider;
+			if (!Set.of("server-local", "client-local").contains(storageProvider))
+				throw new IllegalArgumentException("Unsupported OCR storage provider: " + storageProvider);
 			if (taskCount < 0)
 				throw new IllegalArgumentException("taskCount must not be negative");
 			firstPage = firstPage == 0 ? 1 : firstPage;
@@ -230,9 +244,16 @@ public final class Messages {
 	}
 
 	public record BlenderJobSubmitRequest(String sourcePath, int firstFrame, int lastFrame, int taskCount, int width,
-			int height, int samples, int fps) {
+			int height, int samples, int fps, String storageProvider) {
+		public BlenderJobSubmitRequest(String sourcePath, int firstFrame, int lastFrame, int taskCount, int width,
+				int height, int samples, int fps) {
+			this(sourcePath, firstFrame, lastFrame, taskCount, width, height, samples, fps, "server-local");
+		}
 		public BlenderJobSubmitRequest {
 			Objects.requireNonNull(sourcePath, "sourcePath");
+			storageProvider = storageProvider == null || storageProvider.isBlank() ? "server-local" : storageProvider;
+			if (!Set.of("server-local", "client-local").contains(storageProvider))
+				throw new IllegalArgumentException("Unsupported Blender storage provider: " + storageProvider);
 			if (firstFrame < 0 || lastFrame < firstFrame || taskCount < 0 || taskCount > lastFrame - firstFrame + 1)
 				throw new IllegalArgumentException("Invalid Blender frame range or task count");
 			if (width < 64 || height < 64 || width > 8192 || height > 8192 || samples < 1 || samples > 4096 || fps < 1

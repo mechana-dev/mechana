@@ -43,7 +43,7 @@ class JobLauncherCatalogTest {
 		assertEquals("24", defaults.get("fps"));
 		assertEquals("640", defaults.get("width"));
 		assertEquals("360", defaults.get("height"));
-		assertEquals("taskCount", descriptor.fields().get(1).name());
+		assertTrue(descriptor.fields().stream().anyMatch(field -> "taskCount".equals(field.name())));
 	}
 
 	@Test
@@ -64,8 +64,10 @@ class JobLauncherCatalogTest {
 	@Test
 	void fileFieldsAdvertisePluginSpecificExtensions() {
 		var descriptors = JobLauncherCatalog.available(Map.of("ocr-tesseract", 1, "blender-render", 1));
-		assertEquals(List.of("pdf"), descriptors.getFirst().fields().getFirst().acceptedExtensions());
-		assertEquals(List.of("blend"), descriptors.getLast().fields().getFirst().acceptedExtensions());
+		assertEquals(List.of("pdf"), descriptors.getFirst().fields().stream()
+				.filter(field -> "sourcePath".equals(field.name())).findFirst().orElseThrow().acceptedExtensions());
+		assertEquals(List.of("blend"), descriptors.getLast().fields().stream()
+				.filter(field -> "sourcePath".equals(field.name())).findFirst().orElseThrow().acceptedExtensions());
 	}
 
 	@Test
