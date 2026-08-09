@@ -53,7 +53,7 @@ final class JobLauncherCatalog {
 						file("sourcePath", "Input video"),
 						directory("clientScratchDirectory", "Client scratch directory"),
 						directory("clientOutputDirectory", "Client output directory"),
-						text("clientTransferHost", "Client transfer host (blank = this Mac)", ""),
+						optionalText("clientTransferHost", "Client transfer host (blank = this Mac)", ""),
 						decimal("durationSeconds", "Duration (seconds)", "60", 0.01, 86400),
 						integer("segmentCount", "Tasks (0 = fleet)", "0", 0, 10000),
 						decimal("targetSizeRatio", "Target size ratio", "0.75", 0.01, 0.99)),
@@ -104,6 +104,10 @@ final class JobLauncherCatalog {
 
 	private static SubmissionField text(String name, String label, String value) {
 		return new SubmissionField(name, label, "text", true, value, null, null, List.of(), "");
+	}
+
+	private static SubmissionField optionalText(String name, String label, String value) {
+		return new SubmissionField(name, label, "text", false, value, null, null, List.of(), "");
 	}
 
 	private static SubmissionField choice(String name, String label, String value, String... choices) {

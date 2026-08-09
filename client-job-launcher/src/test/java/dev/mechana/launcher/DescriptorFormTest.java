@@ -67,4 +67,14 @@ class DescriptorFormTest {
 				() -> new DescriptorForm(descriptor, settings).values());
 		assertEquals("Input PDF must be a .pdf file", failure.getMessage());
 	}
+
+	@Test
+	void acceptsBlankOptionalText() {
+		var descriptor = new JobLauncherDescriptor("video", "Video", "/api/jobs/video",
+				List.of(new SubmissionField("clientTransferHost", "Client transfer host", "text", false, "", null, null,
+						List.of(), "")),
+				new OutputDescriptor("client-local", "directory", "Artifacts", false), "small", 1, "now");
+		Preferences settings = Preferences.userRoot().node("dev/mechana/test/" + UUID.randomUUID());
+		assertEquals("", new DescriptorForm(descriptor, settings).values().get("clientTransferHost"));
+	}
 }
