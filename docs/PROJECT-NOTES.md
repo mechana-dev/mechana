@@ -1385,3 +1385,18 @@ cloud providers remain future direction; see `brain/current-state.md` and
   `transfer-summary.json` completed artifact with topology, directional routes,
   totals, and per-worker breakdowns. Existing workers continue to run but report
   zero counters until reinstalled.
+
+## 2026-08-09 05:52 EDT — Verify transfer accounting on an eight-worker video job
+
+- Job `462fa0ee-b8f3-417b-a368-228ed24fd77e` completed all eight FFmpeg work
+  units through the `client-worker-direct` topology and retained an exact
+  per-worker `transfer-summary.json`.
+- Measured 29,633,829 input bytes from client to workers, 16,717,070 output bytes
+  from workers to client, and 438,616 plugin-package bytes from server to workers:
+  46,789,515 application-payload bytes in total.
+- The 119,175,998-byte source was prepared into worker chunks totaling 24.9% of
+  the original source size. Client-local assembly produced a 19,118,980-byte MKV;
+  the coordinator relayed none of the video input or compressed-segment bytes.
+- Counters intentionally exclude HTTP/TLS framing, small control messages, and
+  local preparation/assembly disk I/O. They include only accepted task attempts,
+  so stale completion reports cannot affect the durable totals.

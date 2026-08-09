@@ -1,6 +1,6 @@
 # Storage and artifact fabric
 
-Last reviewed: 2026-08-08
+Last reviewed: 2026-08-09
 
 ## Status
 
@@ -36,6 +36,14 @@ leases, and accepted-attempt identities but does not relay these large bytes. Ot
 Google Drive, S3, generalized provider publication, and restart-resumable client
 assembly remain future work. Direct client-local assembly is implemented for
 FFmpeg, Fractal, OCR, and Blender; Sleep has no bulk data plane.
+
+Completed jobs now retain `transfer-summary.json`. Updated workers count bytes
+downloaded into attempt scratch, bytes successfully published from the attempt,
+and plugin-package downloads. The coordinator aggregates only accepted lease
+completions and labels the measured routes as server-worker or direct
+client-worker. These are application-payload counters: small HTTP/control-plane
+messages, protocol headers, retries that never complete authoritatively, and
+local preparation/assembly disk I/O are intentionally outside the totals.
 
 ## First-class storage model
 

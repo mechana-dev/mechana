@@ -1,6 +1,6 @@
 # Artifacts
 
-Last reviewed: 2026-08-08
+Last reviewed: 2026-08-09
 
 Artifacts abstract inputs, intermediates, and outputs from topology and storage.
 Jobs may choose each provider independently. Core and plugins
@@ -39,6 +39,8 @@ accepted attempts by worker and publishes `transfer-summary.json` with the compl
 job, so stale or retried attempts cannot inflate authoritative job totals. The
 summary identifies whether bulk artifacts followed server-worker or direct
 client-worker routes; it does not put the artifact bytes on the control plane.
+Counters describe successful application payloads at worker boundaries, not wire
+overhead or client/server-local disk I/O.
 
 ## Locality and caching direction
 

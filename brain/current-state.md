@@ -28,6 +28,11 @@
   compute node, logs terminal totals, and retains `transfer-summary.json` as a
   normal completed artifact. Legacy workers remain compatible and contribute zero
   counters until upgraded.
+- A live eight-worker direct FFmpeg job verified the telemetry end to end: the
+  client sent 29,633,829 input bytes directly to workers, workers returned
+  16,717,070 output bytes directly to the client, and the server supplied 438,616
+  plugin bytes. The server relayed none of the 46,350,899 measured video-artifact
+  bytes; client-local assembly produced a 19,118,980-byte final MKV.
 
 Verified: 2026-08-09
 
