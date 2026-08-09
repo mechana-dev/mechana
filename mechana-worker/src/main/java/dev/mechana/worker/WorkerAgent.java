@@ -346,8 +346,16 @@ public final class WorkerAgent {
 			try {
 				HttpRequest request = HttpRequest.newBuilder(uri).timeout(timeout).GET().build();
 				HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
-				if (response.statusCode() == 200)
-					return response.body();
+				if (response.statusCode() == 200) {
+					byte[] body = response.body();
+					String expectedHash = response.headers().firstValue("X-Checksum-Sha256").orElse("");
+					if (!expectedHash.isBlank() && !sha256(body).equalsIgnoreCase(expectedHash))
+						throw new IOException(description + " failed SHA-256 validation");
+					long expectedSize = response.headers().firstValueAsLong("Content-Length").orElse(-1);
+					if (expectedSize >= 0 && body.length != expectedSize)
+						throw new IOException(description + " failed size validation");
+					return body;
+				}
 				if (response.statusCode() < 500 && response.statusCode() != 408 && response.statusCode() != 429)
 					throw new IOException(description + " returned HTTP " + response.statusCode());
 				lastFailure = new IOException(description + " returned HTTP " + response.statusCode());

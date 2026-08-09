@@ -19,6 +19,7 @@ package dev.mechana.server;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mechana.coordinator.InMemoryJobMonitor;
 import dev.mechana.api.ArtifactReference;
+import dev.mechana.api.ArtifactStore;
 import dev.mechana.api.StorageSelection;
 import java.io.IOException;
 import java.io.InputStream;
@@ -43,11 +44,17 @@ final class CompletedJobStore {
 	private static final String EXTERNAL_ARTIFACTS_FILE = ".external-artifacts.json";
 	private final Path jobsRoot;
 	private final ObjectMapper json;
+	private final ArtifactStore artifactStore;
 	private final Map<String, InMemoryJobMonitor.Snapshot> snapshots = new LinkedHashMap<>();
 
 	CompletedJobStore(Path dataDirectory, ObjectMapper json) throws IOException {
+		this(dataDirectory, json, new ServerLocalArtifactStore(dataDirectory));
+	}
+
+	CompletedJobStore(Path dataDirectory, ObjectMapper json, ArtifactStore artifactStore) throws IOException {
 		this.jobsRoot = dataDirectory.toAbsolutePath().normalize().resolve("jobs");
 		this.json = json;
+		this.artifactStore = artifactStore;
 		Files.createDirectories(jobsRoot);
 		load();
 	}
@@ -59,7 +66,13 @@ final class CompletedJobStore {
 		Path artifacts = jobDirectory.resolve(ARTIFACTS_DIRECTORY);
 		Files.createDirectories(artifacts);
 		writeAtomically(jobDirectory.resolve(SNAPSHOT_FILE), snapshot);
-		writeAtomically(artifacts.resolve("job-summary.json"), snapshot);
+		byte[] summary = json.writeValueAsBytes(snapshot);
+		try (InputStream bytes = new java.io.ByteArrayInputStream(summary)) {
+			ArtifactReference published = artifactStore
+					.put("jobs/" + snapshot.jobId() + "/artifacts/job-summary.json", bytes);
+			if (published.sizeBytes() != summary.length)
+				throw new IOException("Completed summary publication size mismatch");
+		}
 		snapshots.put(snapshot.jobId(), snapshot);
 	}
 
