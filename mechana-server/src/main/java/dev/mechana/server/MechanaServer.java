@@ -25,6 +25,7 @@ import dev.mechana.coordinator.InMemoryJobMonitor;
 import dev.mechana.coordinator.Scheduler;
 import dev.mechana.coordinator.Scheduler.PluginLocation;
 import dev.mechana.coordinator.Scheduler.WorkSpec;
+import dev.mechana.api.ArtifactStore;
 import dev.mechana.protocol.Messages.JobStatusResponse;
 import dev.mechana.protocol.Messages.ArtifactReference;
 import dev.mechana.protocol.Messages.LauncherJob;
@@ -110,6 +111,8 @@ public final class MechanaServer implements AutoCloseable {
 	private final long processId = ProcessHandle.current().pid();
 	private final Scheduler scheduler;
 	private final CompletedJobStore completedJobs;
+	private final ArtifactStoreRegistry artifactStores;
+	private final ArtifactStore videoArtifactStore;
 	private final HttpServer http;
 	private final Path pluginJar;
 	private final PluginLocation pluginLocation;
@@ -123,7 +126,7 @@ public final class MechanaServer implements AutoCloseable {
 	private final PluginLocation blenderPluginLocation;
 	private final Path workRoot;
 	private final String publicUrl;
-	private final ConcurrentMap<String, Path> videoInputs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, dev.mechana.api.ArtifactReference> videoInputs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, VideoJob> videoJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, FractalJob> fractalJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, Path> ocrInputs = new ConcurrentHashMap<>();
@@ -169,6 +172,8 @@ public final class MechanaServer implements AutoCloseable {
 			Path ocrPluginJar, Path blenderPluginJar, long leaseMillis, Path dataDirectory) throws IOException {
 		this.scheduler = new Scheduler(leaseMillis);
 		this.completedJobs = new CompletedJobStore(dataDirectory, json);
+		this.artifactStores = new ArtifactStoreRegistry().register(new ServerLocalArtifactStore(dataDirectory));
+		this.videoArtifactStore = artifactStores.require(dev.mechana.api.StorageSelection.defaults().inputProviderId());
 		this.workRoot = dataDirectory.toAbsolutePath().normalize().resolve("work");
 		Files.createDirectories(workRoot);
 		this.publicUrl = stripTrailingSlash(publicUrl);
@@ -658,10 +663,17 @@ public final class MechanaServer implements AutoCloseable {
 			FractalJob fractal = fractalJobs.get(jobId);
 			OcrJob ocr = ocrJobs.get(jobId);
 			BlenderJob blender = blenderJobs.get(jobId);
+			if (video != null && name.matches("segment-[0-9]{5}\\.mkv")) {
+				try (InputStream input = exchange.getRequestBody()) {
+					dev.mechana.api.ArtifactReference published = videoArtifactStore
+							.put("jobs/" + jobId + "/intermediate/segments/" + name, input);
+					video.segments().put(name, published);
+				}
+				sendEmpty(exchange, 204);
+				return;
+			}
 			Path artifactRoot;
-			if (video != null && name.matches("segment-[0-9]{5}\\.mkv"))
-				artifactRoot = video.scratch().resolve("segments");
-			else if (fractal != null && name.matches("batch-[0-9]{5}\\.zip"))
+			if (fractal != null && name.matches("batch-[0-9]{5}\\.zip"))
 				artifactRoot = fractal.scratch().resolve("batches");
 			else if (ocr != null && name.matches("ocr-batch-[0-9]{5}\\.zip"))
 				artifactRoot = ocr.scratch().resolve("batches");
@@ -701,6 +713,7 @@ public final class MechanaServer implements AutoCloseable {
 			throw new IllegalArgumentException("Video source does not exist: " + source);
 		String workToken = UUID.randomUUID().toString();
 		Path scratch = workRoot.resolve(workToken);
+		Path preparedInput = scratch.resolve("prepared-input.mp4");
 		Path input = scratch.resolve("input.mp4");
 		Path output = scratch.resolve("result.mkv");
 		Files.createDirectories(scratch.resolve("segments"));
@@ -710,9 +723,14 @@ public final class MechanaServer implements AutoCloseable {
 			ExternalProcessRunner runner = new ExternalProcessRunner();
 			runner.run(
 					List.of("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", source.toString(), "-t",
-							Double.toString(request.durationSeconds()), "-c", "copy", input.toString()),
+							Double.toString(request.durationSeconds()), "-c", "copy", preparedInput.toString()),
 					Duration.ofMinutes(15), CancellationToken.NEVER, ignored -> {
 					});
+			dev.mechana.api.ArtifactReference sourceArtifact;
+			try (InputStream bytes = Files.newInputStream(preparedInput)) {
+				sourceArtifact = videoArtifactStore.put("video-staging/" + workToken + "/input/source.mp4", bytes);
+			}
+			stageArtifact(sourceArtifact, input);
 			FfmpegCommands commands = new FfmpegCommands("ffmpeg", "ffprobe");
 			MediaProbe probe = new MediaProbe(commands, runner);
 			VideoTypes.MediaInfo info = probe.inspect(input, Duration.ofMinutes(5));
@@ -724,6 +742,7 @@ public final class MechanaServer implements AutoCloseable {
 					scratch, taskCount);
 			long bitrate = targetVideoBitrate(info, request.targetSizeRatio());
 			List<String> inputTokens = new java.util.ArrayList<>(plan.segments().size());
+			List<dev.mechana.api.ArtifactReference> workerInputs = new java.util.ArrayList<>(plan.segments().size());
 			List<WorkSpec> work = new java.util.ArrayList<>(plan.segments().size());
 			for (VideoTypes.Segment segment : plan.segments()) {
 				Path segmentInput = scratch.resolve("inputs").resolve("input-%05d.mp4".formatted(segment.index()));
@@ -731,7 +750,13 @@ public final class MechanaServer implements AutoCloseable {
 						CancellationToken.NEVER, ignored -> {
 						});
 				String inputToken = UUID.randomUUID().toString();
-				videoInputs.put(inputToken, segmentInput);
+				dev.mechana.api.ArtifactReference workerInput;
+				try (InputStream bytes = Files.newInputStream(segmentInput)) {
+					workerInput = videoArtifactStore.put(
+							"video-staging/" + workToken + "/inputs/input-%05d.mp4".formatted(segment.index()), bytes);
+				}
+				videoInputs.put(inputToken, workerInput);
+				workerInputs.add(workerInput);
 				inputTokens.add(inputToken);
 				work.add(new WorkSpec(Math.max(1, Math.round(segment.durationSeconds() * 1000)),
 						Map.of("inputUrl", publicUrl + "/api/video-inputs/" + inputToken, "segmentIndex",
@@ -747,15 +772,16 @@ public final class MechanaServer implements AutoCloseable {
 					Map.of("source", source.toString(), "inputDuration", "%.1fs".formatted(info.durationSeconds()),
 							"targetSizeRatio", Double.toString(request.targetSizeRatio())),
 					videoPluginLocation);
-			videoJobs.put(jobId, new VideoJob(List.copyOf(inputTokens), input, output, scratch, plan));
+			videoJobs.put(jobId, new VideoJob(List.copyOf(inputTokens), sourceArtifact, List.copyOf(workerInputs),
+					input, output, scratch, plan, new ConcurrentHashMap<>(), null));
 			return jobId;
 		} catch (InterruptedException interrupted) {
 			Thread.currentThread().interrupt();
-			videoInputs.entrySet().removeIf(entry -> entry.getValue().startsWith(scratch));
+			videoInputs.keySet().removeAll(inputTokensForWorkToken(workToken));
 			deleteTree(scratch);
 			throw new IOException("Video planning was interrupted", interrupted);
 		} catch (IOException | RuntimeException failure) {
-			videoInputs.entrySet().removeIf(entry -> entry.getValue().startsWith(scratch));
+			videoInputs.keySet().removeAll(inputTokensForWorkToken(workToken));
 			deleteTree(scratch);
 			throw failure;
 		}
@@ -967,16 +993,18 @@ public final class MechanaServer implements AutoCloseable {
 		}
 		String prefix = "/api/video-inputs/";
 		String path = exchange.getRequestURI().getPath();
-		Path input = path.startsWith(prefix) ? videoInputs.get(path.substring(prefix.length())) : null;
-		if (input == null || !Files.isRegularFile(input)) {
+		dev.mechana.api.ArtifactReference input = path.startsWith(prefix)
+				? videoInputs.get(path.substring(prefix.length()))
+				: null;
+		if (input == null || !videoArtifactStore.exists(input)) {
 			sendEmpty(exchange, 404);
 			return;
 		}
-		long size = Files.size(input);
 		exchange.getResponseHeaders().set("Content-Type", "video/mp4");
-		exchange.sendResponseHeaders(200, size);
-		try (var output = exchange.getResponseBody()) {
-			Files.copy(input, output);
+		exchange.getResponseHeaders().set("X-Checksum-Sha256", input.sha256());
+		exchange.sendResponseHeaders(200, input.sizeBytes());
+		try (InputStream bytes = videoArtifactStore.open(input); var output = exchange.getResponseBody()) {
+			bytes.transferTo(output);
 		}
 	}
 
@@ -1012,11 +1040,22 @@ public final class MechanaServer implements AutoCloseable {
 		if (video == null)
 			return;
 		try {
+			for (VideoTypes.Segment segment : video.plan().segments()) {
+				String name = "segment-%05d.mkv".formatted(segment.index());
+				dev.mechana.api.ArtifactReference artifact = video.segments().get(name);
+				if (artifact == null)
+					throw new IOException("Missing published segment artifact: " + name);
+				stageArtifact(artifact, segment.output());
+			}
 			FfmpegCommands commands = new FfmpegCommands("ffmpeg", "ffprobe");
 			ExternalProcessRunner runner = new ExternalProcessRunner();
 			new VideoAssembler(commands, runner).assemble(video.input(), video.output(), video.plan(),
 					CancellationToken.NEVER);
 			new FinalValidator(new MediaProbe(commands, runner)).validateSmallerThanInput(video.output(), video.plan());
+			try (InputStream bytes = Files.newInputStream(video.output())) {
+				video.finalArtifact(
+						videoArtifactStore.put("jobs/" + jobId + "/artifacts/compressed-first-minute.mkv", bytes));
+			}
 			scheduler.finishVideo(jobId, null);
 		} catch (InterruptedException failure) {
 			Thread.currentThread().interrupt();
@@ -1093,8 +1132,12 @@ public final class MechanaServer implements AutoCloseable {
 		List<CompletedJobStore.Artifact> artifacts = completedJobs.find(jobId).isPresent()
 				? completedJobs.artifacts(jobId)
 				: List.of();
-		body.set("artifacts", json.valueToTree(artifacts.stream().map(artifact -> Map.of("name", artifact.name(),
-				"size", artifact.size(), "url", "/api/jobs/" + jobId + "/artifacts/" + artifact.name())).toList()));
+		body.set("artifacts",
+				json.valueToTree(artifacts.stream()
+						.map(artifact -> Map.of("name", artifact.name(), "size", artifact.size(), "url",
+								"/api/jobs/" + jobId + "/artifacts/" + artifact.name(), "provider", artifact.provider(),
+								"key", artifact.key(), "sha256", artifact.sha256()))
+						.toList()));
 		body.put("completed", completedJobs.find(jobId).isPresent());
 		body.put("abortable", !isTerminal(snapshot.stage()));
 		body.put("pausable", "QUEUED".equals(snapshot.stage()) || "EXECUTING".equals(snapshot.stage()));
@@ -1118,8 +1161,8 @@ public final class MechanaServer implements AutoCloseable {
 		try {
 			completedJobs.archive(snapshot);
 			VideoJob video = videoJobs.get(jobId);
-			if (video != null && "SUCCEEDED".equals(snapshot.stage()) && Files.isRegularFile(video.output()))
-				completedJobs.storeArtifact(jobId, "compressed-first-minute.mkv", video.output());
+			if (video != null && "SUCCEEDED".equals(snapshot.stage()) && video.finalArtifact() != null)
+				completedJobs.registerArtifact(jobId, "compressed-first-minute.mkv", video.finalArtifact());
 			FractalJob fractal = fractalJobs.get(jobId);
 			if (fractal != null && "SUCCEEDED".equals(snapshot.stage())) {
 				Path result = fractal.scratch().resolve("result");
@@ -1152,6 +1195,9 @@ public final class MechanaServer implements AutoCloseable {
 			VideoJob video = videoJobs.remove(jobId);
 			if (video != null) {
 				video.inputTokens().forEach(videoInputs::remove);
+				deleteArtifactQuietly(video.sourceArtifact());
+				video.workerInputs().forEach(this::deleteArtifactQuietly);
+				video.segments().values().forEach(this::deleteArtifactQuietly);
 				deleteTree(video.scratch());
 			}
 			FractalJob fractal = fractalJobs.remove(jobId);
@@ -1177,6 +1223,35 @@ public final class MechanaServer implements AutoCloseable {
 		} catch (IOException ignored) {
 			// Server work storage is best-effort cleanup after durable archival.
 		}
+	}
+
+	private void stageArtifact(dev.mechana.api.ArtifactReference artifact, Path destination) throws IOException {
+		Files.createDirectories(Objects.requireNonNull(destination.getParent()));
+		Path temporary = Files.createTempFile(destination.getParent(), ".artifact-stage-", ".tmp");
+		try (InputStream input = artifactStores.require(artifact.providerId()).open(artifact)) {
+			Files.copy(input, temporary, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+		}
+		if (Files.size(temporary) != artifact.sizeBytes() || !sha256(temporary).equalsIgnoreCase(artifact.sha256())) {
+			Files.deleteIfExists(temporary);
+			throw new IOException(
+					"Artifact integrity check failed for " + artifact.providerId() + ":" + artifact.key());
+		}
+		Files.move(temporary, destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+	}
+
+	private void deleteArtifactQuietly(dev.mechana.api.ArtifactReference artifact) {
+		try {
+			artifactStores.require(artifact.providerId()).delete(artifact);
+		} catch (IOException failure) {
+			System.err.printf("Could not delete transient artifact %s:%s: %s%n", artifact.providerId(), artifact.key(),
+					failure.getMessage());
+		}
+	}
+
+	private Set<String> inputTokensForWorkToken(String workToken) {
+		String prefix = "video-staging/" + workToken + "/";
+		return videoInputs.entrySet().stream().filter(entry -> entry.getValue().key().startsWith(prefix))
+				.map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
 	}
 
 	private static void serveArtifact(HttpExchange exchange, Path artifact) throws IOException {
@@ -1392,7 +1467,61 @@ public final class MechanaServer implements AutoCloseable {
 		}
 	}
 
-	private record VideoJob(List<String> inputTokens, Path input, Path output, Path scratch, VideoTypes.Plan plan) {
+	private static final class VideoJob {
+		private final List<String> inputTokens;
+		private final dev.mechana.api.ArtifactReference sourceArtifact;
+		private final List<dev.mechana.api.ArtifactReference> workerInputs;
+		private final Path input;
+		private final Path output;
+		private final Path scratch;
+		private final VideoTypes.Plan plan;
+		private final ConcurrentMap<String, dev.mechana.api.ArtifactReference> segments;
+		private volatile dev.mechana.api.ArtifactReference finalArtifact;
+
+		private VideoJob(List<String> inputTokens, dev.mechana.api.ArtifactReference sourceArtifact,
+				List<dev.mechana.api.ArtifactReference> workerInputs, Path input, Path output, Path scratch,
+				VideoTypes.Plan plan, ConcurrentMap<String, dev.mechana.api.ArtifactReference> segments,
+				dev.mechana.api.ArtifactReference finalArtifact) {
+			this.inputTokens = inputTokens;
+			this.sourceArtifact = sourceArtifact;
+			this.workerInputs = workerInputs;
+			this.input = input;
+			this.output = output;
+			this.scratch = scratch;
+			this.plan = plan;
+			this.segments = segments;
+			this.finalArtifact = finalArtifact;
+		}
+		List<String> inputTokens() {
+			return inputTokens;
+		}
+		dev.mechana.api.ArtifactReference sourceArtifact() {
+			return sourceArtifact;
+		}
+		List<dev.mechana.api.ArtifactReference> workerInputs() {
+			return workerInputs;
+		}
+		Path input() {
+			return input;
+		}
+		Path output() {
+			return output;
+		}
+		Path scratch() {
+			return scratch;
+		}
+		VideoTypes.Plan plan() {
+			return plan;
+		}
+		ConcurrentMap<String, dev.mechana.api.ArtifactReference> segments() {
+			return segments;
+		}
+		dev.mechana.api.ArtifactReference finalArtifact() {
+			return finalArtifact;
+		}
+		void finalArtifact(dev.mechana.api.ArtifactReference artifact) {
+			this.finalArtifact = artifact;
+		}
 	}
 
 	private record FractalJob(Path scratch, FractalJobSubmitRequest request) {

@@ -19,7 +19,10 @@ package dev.mechana.api;
 import java.io.IOException;
 import java.io.InputStream;
 
-/** Byte-storage boundary used by Mechana infrastructure; plugins depend on artifact identity, not providers. */
+/**
+ * Byte-storage boundary used by Mechana infrastructure; plugins depend on
+ * artifact identity, not providers.
+ */
 public interface ArtifactStore {
 
 	String providerId();

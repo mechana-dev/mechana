@@ -1,5 +1,14 @@
 # Architecture
 
+## Implemented storage boundary (2026-08-08)
+
+The server registers `server-local` behind the storage-neutral artifact-store
+contract. Scheduler-managed video uses references at platform boundaries and
+verified local staging at FFmpeg boundaries. HTTP worker transfer remains the
+compatible byte path; control-plane task messages continue to carry URLs and
+metadata rather than embedding large artifacts. This is one workload/provider
+slice, not yet the general distributed-storage topology described below.
+
 Last reviewed: 2026-08-06
 
 ## Stable shape

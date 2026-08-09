@@ -1,5 +1,18 @@
 # Current state
 
+## Storage abstraction checkpoint (2026-08-08)
+
+- The seven-file storage foundation is rebased on the post-sandbox `main` line.
+- `server-local` remains the default input/intermediate/output provider.
+- Scheduler-managed FFmpeg video is the first workload migrated end to end across
+  source ingest, worker inputs, lease-fenced output publication, assembly staging,
+  final publication, and completed-artifact metadata.
+- Plugin code and scheduler work specifications still receive URLs and staged
+  local paths, never server-local keys or provider APIs.
+- No client-local, Google Drive, S3, direct worker-to-requester publication, or
+  client-side assembly provider exists yet. Other workloads retain their current
+  path-backed adapters.
+
 Verified: 2026-08-08
 
 This file reports repository evidence, not desired future status.

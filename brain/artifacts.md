@@ -1,6 +1,6 @@
 # Artifacts
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-08
 
 Artifacts abstract inputs, intermediates, and outputs from topology and storage.
 Jobs may choose each provider independently. Core and plugins
@@ -46,13 +46,15 @@ Caching is an infrastructure optimization. Plugins describe artifact requirement
 Mechana owns transfer, verification, cache placement, eviction, and locality-aware
 scheduling. Cache storage and attempt scratch are accounted separately.
 
-The video-plugin local slice currently adapts artifacts to paths beneath an
-attempt-specific scratch tree. Segment files, concat manifest, separated audio,
-and assembled video are intermediates; the requested MP4/MKV path is the final
-artifact. This proves the lifecycle locally but is not the storage-neutral artifact
-provider or atomic publication contract described above.
+The scheduler-managed FFmpeg slice now addresses source ingest, per-worker input,
+worker segment output, assembly input, and the retained final video through
+`ArtifactReference`. Server-local writes are atomic and return size/SHA-256
+metadata. Worker publication remains behind scheduler lease validation, and the
+assembler stages each referenced segment into its private workspace while
+verifying size and SHA-256 before invoking FFmpeg. Completed-job JSON retains the
+existing download URL while adding provider, key, and SHA-256 metadata.
 
-The manual two-host proof copies its input to a fixed remote scratch directory and
+The older manual two-host proof copies its input to a fixed remote scratch directory and
 copies completed remote Matroska segments back to the initiating host before
 assembly. Those SCP operations are explicit test scaffolding: they do not provide
 stable artifact identities, checksums, atomic publication, or provider-managed

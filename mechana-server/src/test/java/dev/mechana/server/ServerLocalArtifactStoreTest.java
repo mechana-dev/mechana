@@ -41,6 +41,7 @@ class ServerLocalArtifactStoreTest {
 
 		assertEquals("server-local", artifact.providerId());
 		assertEquals(content.length, artifact.sizeBytes());
+		assertEquals("e4b66a4078d5639779d61b84cd381dc08440f9e8ff98f754359f8b8438159348", artifact.sha256());
 		assertTrue(store.exists(artifact));
 		assertEquals("mechana artifact", new String(store.open(artifact).readAllBytes(), StandardCharsets.UTF_8));
 
@@ -52,6 +53,6 @@ class ServerLocalArtifactStoreTest {
 	void rejectsKeysThatEscapeTheProviderRoot() throws Exception {
 		ServerLocalArtifactStore store = new ServerLocalArtifactStore(temporaryDirectory);
 		assertThrows(IllegalArgumentException.class,
-				() -> store.put("../outside.txt", new ByteArrayInputStream(new byte[] { 1 })));
+				() -> store.put("../outside.txt", new ByteArrayInputStream(new byte[]{1})));
 	}
 }

@@ -1274,3 +1274,16 @@ cloud providers remain future direction; see `brain/current-state.md` and
   reactor successfully before submitting PR #39 for final review.
 - Local app images remain unsigned development builds. Distribution outside the
   owner's Macs will require Apple Developer signing and notarization.
+
+## 2026-08-08 20:45:00 EDT — Migrate server-local video to artifact references
+
+- Replayed the seven storage-foundation commits cleanly onto current `main`,
+  preserving server-local defaults for input, intermediate, and output roles.
+- Migrated scheduler-managed FFmpeg video source ingest, worker input staging,
+  lease-fenced segment publication, verified assembly staging, final publication,
+  and completed-job metadata to `ArtifactReference`/`ArtifactStore` boundaries.
+- Preserved the existing HTTP transfer path and FFmpeg local-path interface while
+  adding provider/key/size/SHA-256 ownership and integrity semantics.
+- This is intentionally limited to server-local FFmpeg video. Client-local,
+  Google Drive, S3, direct worker-to-requester publication, client-side assembly,
+  and migration of the other workloads remain future work.

@@ -18,7 +18,10 @@ package dev.mechana.api;
 
 import java.util.Objects;
 
-/** Independent provider choices for a job's input, intermediate, and final artifacts. */
+/**
+ * Independent provider choices for a job's input, intermediate, and final
+ * artifacts.
+ */
 public record StorageSelection(String inputProviderId, String intermediateProviderId, String outputProviderId) {
 
 	public static final String SERVER_LOCAL = "server-local";

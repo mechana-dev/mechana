@@ -29,7 +29,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-/** Default artifact store preserving Mechana's existing server-owned storage topology. */
+/**
+ * Default artifact store preserving Mechana's existing server-owned storage
+ * topology.
+ */
 public final class ServerLocalArtifactStore implements ArtifactStore {
 
 	private final Path root;
