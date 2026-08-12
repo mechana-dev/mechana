@@ -138,12 +138,35 @@ public final class ServerMain {
 			String packagedApp = System.getProperty("jpackage.app-path");
 			Path path = configured != null
 					? Path.of(configured)
-					: packagedApp != null ? packagedPluginPath(packagedApp, id) : Path.of(defaultPath);
+					: packagedApp != null
+							? packagedPluginPath(packagedApp, id)
+							: packagedPluginOnClasspath(id).orElse(Path.of(defaultPath));
 			return path.toAbsolutePath().normalize();
 		}
 
+		private static Optional<Path> packagedPluginOnClasspath(String id) {
+			String fileName = pluginFileName(id);
+			for (String entry : System.getProperty("java.class.path", "").split(java.io.File.pathSeparator)) {
+				Path parent = Path.of(entry).toAbsolutePath().getParent();
+				if (parent != null) {
+					Path candidate = parent.resolve(fileName);
+					if (java.nio.file.Files.isRegularFile(candidate))
+						return Optional.of(candidate);
+				}
+			}
+			return Optional.empty();
+		}
+
 		private static Path packagedPluginPath(String executable, String id) {
-			String fileName = switch (id) {
+			String fileName = pluginFileName(id);
+			Path executablePath = Path.of(executable).toAbsolutePath();
+			Path macOsDirectory = Objects.requireNonNull(executablePath.getParent(), "packaged launcher directory");
+			Path contentsDirectory = Objects.requireNonNull(macOsDirectory.getParent(), "packaged Contents directory");
+			return contentsDirectory.resolve("app").resolve(fileName);
+		}
+
+		private static String pluginFileName(String id) {
+			return switch (id) {
 				case "sleep" -> "mechana-plugin-sleep.jar";
 				case "video" -> "mechana-plugin-video.jar";
 				case "fractal" -> "mechana-plugin-fractal-render.jar";
@@ -152,10 +175,6 @@ public final class ServerMain {
 				case "audio" -> "mechana-plugin-audio-reverb.jar";
 				default -> throw new IllegalArgumentException("Unknown plugin: " + id);
 			};
-			Path executablePath = Path.of(executable).toAbsolutePath();
-			Path macOsDirectory = Objects.requireNonNull(executablePath.getParent(), "packaged launcher directory");
-			Path contentsDirectory = Objects.requireNonNull(macOsDirectory.getParent(), "packaged Contents directory");
-			return contentsDirectory.resolve("app").resolve(fileName);
 		}
 	}
 }
