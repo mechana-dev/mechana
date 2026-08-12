@@ -25,6 +25,7 @@ loaded through the root `AGENTS.md` and does not affect other repositories.
 - [Fractal plugin](fractal-plugin.md): deterministic no-input rendering design
 - [OCR plugin](ocr-plugin.md): PDF rasterization, distributed Tesseract, and Markdown assembly
 - [Blender plugin](blender-plugin.md): distributed animation-frame rendering and movie assembly
+- [Audio reverb plugin](audio-reverb-plugin.md): pure-Java partitioned convolution and WAV artifact workflow
 - [Glossary](glossary.md): shared terminology
 
 ## Maintenance

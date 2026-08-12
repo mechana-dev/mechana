@@ -71,6 +71,13 @@ This file reports repository evidence, not desired future status.
 
 ## Present in the repository
 
+- A pure-Java `audio-convolution-reverb` POC accepts staged dry and IR WAV
+  artifacts, performs single-worker uniform partitioned FFT convolution, and
+  publishes a 24-bit WAV through server-local storage. The generic launcher
+  descriptor exposes WAV inputs, output name, wet/dry, pre-delay, IR
+  normalization, peak protection, and headroom. Hardware sweep deconvolution and
+  multi-worker contribution assembly remain future work.
+
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,
   FFmpeg video, fractal-render, Tesseract OCR, and Blender render plugins.

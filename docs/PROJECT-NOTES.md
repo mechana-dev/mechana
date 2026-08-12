@@ -1444,3 +1444,21 @@ cloud providers remain future direction; see `brain/current-state.md` and
   disk, HTTP handling, and any shared worker uplinks. Server-local can remain more
   efficient for already-resident/cached inputs, repeated reuse, weak client links,
   or jobs that must survive launcher disconnection.
+
+## 2026-08-12 11:35 EDT — Add pure-Java convolution reverb proof of concept
+
+- Added `audio-convolution-reverb` with dependency-free radix-2 FFT, uniform
+  partitioned overlap-add convolution, streaming source blocks, precomputed IR
+  spectra, full-tail output, wet/dry and pre-delay controls, optional IR
+  normalization, and deterministic peak protection with configurable headroom.
+- Added 16/24-bit PCM and 32-bit IEEE-float WAV input, mono/stereo routing,
+  24-bit PCM output, and explicit matching-sample-rate validation. No native
+  program or third-party DSP dependency is used.
+- Integrated staged dry/IR artifacts, lease-fenced worker publication,
+  server-local final artifact metadata, the sandbox allowlist, macOS packaging,
+  worker controls, and the generic Client Job Launcher descriptor.
+- Verified a live MacBook Air job through one sandboxed worker. A two-second mono
+  synthetic source and two-second stereo decaying IR produced a 4.024979-second,
+  stereo 48 kHz/24-bit WAV at the configured -1 dBFS headroom.
+- Documented future frequency-domain contribution/overlap-add decomposition.
+  Hardware sweep deconvolution remains separate future/helper tooling.
