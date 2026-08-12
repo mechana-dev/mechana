@@ -43,6 +43,17 @@ final class JobLauncherCatalog {
 	private static List<JobLauncherDescriptor> definitions() {
 		OutputDescriptor serverFiles = new OutputDescriptor("server-local", "directory", "Server job artifacts", false);
 		return List.of(
+				descriptor("audio-convolution-reverb", "Convolution reverb", "/api/jobs/audio-reverb", serverFiles,
+						"Pure Java; one worker; memory scales with IR length and FFT partitions",
+						commonStorage("server-local"), file("dryPath", "Dry audio WAV", "", "wav"),
+						file("irPath", "Impulse response WAV", "", "wav"),
+						text("outputName", "Output artifact name", "reverberated.wav"),
+						integer("taskCount", "Tasks (0 = fleet)", "0", 0, 1), decimal("wet", "Wet level", "0.35", 0, 2),
+						decimal("dry", "Dry level", "1.0", 0, 2),
+						decimal("preDelayMilliseconds", "Pre-delay (ms)", "20", 0, 10000),
+						choice("normalizeIr", "Normalize IR", "true", "true", "false"),
+						choice("peakProtection", "Peak protection", "true", "true", "false"),
+						decimal("headroomDecibels", "Safe headroom (dB)", "1.0", 0, 24)),
 				descriptor("sleep", "Sleep", "/api/jobs", serverFiles, "One worker slot per task",
 						commonStorage("server-local"), directory("clientScratchDirectory", "Client scratch directory"),
 						directory("clientOutputDirectory", "Client output directory"),

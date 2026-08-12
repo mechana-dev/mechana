@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Properties;
 
 final class SettingsStore {
-	static final String ALL_SUPPORTED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render";
+	static final String ALL_SUPPORTED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render,audio-convolution-reverb";
 	static final String FLEET_COORDINATOR = "http://marks-macbook-air-m4:8787";
 	static final String REPOSITORY_AGENT_JAR = "worker-host-agent/target/mechana-worker-host-agent.jar";
 	static final String REPOSITORY_WORKER_JAR = "mechana-worker/target/mechana-worker.jar";

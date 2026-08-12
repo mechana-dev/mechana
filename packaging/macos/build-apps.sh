@@ -54,6 +54,7 @@ cp plugins/video-ffmpeg-plugin/target/mechana-plugin-video-0.1.0-SNAPSHOT.jar "$
 cp plugins/fractal-render-plugin/target/mechana-plugin-fractal-render-0.1.0-SNAPSHOT.jar "${STAGING}/server/mechana-plugin-fractal-render.jar"
 cp plugins/ocr-tesseract-plugin/target/mechana-plugin-ocr-tesseract-0.1.0-SNAPSHOT.jar "${STAGING}/server/mechana-plugin-ocr-tesseract.jar"
 cp plugins/blender-render-plugin/target/mechana-plugin-blender-render-0.1.0-SNAPSHOT.jar "${STAGING}/server/mechana-plugin-blender-render.jar"
+cp plugins/audio-reverb-plugin/target/mechana-plugin-audio-reverb-0.1.0-SNAPSHOT.jar "${STAGING}/server/mechana-plugin-audio-reverb.jar"
 cp worker-control-app/target/mechana-worker-control.jar "${STAGING}/worker-control/"
 cp worker-host-agent/target/mechana-worker-host-agent.jar "${STAGING}/worker-control/deployment/"
 cp mechana-worker/target/mechana-worker.jar "${STAGING}/worker-control/deployment/"

@@ -48,6 +48,8 @@ class ServerMainTest {
 					plugins.sleep());
 			assertEquals(Path.of("/Applications/Mechana Server.app/Contents/app/mechana-plugin-blender-render.jar"),
 					plugins.blender());
+			assertEquals(Path.of("/Applications/Mechana Server.app/Contents/app/mechana-plugin-audio-reverb.jar"),
+					plugins.audio());
 		} finally {
 			if (originalAppPath == null) {
 				System.clearProperty("jpackage.app-path");

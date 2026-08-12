@@ -40,7 +40,7 @@ public final class ServerMain {
 		PluginJars plugins = PluginJars.configured();
 
 		MechanaServer server = new MechanaServer(port, publicUrl, plugins.sleep(), plugins.video(), plugins.fractal(),
-				plugins.ocr(), plugins.blender(), 5_000, dataDirectory);
+				plugins.ocr(), plugins.blender(), plugins.audio(), 5_000, dataDirectory);
 		server.onRestart(() -> restart(server, port, publicUrl, dataDirectory));
 		server.onStop(() -> stop(server));
 		server.start();
@@ -52,6 +52,7 @@ public final class ServerMain {
 		System.out.printf("Serving fractal plugin from %s%n", plugins.fractal().toAbsolutePath());
 		System.out.printf("Serving OCR plugin from %s%n", plugins.ocr().toAbsolutePath());
 		System.out.printf("Serving Blender plugin from %s%n", plugins.blender().toAbsolutePath());
+		System.out.printf("Serving audio reverb plugin from %s%n", plugins.audio().toAbsolutePath());
 		System.out.printf("Persisting completed jobs under %s%n", dataDirectory.toAbsolutePath());
 		new CountDownLatch(1).await();
 	}
@@ -117,7 +118,7 @@ public final class ServerMain {
 		return List.copyOf(command);
 	}
 
-	record PluginJars(Path sleep, Path video, Path fractal, Path ocr, Path blender) {
+	record PluginJars(Path sleep, Path video, Path fractal, Path ocr, Path blender, Path audio) {
 		static PluginJars configured() {
 			return new PluginJars(
 					pluginPath("sleep", "plugins/sleep-plugin/target/mechana-plugin-sleep-0.1.0-SNAPSHOT.jar"),
@@ -127,7 +128,9 @@ public final class ServerMain {
 					pluginPath("ocr",
 							"plugins/ocr-tesseract-plugin/target/mechana-plugin-ocr-tesseract-0.1.0-SNAPSHOT.jar"),
 					pluginPath("blender",
-							"plugins/blender-render-plugin/target/mechana-plugin-blender-render-0.1.0-SNAPSHOT.jar"));
+							"plugins/blender-render-plugin/target/mechana-plugin-blender-render-0.1.0-SNAPSHOT.jar"),
+					pluginPath("audio",
+							"plugins/audio-reverb-plugin/target/mechana-plugin-audio-reverb-0.1.0-SNAPSHOT.jar"));
 		}
 
 		private static Path pluginPath(String id, String defaultPath) {
@@ -146,6 +149,7 @@ public final class ServerMain {
 				case "fractal" -> "mechana-plugin-fractal-render.jar";
 				case "ocr" -> "mechana-plugin-ocr-tesseract.jar";
 				case "blender" -> "mechana-plugin-blender-render.jar";
+				case "audio" -> "mechana-plugin-audio-reverb.jar";
 				default -> throw new IllegalArgumentException("Unknown plugin: " + id);
 			};
 			Path executablePath = Path.of(executable).toAbsolutePath();

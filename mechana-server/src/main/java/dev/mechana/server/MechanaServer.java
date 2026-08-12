@@ -28,6 +28,7 @@ import dev.mechana.coordinator.Scheduler.WorkSpec;
 import dev.mechana.api.ArtifactStore;
 import dev.mechana.protocol.Messages.JobStatusResponse;
 import dev.mechana.protocol.Messages.ArtifactReference;
+import dev.mechana.protocol.Messages.AudioReverbJobSubmitRequest;
 import dev.mechana.protocol.Messages.ClientAssemblyCompletion;
 import dev.mechana.protocol.Messages.VideoAssemblyManifest;
 import dev.mechana.protocol.Messages.LauncherJob;
@@ -92,6 +93,7 @@ public final class MechanaServer implements AutoCloseable {
 	private static final String FRACTAL_PLUGIN_PATH = "/api/plugins/fractal-render/1.0.0";
 	private static final String OCR_PLUGIN_PATH = "/api/plugins/ocr-tesseract/1.0.0";
 	private static final String BLENDER_PLUGIN_PATH = "/api/plugins/blender-render/1.0.0";
+	private static final String AUDIO_PLUGIN_PATH = "/api/plugins/audio-convolution-reverb/1.0.0";
 	private static final String FRACTAL_PLUGIN_ID = "fractal-render";
 	private static final String FRACTAL_PLUGIN_VERSION = "1.0.0";
 	private static final String FRACTAL_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.fractal.FractalTaskPlugin";
@@ -101,6 +103,9 @@ public final class MechanaServer implements AutoCloseable {
 	private static final String BLENDER_PLUGIN_ID = "blender-render";
 	private static final String BLENDER_PLUGIN_VERSION = "1.0.0";
 	private static final String BLENDER_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.blender.BlenderRenderPlugin";
+	private static final String AUDIO_PLUGIN_ID = "audio-convolution-reverb";
+	private static final String AUDIO_PLUGIN_VERSION = "1.0.0";
+	private static final String AUDIO_PLUGIN_ENTRYPOINT = "dev.mechana.plugins.audio.AudioConvolutionReverbPlugin";
 	private static final long WORKER_TIMEOUT_MILLIS = 15_000;
 	private static final long WORKER_RETENTION_MILLIS = 10_000;
 	private static final long HEARTBEAT_CHECK_MILLIS = 1_000;
@@ -123,6 +128,8 @@ public final class MechanaServer implements AutoCloseable {
 	private final PluginLocation ocrPluginLocation;
 	private final Path blenderPluginJar;
 	private final PluginLocation blenderPluginLocation;
+	private final Path audioPluginJar;
+	private final PluginLocation audioPluginLocation;
 	private final Path workRoot;
 	private final String publicUrl;
 	private final ConcurrentMap<String, dev.mechana.api.ArtifactReference> videoInputs = new ConcurrentHashMap<>();
@@ -133,6 +140,8 @@ public final class MechanaServer implements AutoCloseable {
 	private final ConcurrentMap<String, OcrJob> ocrJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, dev.mechana.api.ArtifactReference> blenderInputs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, BlenderJob> blenderJobs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, dev.mechana.api.ArtifactReference> audioInputs = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, AudioJob> audioJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, DirectClientJob> directClientJobs = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, ConcurrentMap<String, TransferTotals>> jobTransfers = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, WorkerPresence> workers = new ConcurrentHashMap<>();
@@ -172,6 +181,13 @@ public final class MechanaServer implements AutoCloseable {
 
 	public MechanaServer(int port, String publicUrl, Path pluginJar, Path videoPluginJar, Path fractalPluginJar,
 			Path ocrPluginJar, Path blenderPluginJar, long leaseMillis, Path dataDirectory) throws IOException {
+		this(port, publicUrl, pluginJar, videoPluginJar, fractalPluginJar, ocrPluginJar, blenderPluginJar,
+				blenderPluginJar, leaseMillis, dataDirectory);
+	}
+
+	public MechanaServer(int port, String publicUrl, Path pluginJar, Path videoPluginJar, Path fractalPluginJar,
+			Path ocrPluginJar, Path blenderPluginJar, Path audioPluginJar, long leaseMillis, Path dataDirectory)
+			throws IOException {
 		this.scheduler = new Scheduler(leaseMillis);
 		this.artifactStores = new ArtifactStoreRegistry().register(new ServerLocalArtifactStore(dataDirectory));
 		this.defaultArtifactStore = artifactStores
@@ -195,6 +211,8 @@ public final class MechanaServer implements AutoCloseable {
 		this.blenderPluginJar = blenderPluginJar.toAbsolutePath().normalize();
 		this.blenderPluginLocation = new PluginLocation(this.publicUrl + BLENDER_PLUGIN_PATH,
 				sha256(this.blenderPluginJar));
+		this.audioPluginJar = audioPluginJar.toAbsolutePath().normalize();
+		this.audioPluginLocation = new PluginLocation(this.publicUrl + AUDIO_PLUGIN_PATH, sha256(this.audioPluginJar));
 		this.http = HttpServer.create(new InetSocketAddress(port), 0);
 		this.http.createContext("/api/jobs", new JobsHandler());
 		this.http.createContext("/api/client/capabilities", this::serveLauncherCapabilities);
@@ -213,10 +231,13 @@ public final class MechanaServer implements AutoCloseable {
 				exchange -> servePlugin(exchange, this.ocrPluginJar, this.ocrPluginLocation));
 		this.http.createContext(BLENDER_PLUGIN_PATH,
 				exchange -> servePlugin(exchange, this.blenderPluginJar, this.blenderPluginLocation));
+		this.http.createContext(AUDIO_PLUGIN_PATH,
+				exchange -> servePlugin(exchange, this.audioPluginJar, this.audioPluginLocation));
 		this.http.createContext("/api/video-inputs", this::serveVideoInput);
 		this.http.createContext("/api/client/video-inputs", this::receiveClientVideoInput);
 		this.http.createContext("/api/ocr-inputs", this::serveOcrInput);
 		this.http.createContext("/api/blender-inputs", this::serveBlenderInput);
+		this.http.createContext("/api/audio-inputs", this::serveAudioInput);
 		this.http.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
 	}
 
@@ -346,6 +367,12 @@ public final class MechanaServer implements AutoCloseable {
 					if ("server-local".equals(request.storageProvider()))
 						requireLoopback(exchange);
 					sendJson(exchange, 202, new JobSubmission(submitBlender(request)));
+					return;
+				}
+				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs/audio-reverb".equals(path)) {
+					requireLoopback(exchange);
+					sendJson(exchange, 202,
+							new JobSubmission(submitAudioReverb(read(exchange, AudioReverbJobSubmitRequest.class))));
 					return;
 				}
 				if ("POST".equals(exchange.getRequestMethod()) && "/api/jobs".equals(path)) {
@@ -677,6 +704,8 @@ public final class MechanaServer implements AutoCloseable {
 						assembleOcr(status.jobId());
 					else if (blenderJobs.containsKey(status.jobId()))
 						assembleBlender(status.jobId());
+					else if (audioJobs.containsKey(status.jobId()))
+						assembleAudio(status.jobId());
 				}
 				archiveIfTerminal(status.jobId());
 				if (!"heartbeat".equals(action)) {
@@ -706,6 +735,7 @@ public final class MechanaServer implements AutoCloseable {
 			FractalJob fractal = fractalJobs.get(jobId);
 			OcrJob ocr = ocrJobs.get(jobId);
 			BlenderJob blender = blenderJobs.get(jobId);
+			AudioJob audio = audioJobs.get(jobId);
 			if (video != null && name.matches("segment-[0-9]{5}\\.mkv")) {
 				try (InputStream input = exchange.getRequestBody()) {
 					dev.mechana.api.ArtifactReference published = defaultArtifactStore
@@ -722,6 +752,8 @@ public final class MechanaServer implements AutoCloseable {
 				publications = ocr.batches();
 			else if (blender != null && name.matches("frames-[0-9]{5}\\.zip"))
 				publications = blender.batches();
+			else if (audio != null && "reverberated.wav".equals(name))
+				publications = audio.outputs();
 			else
 				throw new IllegalArgumentException("Unexpected task artifact");
 			try (InputStream input = exchange.getRequestBody()) {
@@ -968,6 +1000,43 @@ public final class MechanaServer implements AutoCloseable {
 			if (!retained)
 				deleteTree(scratch);
 		}
+	}
+
+	private String submitAudioReverb(AudioReverbJobSubmitRequest request) throws IOException {
+		Path dry = requireWav(request.dryPath(), "Dry audio");
+		Path ir = requireWav(request.irPath(), "Impulse response");
+		String dryToken = UUID.randomUUID().toString();
+		String irToken = UUID.randomUUID().toString();
+		try (InputStream bytes = Files.newInputStream(dry)) {
+			audioInputs.put(dryToken, defaultArtifactStore.put("audio-staging/" + dryToken + "/dry.wav", bytes));
+		}
+		try (InputStream bytes = Files.newInputStream(ir)) {
+			audioInputs.put(irToken, defaultArtifactStore.put("audio-staging/" + irToken + "/ir.wav", bytes));
+		}
+		Map<String, String> parameters = Map.ofEntries(Map.entry("dryUrl", publicUrl + "/api/audio-inputs/" + dryToken),
+				Map.entry("irUrl", publicUrl + "/api/audio-inputs/" + irToken),
+				Map.entry("wet", Double.toString(request.wet())), Map.entry("dry", Double.toString(request.dry())),
+				Map.entry("preDelayMilliseconds", Double.toString(request.preDelayMilliseconds())),
+				Map.entry("normalizeIr", Boolean.toString(request.normalizeIr())),
+				Map.entry("peakProtection", Boolean.toString(request.peakProtection())),
+				Map.entry("headroomDecibels", Double.toString(request.headroomDecibels())));
+		String jobId = scheduler.submitPlugin(AUDIO_PLUGIN_ID, AUDIO_PLUGIN_VERSION, AUDIO_PLUGIN_ENTRYPOINT,
+				List.of(new WorkSpec(1, parameters, "Convolution",
+						Map.of("dry", Objects.requireNonNull(dry.getFileName()).toString(), "ir",
+								Objects.requireNonNull(ir.getFileName()).toString()))),
+				Map.of("dry", dry.toString(), "ir", ir.toString(), "output", request.outputName()),
+				audioPluginLocation);
+		audioJobs.put(jobId, new AudioJob(List.of(dryToken, irToken), request.outputName(), new ConcurrentHashMap<>()));
+		return jobId;
+	}
+
+	private static Path requireWav(String value, String label) {
+		Path path = Path.of(value).toAbsolutePath().normalize();
+		Path fileName = path.getFileName();
+		if (!Files.isRegularFile(path) || fileName == null
+				|| !fileName.toString().toLowerCase(java.util.Locale.ROOT).endsWith(".wav"))
+			throw new IllegalArgumentException(label + " must be an existing .wav file: " + path);
+		return path;
 	}
 
 	private String submitOcr(OcrJobSubmitRequest request) throws IOException {
@@ -1242,6 +1311,10 @@ public final class MechanaServer implements AutoCloseable {
 		serveMappedArtifact(exchange, "/api/blender-inputs/", blenderInputs, "application/x-blender");
 	}
 
+	private void serveAudioInput(HttpExchange exchange) throws IOException {
+		serveMappedArtifact(exchange, "/api/audio-inputs/", audioInputs, "audio/wav");
+	}
+
 	private void serveMappedArtifact(HttpExchange exchange, String prefix,
 			Map<String, dev.mechana.api.ArtifactReference> inputs, String contentType) throws IOException {
 		if (!"GET".equals(exchange.getRequestMethod())) {
@@ -1389,6 +1462,24 @@ public final class MechanaServer implements AutoCloseable {
 		}
 	}
 
+	private void assembleAudio(String jobId) {
+		AudioJob audio = audioJobs.get(jobId);
+		try {
+			dev.mechana.api.ArtifactReference intermediate = audio.outputs().remove("reverberated.wav");
+			if (intermediate == null)
+				throw new IOException("Worker did not publish reverberated.wav");
+			Path staged = workRoot.resolve(jobId).resolve(audio.outputName());
+			stageArtifact(intermediate, staged);
+			try (InputStream bytes = Files.newInputStream(staged)) {
+				audio.outputs().put(audio.outputName(),
+						defaultArtifactStore.put("jobs/" + jobId + "/artifacts/" + audio.outputName(), bytes));
+			}
+			scheduler.finishAssembly(jobId, null);
+		} catch (IOException failure) {
+			scheduler.finishAssembly(jobId, "Audio assembly failed: " + failure.getMessage());
+		}
+	}
+
 	private void assembleOcr(String jobId) {
 		OcrJob ocr = ocrJobs.get(jobId);
 		if (ocr == null)
@@ -1507,11 +1598,18 @@ public final class MechanaServer implements AutoCloseable {
 			BlenderJob blender = blenderJobs.get(jobId);
 			if (blender != null && "SUCCEEDED".equals(snapshot.stage()))
 				registerCompletedArtifacts(jobId, blender.outputs());
+			AudioJob audio = audioJobs.get(jobId);
+			if (audio != null && "SUCCEEDED".equals(snapshot.stage()))
+				registerCompletedArtifacts(jobId, audio.outputs());
 		} catch (IOException failure) {
 			System.err.printf("Could not archive completed job %s: %s%n", jobId, failure.getMessage());
 		} finally {
 			jobTransfers.remove(jobId);
 			directClientJobs.remove(jobId);
+			AudioJob audio = audioJobs.remove(jobId);
+			if (audio != null)
+				audio.inputTokens().stream().map(audioInputs::remove).filter(Objects::nonNull)
+						.forEach(this::deleteArtifactQuietly);
 			VideoJob video = videoJobs.remove(jobId);
 			if (video != null) {
 				video.inputTokens().forEach(videoInputs::remove);
@@ -1938,6 +2036,10 @@ public final class MechanaServer implements AutoCloseable {
 
 	private record BlenderJob(String inputToken, Path scratch, BlenderJobSubmitRequest request,
 			ConcurrentMap<String, dev.mechana.api.ArtifactReference> batches,
+			ConcurrentMap<String, dev.mechana.api.ArtifactReference> outputs) {
+	}
+
+	private record AudioJob(List<String> inputTokens, String outputName,
 			ConcurrentMap<String, dev.mechana.api.ArtifactReference> outputs) {
 	}
 

@@ -48,9 +48,9 @@ class JobLauncherCatalogTest {
 
 	@Test
 	void everyCapabilityUsesTheSameFleetAwareTasksConvention() {
-		var descriptors = JobLauncherCatalog.available(
-				Map.of("sleep", 1, "video-ffmpeg", 1, "fractal-render", 1, "ocr-tesseract", 1, "blender-render", 1));
-		assertEquals(5, descriptors.size());
+		var descriptors = JobLauncherCatalog.available(Map.of("sleep", 1, "video-ffmpeg", 1, "fractal-render", 1,
+				"ocr-tesseract", 1, "blender-render", 1, "audio-convolution-reverb", 1));
+		assertEquals(6, descriptors.size());
 		for (var descriptor : descriptors) {
 			var tasks = descriptor.fields().stream()
 					.filter(field -> field.name().equals("taskCount") || field.name().equals("segmentCount"))
@@ -59,6 +59,18 @@ class JobLauncherCatalogTest {
 			assertEquals("0", tasks.defaultValue());
 			assertEquals(0d, tasks.minimum());
 		}
+	}
+
+	@Test
+	void audioDescriptorIsSchemaDrivenAndWavSpecific() {
+		var descriptor = JobLauncherCatalog.available(Map.of("audio-convolution-reverb", 1)).getFirst();
+		var fields = descriptor.fields().stream()
+				.collect(java.util.stream.Collectors.toMap(field -> field.name(), field -> field));
+		assertEquals("/api/jobs/audio-reverb", descriptor.submitPath());
+		assertEquals(List.of("wav"), fields.get("dryPath").acceptedExtensions());
+		assertEquals(List.of("wav"), fields.get("irPath").acceptedExtensions());
+		assertEquals(List.of("true", "false"), fields.get("normalizeIr").choices());
+		assertEquals(List.of("server-local"), fields.get("storageProvider").choices());
 	}
 
 	@Test
