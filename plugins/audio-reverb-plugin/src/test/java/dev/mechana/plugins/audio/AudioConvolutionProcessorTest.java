@@ -102,6 +102,17 @@ class AudioConvolutionProcessorTest {
 		}
 	}
 
+	@Test
+	void readsMacOsExtensibleTwentyFourBitPcm() throws IOException {
+		Path pcm = extensiblePcm24("macos-pcm24.wav", new int[]{0, 4_194_304, -4_194_304});
+		try (WavFile.Reader reader = WavFile.open(pcm)) {
+			double[][] samples = new double[1][3];
+			assertEquals(24, reader.format().bitsPerSample());
+			assertEquals(3, reader.read(samples, 0, 3));
+			assertArrayEquals(new double[]{0, 0.5, -0.5}, samples[0], 1e-9);
+		}
+	}
+
 	private AudioConvolutionProcessor.Result processor(Path dry, Path ir, Path output,
 			AudioConvolutionProcessor.Options options) throws IOException {
 		return new AudioConvolutionProcessor().process(dry, ir, output, temporary, options, ignored -> {
@@ -152,6 +163,23 @@ class AudioConvolutionProcessorTest {
 		ByteBuffer data = header(3, 32, samples.length);
 		for (float sample : samples)
 			data.putFloat(sample);
+		Path path = temporary.resolve(name);
+		Files.write(path, data.array());
+		return path;
+	}
+
+	private Path extensiblePcm24(String name, int[] samples) throws IOException {
+		int dataBytes = samples.length * 3;
+		ByteBuffer data = ByteBuffer.allocate(68 + dataBytes).order(ByteOrder.LITTLE_ENDIAN);
+		data.put("RIFF".getBytes(java.nio.charset.StandardCharsets.US_ASCII)).putInt(60 + dataBytes)
+				.put("WAVEfmt ".getBytes(java.nio.charset.StandardCharsets.US_ASCII)).putInt(40)
+				.putShort((short) 0xfffe).putShort((short) 1).putInt(48_000).putInt(144_000).putShort((short) 3)
+				.putShort((short) 24).putShort((short) 22).putShort((short) 24).putInt(4).putInt(1).putShort((short) 0)
+				.putShort((short) 0x10).putLong(0x719b3800aa000080L)
+				.put("data".getBytes(java.nio.charset.StandardCharsets.US_ASCII)).putInt(dataBytes);
+		for (int sample : samples) {
+			data.put((byte) sample).put((byte) (sample >>> 8)).put((byte) (sample >>> 16));
+		}
 		Path path = temporary.resolve(name);
 		Files.write(path, data.array());
 		return path;

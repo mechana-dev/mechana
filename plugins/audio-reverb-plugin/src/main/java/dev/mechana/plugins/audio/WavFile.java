@@ -71,6 +71,14 @@ public final class WavFile {
 						readUnsignedInt(input);
 						readUnsignedShort(input);
 						bits = readUnsignedShort(input);
+						if (audioFormat == 0xfffe && size >= 40) {
+							int extensionSize = readUnsignedShort(input);
+							if (extensionSize >= 22) {
+								readUnsignedShort(input);
+								readUnsignedInt(input);
+								audioFormat = (int) readUnsignedInt(input);
+							}
+						}
 					} else if ("data".equals(id)) {
 						dataOffset = input.getFilePointer();
 						dataSize = size;
