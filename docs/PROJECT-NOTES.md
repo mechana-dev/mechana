@@ -1475,3 +1475,15 @@ cloud providers remain future direction; see `brain/current-state.md` and
   normal completed-job artifact directory.
 - Added launcher selection and descriptor coverage and verified the affected
   server, protocol, plugin, and launcher modules.
+
+## 2026-08-13 05:45 EDT — Suggest descriptive Reverb output filenames
+
+- Made the Reverb output artifact name follow the selected dry WAV stem plus wet
+  level, dry level, pre-delay, and IR-normalization controls. Decimal points are
+  encoded as `p` so the result remains valid under the existing artifact-name
+  contract; peak protection and safe headroom are intentionally omitted.
+- Kept the field editable: the live suggestion stops changing once the user types
+  an explicit output name. Remembered generated names remain recognizable as
+  suggestions when the launcher is reopened.
+- Added coverage for initial generation, parameter-driven updates, normalization,
+  filename sanitization, and manual override preservation.

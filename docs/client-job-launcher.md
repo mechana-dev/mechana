@@ -23,7 +23,10 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
   dry levels, pre-delay, IR normalization, peak protection, headroom, and an
   optional shared artifacts folder. When selected, each successful reverb job is
   copied into `<selected folder>/<job ID>/` while its durable server record is
-  retained. Its POC placement is server-local and its task count is limited to one.
+  retained. After a dry WAV is selected, the output name is suggested from its
+  base name plus wet, dry, pre-delay, and IR-normalization settings; the suggestion
+  follows control changes until the user overrides the name. Its POC placement is
+  server-local and its task count is limited to one.
 - FFmpeg video includes `Start offset in seconds`, default `0`, which selects the
   beginning of the requested compression range for server-local and client-local
   jobs. Duration is measured from that offset.
