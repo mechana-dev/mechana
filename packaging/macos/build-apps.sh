@@ -64,6 +64,8 @@ cp mechana-worker/target/mechana-worker.jar "${STAGING}/worker-control/deploymen
 cp client-job-launcher/target/mechana-client-job-launcher.jar "${STAGING}/job-launcher/"
 cp standalone-reverb-app/target/mechana-standalone-reverb.jar "${STAGING}/standalone-reverb/"
 cp -R standalone-reverb-app/src/main/distribution/ir-profiles "${STAGING}/standalone-reverb/"
+cp -R standalone-reverb-app/src/main/distribution/capture "${STAGING}/standalone-reverb/"
+cp LICENSE NOTICE "${STAGING}/standalone-reverb/"
 
 jpackage --type app-image --dest "${APPS}" --input "${STAGING}/server" \
 	--name "Mechana Server" --main-jar mechana-macos-app-launcher.jar \

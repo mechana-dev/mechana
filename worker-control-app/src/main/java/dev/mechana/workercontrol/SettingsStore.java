@@ -29,12 +29,13 @@ import java.util.Map;
 import java.util.Properties;
 
 final class SettingsStore {
-	static final String ALL_SUPPORTED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render,audio-convolution-reverb";
+	static final String ALL_SUPPORTED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render,audio-convolution-reverb,audio-ir-deconvolution";
 	private static final String PRE_AUDIO_SUPPORTED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render";
+	private static final String PRE_IR_SUPPORTED_PLUGINS = PRE_AUDIO_SUPPORTED_PLUGINS + ",audio-convolution-reverb";
 	static final String FLEET_COORDINATOR = "http://marks-macbook-air-m4:8787";
 	static final String REPOSITORY_AGENT_JAR = "worker-host-agent/target/mechana-worker-host-agent.jar";
 	static final String REPOSITORY_WORKER_JAR = "mechana-worker/target/mechana-worker.jar";
-	private static final int CURRENT_VERSION = 4;
+	private static final int CURRENT_VERSION = 5;
 	private static final Map<String, SshDefaults> KNOWN_HOSTS = Map.of("marks-macbook-air-m4",
 			new SshDefaults("markvita", 22), "rocinante", new SshDefaults("markvita", 21012), "srv959600",
 			new SshDefaults("root", 22), "hyperion", new SshDefaults("markf", 22));
@@ -110,9 +111,9 @@ final class SettingsStore {
 	}
 
 	static HostSettings defaults() {
-		return new HostSettings(8790, "", 1, AgentClient.LaunchMode.SANDBOXED, ALL_SUPPORTED_PLUGINS,
-				System.getProperty("user.name"), 22, "", false, "http://127.0.0.1:8787", "~/.mechana/host-agent",
-				defaultAgentJar(), defaultWorkerJar(), "~/.mechana/sandbox",
+		return new HostSettings(8790, "", 1, AgentClient.LaunchMode.SANDBOXED, "", System.getProperty("user.name"), 22,
+				"", false, "http://127.0.0.1:8787", "~/.mechana/host-agent", defaultAgentJar(), defaultWorkerJar(),
+				"~/.mechana/sandbox",
 				"windows-sandbox-launcher/bin/Release/net10.0-windows/win-arm64/publish/mechana-windows-sandbox.exe");
 	}
 
@@ -121,7 +122,7 @@ final class SettingsStore {
 		SshDefaults ssh = KNOWN_HOSTS.get(host);
 		if (ssh == null)
 			return defaults;
-		return withFleetDefaults(defaults, ssh.user(), ssh.port(), ALL_SUPPORTED_PLUGINS, FLEET_COORDINATOR);
+		return withFleetDefaults(defaults, ssh.user(), ssh.port(), "", FLEET_COORDINATOR);
 	}
 
 	private static HostSettings readProfile(Properties p, String prefix, HostSettings defaults) {
@@ -148,9 +149,7 @@ final class SettingsStore {
 
 	private static HostSettings migrateLegacyProfile(String host, HostSettings legacy) {
 		SshDefaults ssh = KNOWN_HOSTS.get(host);
-		return ssh == null
-				? legacy
-				: withFleetDefaults(legacy, ssh.user(), ssh.port(), ALL_SUPPORTED_PLUGINS, FLEET_COORDINATOR);
+		return ssh == null ? legacy : withFleetDefaults(legacy, ssh.user(), ssh.port(), "", FLEET_COORDINATOR);
 	}
 
 	private static HostSettings migrateKnownCoordinator(String host, HostSettings profile, int version) {
@@ -178,7 +177,8 @@ final class SettingsStore {
 	}
 
 	private static String migrateCapabilities(String value) {
-		return PRE_AUDIO_SUPPORTED_PLUGINS.equals(value) ? ALL_SUPPORTED_PLUGINS : value;
+		return PRE_AUDIO_SUPPORTED_PLUGINS.equals(value) || PRE_IR_SUPPORTED_PLUGINS.equals(value)
+				|| ALL_SUPPORTED_PLUGINS.equals(value) ? "" : value;
 	}
 
 	static String defaultAgentJar() {

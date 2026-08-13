@@ -51,6 +51,6 @@ class WorkerControlFrameTest {
 		SettingsStore.HostSettings rocinante = WorkerControlFrame.profileForSelectedHost(profiles, "rocinante");
 		assertEquals("markvita", rocinante.sshUser());
 		assertEquals(21012, rocinante.sshPort());
-		assertEquals(SettingsStore.ALL_SUPPORTED_PLUGINS, rocinante.capabilities());
+		assertEquals("", rocinante.capabilities());
 	}
 }

@@ -60,7 +60,7 @@ public record AgentConfig(String bindAddress, int port, String token, URI coordi
 				normalizeMachineName(p.getProperty("machine-name", localMachineName())),
 				Boolean.parseBoolean(p.getProperty("allow-unauthenticated", "false")),
 				Path.of(p.getProperty("sandbox-root", defaultSandboxRoot())), p.getProperty("sandboxed-capabilities",
-						"sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render,audio-convolution-reverb"));
+						"sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render,audio-convolution-reverb,audio-ir-deconvolution"));
 	}
 
 	private static String localMachineName() {

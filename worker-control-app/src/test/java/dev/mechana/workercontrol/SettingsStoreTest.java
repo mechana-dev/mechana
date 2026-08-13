@@ -82,7 +82,7 @@ class SettingsStoreTest {
 		assertEquals(SettingsStore.FLEET_COORDINATOR, migrated.coordinator());
 		assertEquals("markvita", migrated.sshUser());
 		assertEquals(21012, migrated.sshPort());
-		assertEquals(SettingsStore.ALL_SUPPORTED_PLUGINS, migrated.capabilities());
+		assertEquals("", migrated.capabilities());
 	}
 
 	@Test
@@ -106,7 +106,7 @@ class SettingsStoreTest {
 
 		SettingsStore.HostSettings loaded = new SettingsStore(file).load().profiles().get("marks-macbook-air-m4");
 
-		assertEquals(SettingsStore.ALL_SUPPORTED_PLUGINS, loaded.capabilities());
+		assertEquals("", loaded.capabilities());
 	}
 
 	@Test
@@ -184,7 +184,7 @@ class SettingsStoreTest {
 		SettingsStore.HostSettings profile = settings.profiles().get(host);
 		assertEquals(user, profile.sshUser());
 		assertEquals(sshPort, profile.sshPort());
-		assertEquals(SettingsStore.ALL_SUPPORTED_PLUGINS, profile.capabilities());
+		assertEquals("", profile.capabilities());
 		assertEquals(SettingsStore.FLEET_COORDINATOR, profile.coordinator());
 	}
 }

@@ -40,7 +40,7 @@ final class WorkerControlFrame extends JFrame {
 	private final JPasswordField token = new JPasswordField(16);
 	private final JSpinner count = new JSpinner(new SpinnerNumberModel(1, 0, 128, 1));
 	private final JComboBox<AgentClient.LaunchMode> launchMode = new JComboBox<>(AgentClient.LaunchMode.values());
-	private final JTextField capabilities = new JTextField(SettingsStore.ALL_SUPPORTED_PLUGINS, 28);
+	private final JTextField capabilities = new JTextField("", 28);
 	private final JTextField sshUser = new JTextField(System.getProperty("user.name"), 10);
 	private final JSpinner sshPort = new JSpinner(new SpinnerNumberModel(22, 1, 65535, 1));
 	private final JTextField identityFile = new JTextField(18);
@@ -80,7 +80,7 @@ final class WorkerControlFrame extends JFrame {
 		usePlainIntegerFormat(sshPort);
 		host.setEditable(true);
 		workers.setEditable(false);
-		capabilities.setToolTipText("Comma-separated plugin capabilities allowed by the selected host agent");
+		capabilities.setToolTipText("Leave blank for every plugin supported by this worker; list names to restrict it");
 		token.setToolTipText("Optional for development; blank uses the SSH tunnel without bearer authentication");
 		workers.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12));
 		JPanel connection = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -96,7 +96,7 @@ final class WorkerControlFrame extends JFrame {
 		actions.add(count);
 		actions.add(new JLabel("Mode"));
 		actions.add(launchMode);
-		actions.add(new JLabel("Plugins"));
+		actions.add(new JLabel("Plugins (blank = all)"));
 		actions.add(capabilities);
 		actions.add(start);
 		actions.add(stop);
@@ -229,11 +229,15 @@ final class WorkerControlFrame extends JFrame {
 				+ status.runningCount() + " running / " + status.requestedCount() + " requested");
 		if (status.launchMode() != null) {
 			launchMode.setSelectedItem(status.launchMode());
-			setCapabilities(status.capabilities());
+			if (!capabilities.getText().isBlank())
+				setCapabilities(status.capabilities());
 		}
 		StringBuilder text = new StringBuilder();
 		if (status.launchMode() != null) {
-			text.append("Mode: ").append(status.launchMode()).append("   Plugins: ").append(status.capabilities());
+			text.append("Mode: ").append(status.launchMode()).append("   Plugins: ")
+					.append(capabilities.getText().isBlank()
+							? "all supported (" + status.capabilities() + ")"
+							: status.capabilities());
 			if (status.sandboxRoot() != null && !status.sandboxRoot().isBlank())
 				text.append("   Sandbox: ").append(status.sandboxRoot());
 			text.append("\n\n");

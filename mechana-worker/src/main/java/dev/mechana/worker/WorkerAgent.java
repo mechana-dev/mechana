@@ -330,6 +330,12 @@ public final class WorkerAgent {
 				parameters.put("irPath",
 						stageRemoteInput(parameters.remove("irUrl"), workspace.input(), "ir.wav", context));
 			}
+			case "audio-ir-deconvolution" -> {
+				parameters.put("sweepPath",
+						stageRemoteInput(parameters.remove("sweepUrl"), workspace.input(), "sweep.wav", context));
+				parameters.put("recordedReturnPath", stageRemoteInput(parameters.remove("recordedReturnUrl"),
+						workspace.input(), "recorded-return.wav", context));
+			}
 			case "sleep", "fractal-render" -> {
 				// Pure-Java plugins need no staged input or native runtime grant.
 			}
@@ -406,14 +412,14 @@ public final class WorkerAgent {
 			case "video-ffmpeg" -> List.of(requiredRuntimePath("ffmpeg"), requiredRuntimePath("ffprobe"));
 			case "ocr-tesseract" -> List.of(requiredRuntimePath("tesseract"));
 			case "blender-render" -> List.of(requiredRuntimePath("blender"));
-			case "sleep", "fractal-render", "audio-convolution-reverb" -> List.of();
+			case "sleep", "fractal-render", "audio-convolution-reverb", "audio-ir-deconvolution" -> List.of();
 			default -> throw new IOException("Plugin is not approved for sandboxed execution: " + pluginId);
 		};
 	}
 
 	private static int sandboxMaxProcesses(String pluginId) throws IOException {
 		return switch (pluginId) {
-			case "sleep", "fractal-render", "audio-convolution-reverb" -> 1;
+			case "sleep", "fractal-render", "audio-convolution-reverb", "audio-ir-deconvolution" -> 1;
 			case "video-ffmpeg", "ocr-tesseract" -> 4;
 			case "blender-render" -> 16;
 			default -> throw new IOException("Plugin is not approved for sandboxed execution: " + pluginId);

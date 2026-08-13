@@ -1535,3 +1535,84 @@ cloud providers remain future direction; see `brain/current-state.md` and
   profile chooser and instructions for selecting arbitrary deconvolved hardware
   IR WAVs. Raw hardware sweep recordings remain inputs to future deconvolution
   tooling rather than valid direct plugin inputs.
+- Added a focused architecture-aware Reverb packaging entry point. It can use an
+  Intel Java 25 JDK under Rosetta to produce a separately named `x86_64` app ZIP
+  for Intel Macs while retaining the Apple Silicon package.
+
+## 2026-08-13 07:19 EDT — Make Reverb IR normalization safe for measured responses
+
+- Changed IR normalization to attenuation-only behavior: peaks above -1 dBFS are
+  reduced to -1 dBFS, while quieter captured hardware responses keep their
+  measured gain instead of being amplified to full scale.
+- Added numerical coverage for both quiet-response preservation and full-scale
+  attenuation. This allows the default Normalize IR control to remain enabled
+  without causing extreme wet gain and whole-mix peak-protection reduction.
+
+## 2026-08-13 07:28 EDT — Generate hardware IRs in the standalone Reverb app
+
+- Added a reusable pure-Java sweep deconvolver using the plugin's internal radix-2
+  FFT. It performs regularized frequency-domain division, preserves captured
+  response gain, aligns the recovered impulse, estimates and trims the decay, and
+  applies a short tail fade.
+- Added a **Create IR from Sweep** tab to the standalone app with source-sweep,
+  recorded-return, and output-IR selectors. A successful conversion selects the
+  new IR automatically for an immediate listening test.
+- Bundled the exact standardized 48 kHz/24-bit stereo Mechana capture sweep and
+  concise capture instructions in the macOS package.
+- Added synthetic numerical recovery coverage and bundled-sweep validation.
+
+## 2026-08-13 08:10 EDT — Unify sweep-to-IR generation across distributed and standalone apps
+
+- Added the `audio-ir-deconvolution` worker capability to the existing pure-Java
+  audio plugin module. It stages an original sweep and recorded wet return and
+  invokes the identical `SweepDeconvolver` class used by Mechana Reverb.app.
+- Added a schema-driven Client Job Launcher form with an optional shared IR
+  library folder and overridable output profile name. Completed jobs include the
+  generated 24-bit WAV, machine metadata, and human-readable provenance.
+- Added worker sandbox approval, host-agent validation, Worker Control defaults
+  and migration so existing standard capability sets gain the new feature after
+  worker reinstall/restart.
+- The standalone generator now writes a matching human-readable sidecar beside
+  each generated IR. No third-party FFT or native audio dependency was added.
+
+## 2026-08-13 08:25 EDT — Make blank Worker Control plugin selection mean all
+
+- Worker Control now labels the field **Plugins (blank = all)**. Blank startup
+  requests expand on the host agent to every plugin supported and allowed by that
+  installed worker build; an explicit comma-separated list still restricts it.
+- New profiles default to blank, and profiles holding the former complete default
+  list migrate to blank. Worker status shows the concrete expanded capability set.
+
+## 2026-08-13 11:05 EDT — Bundle Scott's first measured hardware IR
+
+- Added Scott's 48 kHz, stereo, 24-bit, 1.13-second RVB first-pass IR to the
+  standalone profile library as `scott-rvb-first-pass-ir.wav`.
+- Updated bundled capture guidance to point directly to the app's Create IR from
+  Sweep workflow and extended package validation to require all six profiles.
+
+## 2026-08-13 11:15 EDT — Add completed-output actions to standalone Reverb
+
+- Added bottom-line **Play Output** and **Show in Finder** actions. They enable
+  after a successful job, target the newest generated WAV, use the configured
+  default WAV player, and reveal the exact file selected in Finder.
+
+## 2026-08-13 11:25 EDT — Refresh standalone descriptive names after input changes
+
+- Fixed the standalone app retaining its prior generated output name after the
+  dry WAV or impulse-response WAV changed. Either input change now regenerates
+  the descriptive output name; a manual override remains intact while adjusting
+  mix parameters, but resets when selecting a different source or IR.
+
+## Future — Package standalone Reverb for Windows 11
+
+- The pure-Java convolution and sweep-deconvolution code is portable to Windows,
+  but no Windows bundle is implemented in this change.
+- Build a self-contained Windows 11 x64 app on Windows using a Java 25 JDK and
+  `jpackage`; include the Java runtime, standardized capture sweep, and bundled IR
+  library just as the macOS application does.
+- Adapt **Show in Finder** to reveal the exact output with Windows File Explorer,
+  retain default-player WAV launch behavior, add a Windows icon, and validate
+  paths containing spaces plus both Reverb and Create IR workflows.
+- Prefer a portable ZIP for early testing. A later installer and public release
+  should add Windows code signing to reduce Microsoft Defender SmartScreen
+  warnings. A Windows GitHub Actions runner can automate the native package.

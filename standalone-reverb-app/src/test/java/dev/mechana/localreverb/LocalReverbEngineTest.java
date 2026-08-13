@@ -68,17 +68,37 @@ class LocalReverbEngineTest {
 	}
 
 	@Test
+	void suggestedNameChangesWithEitherAudioInput() {
+		String first = StandaloneReverbFrame.suggestedOutputName("/tmp/Voice One.wav", "/tmp/Room One.wav", "0.35",
+				"1.0", "20", true);
+		String changedDry = StandaloneReverbFrame.suggestedOutputName("/tmp/Voice Two.wav", "/tmp/Room One.wav", "0.35",
+				"1.0", "20", true);
+		String changedIr = StandaloneReverbFrame.suggestedOutputName("/tmp/Voice One.wav", "/tmp/Room Two.wav", "0.35",
+				"1.0", "20", true);
+		assertTrue(!first.equals(changedDry));
+		assertTrue(!first.equals(changedIr));
+		assertTrue(changedDry.startsWith("Voice-Two-reverb-ir-Room-One-"));
+		assertTrue(changedIr.startsWith("Voice-One-reverb-ir-Room-Two-"));
+	}
+
+	@Test
 	void shipsReadableStarterImpulseResponses() throws Exception {
 		Path profiles = BundledProfiles.directory();
 		assertTrue(profiles != null && Files.isRegularFile(profiles.resolve("README.txt")));
 		try (Stream<Path> files = Files.list(profiles)) {
 			List<Path> wavs = files.filter(path -> path.getFileName().toString().endsWith(".wav")).sorted().toList();
-			assertEquals(5, wavs.size());
+			assertEquals(6, wavs.size());
 			for (Path wav : wavs)
 				try (WavFile.Reader input = WavFile.open(wav)) {
 					assertEquals(48_000, input.format().sampleRate());
 					assertTrue(input.format().frames() > 0);
 				}
+		}
+		Path sweep = BundledProfiles.sweep();
+		assertTrue(sweep != null && Files.isRegularFile(sweep));
+		try (WavFile.Reader input = WavFile.open(sweep)) {
+			assertEquals(48_000, input.format().sampleRate());
+			assertEquals(2, input.format().channels());
 		}
 	}
 

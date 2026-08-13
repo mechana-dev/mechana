@@ -28,20 +28,32 @@ final class BundledProfiles {
 	}
 
 	static Path directory() {
+		return siblingDirectory("ir-profiles", "ir-profiles");
+	}
+
+	static Path sweep() {
+		Path directory = siblingDirectory("capture", "capture");
+		if (directory == null)
+			return null;
+		Path sweep = directory.resolve("mechana-ir-sweep-48k-24bit.wav");
+		return Files.isRegularFile(sweep) ? sweep : null;
+	}
+
+	private static Path siblingDirectory(String packagedName, String developmentName) {
 		try {
 			Path application = Path
 					.of(BundledProfiles.class.getProtectionDomain().getCodeSource().getLocation().toURI());
 			Path parent = Files.isDirectory(application)
 					? application
 					: Objects.requireNonNull(application.getParent());
-			Path packaged = parent.resolve("ir-profiles");
+			Path packaged = parent.resolve(packagedName);
 			if (Files.isDirectory(packaged))
 				return packaged;
 		} catch (URISyntaxException | RuntimeException ignored) {
 			// Development fallback below.
 		}
-		for (Path development : new Path[]{Path.of("src", "main", "distribution", "ir-profiles"),
-				Path.of("standalone-reverb-app", "src", "main", "distribution", "ir-profiles")}) {
+		for (Path development : new Path[]{Path.of("src", "main", "distribution", developmentName),
+				Path.of("standalone-reverb-app", "src", "main", "distribution", developmentName)}) {
 			Path absolute = development.toAbsolutePath().normalize();
 			if (Files.isDirectory(absolute))
 				return absolute;

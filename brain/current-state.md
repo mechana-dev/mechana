@@ -75,8 +75,11 @@ This file reports repository evidence, not desired future status.
   artifacts, performs single-worker uniform partitioned FFT convolution, and
   publishes a 24-bit WAV through server-local storage. The generic launcher
   descriptor exposes WAV inputs, output name, wet/dry, pre-delay, IR
-  normalization, peak protection, and headroom. Hardware sweep deconvolution and
-  multi-worker contribution assembly remain future work.
+  normalization, peak protection, and headroom. IR normalization safely attenuates
+  peaks above -1 dBFS without boosting quieter measured responses. A reusable
+  pure-Java helper and standalone-app workflow deconvolve recorded wet sweep
+  returns into aligned, tail-trimmed IRs. Multi-worker contribution assembly
+  remains future work.
 - A separate `standalone-reverb-app` module runs that exact plugin class through
   a single-threaded local task context. Its Swing UI contains no server or worker
   settings, retains reloadable per-job JSON state and human-readable reports in a
@@ -368,3 +371,8 @@ The status-classified [sandbox architecture](sandbox.md) separates accepted
 constraints from implemented evidence. It does not elevate the Windows foundation
 into certification of full filesystem invisibility, GPU isolation, undeclared
 native dependencies, or untested runtime versions and plugin features.
+
+- `audio-ir-deconvolution` exposes the same pure-Java `SweepDeconvolver` used by
+  the standalone Reverb app. A launcher job accepts the original excitation
+  sweep and recorded 100%-wet return, publishes a convolution-ready 24-bit WAV
+  plus provenance, and can mirror each result into a shared IR library folder.

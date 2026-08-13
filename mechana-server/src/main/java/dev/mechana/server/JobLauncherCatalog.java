@@ -43,6 +43,13 @@ final class JobLauncherCatalog {
 	private static List<JobLauncherDescriptor> definitions() {
 		OutputDescriptor serverFiles = new OutputDescriptor("server-local", "directory", "Server job artifacts", false);
 		return List.of(
+				descriptor("audio-ir-deconvolution", "Create impulse response", "/api/jobs/audio-ir", serverFiles,
+						"Pure Java; one worker; source sweep and recorded wet return must have matching sample rates",
+						commonStorage("server-local"), file("sweepPath", "Original sweep WAV", "", "wav"),
+						file("recordedReturnPath", "Recorded wet return WAV", "", "wav"),
+						directory("artifactRoot", "IR library folder (optional)"),
+						text("outputName", "IR profile artifact name", "impulse-response.wav"),
+						integer("taskCount", "Tasks (0 = fleet)", "0", 0, 1)),
 				descriptor("audio-convolution-reverb", "Convolution reverb", "/api/jobs/audio-reverb", serverFiles,
 						"Pure Java; one worker; memory scales with IR length and FFT partitions",
 						commonStorage("server-local"), file("dryPath", "Dry audio WAV", "", "wav"),

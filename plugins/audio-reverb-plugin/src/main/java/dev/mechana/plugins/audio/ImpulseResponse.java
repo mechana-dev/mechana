@@ -20,6 +20,8 @@ import java.nio.file.Path;
 
 /** Prepared in-memory IR samples; source audio remains streaming. */
 public record ImpulseResponse(int sampleRate, double[][] channels) {
+	private static final double NORMALIZED_PEAK = Math.pow(10, -1.0 / 20);
+
 	public ImpulseResponse {
 		channels = deepCopy(channels);
 	}
@@ -55,10 +57,10 @@ public record ImpulseResponse(int sampleRate, double[][] channels) {
 				for (double[] channel : samples)
 					for (double value : channel)
 						peak = Math.max(peak, Math.abs(value));
-				if (peak > 0)
+				if (peak > NORMALIZED_PEAK)
 					for (double[] channel : samples)
 						for (int index = 0; index < channel.length; index++)
-							channel[index] /= peak;
+							channel[index] *= NORMALIZED_PEAK / peak;
 			}
 			return new ImpulseResponse(format.sampleRate(), samples);
 		}

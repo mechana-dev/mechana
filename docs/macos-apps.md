@@ -16,6 +16,11 @@ code signing, hardened-runtime validation, and notarization.
 The build also writes `Mechana-Reverb-macOS-arm64.zip`, preserving the application
 bundle for transfer to another Apple Silicon Mac. Because development builds are
 not notarized, a recipient may need to Control-click the app and choose **Open**.
+Use `packaging/macos/build-reverb-app.sh` with `JAVA_HOME` set to a Java 25 JDK of
+the desired architecture to build only the standalone app. An Intel JDK produces
+`Mechana-Reverb-macOS-x86_64.zip`; Rosetta permits that build on an Apple Silicon
+development Mac. The JDK architecture determines the bundled runtime and native
+launcher architecture.
 
 ## Build and install
 
@@ -106,17 +111,30 @@ operation does not depend on a repository working directory. Existing profiles
 using the former repository-relative defaults migrate to the bundled copies;
 explicit custom deployment paths are preserved.
 
+In Worker Control, leaving **Plugins (blank = all)** empty starts workers with
+every plugin supported and allowed by the installed host-agent build. Entering a
+comma-separated list remains available when a host should deliberately advertise
+only a restricted subset. Existing profiles containing the former complete
+default list migrate to the simpler blank selection.
+
 The standalone Reverb app uses the same `AudioConvolutionReverbPlugin` class as a
 distributed worker. It supplies a local task context and executes one job at a
 time without opening a network listener. Job history, the WAV output, plugin
 result metadata, a machine-readable `job.json`, and a human-readable
 `reverb-job-report.txt` are retained under the selected artifacts folder. A
+successful job enables **Play Output**, which launches the generated WAV in the
+Mac's default player, and **Show in Finder**, which reveals and selects that exact
+WAV. A
 recipient needs to provide PCM or float WAV inputs with matching sample rates;
 Voice Memos must first be exported or converted to a supported WAV format.
-Five synthetic starter IRs are included in the bundle: small room, medium room,
-short large room, large stone church, and vocal plate. **Choose a bundled IR
+Six starter IRs are included in the bundle: the five synthetic small room,
+medium room, short large room, large stone church, and vocal plate profiles, plus
+Scott's first measured RVB hardware profile. **Choose a bundled IR
 profile…** opens that collection. The normal IR chooser accepts a user's own
-compatible deconvolved IR WAV from any location; the raw recorded sweep return is
+compatible deconvolved IR WAV from any location. The **Create IR from Sweep** tab
+uses the bundled standardized sweep and converts a raw recorded wet return into a
+plugin-ready IR locally. The recorded return must preserve the sweep's leading and
+trailing silence and should be captured at 100% wet. The raw recorded sweep return is
 not itself an impulse response.
 
 ## Local verification
@@ -134,3 +152,12 @@ Use Activity Monitor or `launchctl print gui/$(id -u)/dev.mechana.server` to
 inspect the background service. A second Server app launch must leave the same
 server PID visible in the dashboard. Quit Worker Control and Job Launcher from
 their application menus and confirm their processes disappear.
+
+## Future Windows standalone package
+
+The standalone DSP and Swing UI are portable, but this repository currently
+produces only native macOS Reverb bundles. A Windows 11 x64 package should be
+built natively on Windows with Java 25 `jpackage`, bundle its own runtime and the
+same sweep/profile library, use File Explorer for output reveal, and initially be
+distributed as a portable ZIP. Windows packaging is planning scope only in the
+current change.

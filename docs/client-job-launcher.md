@@ -20,8 +20,8 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
   Blender render, and pure-Java convolution reverb and submits through their
   existing server endpoints.
 - Convolution reverb provides two WAV pickers, an output artifact name, wet and
-  dry levels, pre-delay, IR normalization, peak protection, headroom, and an
-  optional shared artifacts folder. When selected, each successful reverb job is
+  dry levels, pre-delay, attenuation-only IR normalization, peak protection,
+  headroom, and an optional shared artifacts folder. When selected, each successful reverb job is
   copied into `<selected folder>/<job ID>/` while its durable server record is
   retained. After the dry and IR WAVs are selected, the output name is suggested
   from both base names plus wet, dry, pre-delay, and IR-normalization settings;
@@ -90,3 +90,8 @@ plugin-specific launcher classes.
 
 Artifact rows use provider plus stable key rather than a filesystem path. Future
 providers can supply appropriate actions and ownership-based purge behavior.
+When a worker advertises `audio-ir-deconvolution`, the generic launcher shows
+**Create impulse response**. Select the exact original sweep WAV and its recorded
+100%-wet hardware return. The optional IR library folder receives a job-ID
+subfolder containing the named IR profile, result properties, job summary, and a
+plain-text provenance report. The source and return sample rates must match.

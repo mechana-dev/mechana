@@ -124,6 +124,19 @@ class AudioConvolutionProcessorTest {
 		}
 	}
 
+	@Test
+	void irNormalizationDoesNotBoostQuietMeasuredResponse() throws IOException {
+		Path ir = wav("quiet-ir.wav", new double[][]{{0.04, -0.02}});
+		assertArrayEquals(new double[]{0.04, -0.02}, ImpulseResponse.read(ir, true).channel(0), 2e-7);
+	}
+
+	@Test
+	void irNormalizationAttenuatesPeaksToSafeHeadroom() throws IOException {
+		Path ir = wav("full-scale-ir.wav", new double[][]{{1.0, -0.5}});
+		double target = Math.pow(10, -1.0 / 20);
+		assertArrayEquals(new double[]{target, -target / 2}, ImpulseResponse.read(ir, true).channel(0), 2e-7);
+	}
+
 	private AudioConvolutionProcessor.Result processor(Path dry, Path ir, Path output,
 			AudioConvolutionProcessor.Options options) throws IOException {
 		return new AudioConvolutionProcessor().process(dry, ir, output, temporary, options, ignored -> {

@@ -26,6 +26,7 @@ import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,6 +43,7 @@ import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
+import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
@@ -50,6 +52,7 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.AbstractTableModel;
+import dev.mechana.plugins.audio.SweepDeconvolver;
 
 /** Focused local launcher with no server or worker concepts. */
 final class StandaloneReverbFrame extends JFrame {
@@ -67,14 +70,22 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JCheckBox normalizeIr = check("normalizeIr", true);
 	private final JCheckBox peakProtection = check("peakProtection", true);
 	private final JTextField headroom = field("headroomDecibels", "1.0");
+	private final JTextField sweepPath = field("sweepPath", bundledSweepDefault());
+	private final JTextField recordedSweepPath = field("recordedSweepPath", "");
+	private final JTextField generatedIrPath = field("generatedIrPath",
+			Path.of(System.getProperty("user.home"), "Documents", "RVB_Plug-IR.wav").toString());
 	private final JButton run = new JButton("Run Reverb");
+	private final JButton generateIr = new JButton("Generate IR Profile");
 	private final JButton cancel = new JButton("Cancel");
 	private final JButton reveal = new JButton("Show Artifacts");
+	private final JButton playOutput = new JButton("Play Output");
+	private final JButton showOutput = new JButton("Show in Finder");
 	private final JLabel status = new JLabel("Ready — processing stays on this Mac");
 	private final JProgressBar progress = new JProgressBar(0, 100);
 	private final JobTableModel jobs = new JobTableModel();
 	private final JTable jobTable = new JTable(jobs);
 	private boolean outputOverridden;
+	private transient Path latestOutput;
 
 	StandaloneReverbFrame() {
 		super("Mechana Reverb");
@@ -90,13 +101,20 @@ final class StandaloneReverbFrame extends JFrame {
 			}
 		});
 		add(buildHeader(), BorderLayout.NORTH);
-		JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, buildForm(), buildHistory());
+		JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, buildTools(), buildHistory());
 		split.setResizeWeight(0.62);
 		add(split, BorderLayout.CENTER);
 		add(buildStatus(), BorderLayout.SOUTH);
 		configureActions();
 		configureSuggestedName();
 		reloadHistory();
+	}
+
+	private JTabbedPane buildTools() {
+		JTabbedPane tabs = new JTabbedPane();
+		tabs.addTab("Apply Reverb", buildForm());
+		tabs.addTab("Create IR from Sweep", buildIrCreator());
+		return tabs;
 	}
 
 	private JPanel buildHeader() {
@@ -143,6 +161,30 @@ final class StandaloneReverbFrame extends JFrame {
 		return panel;
 	}
 
+	private JPanel buildIrCreator() {
+		JPanel panel = new JPanel(new GridBagLayout());
+		panel.setBorder(BorderFactory.createTitledBorder("Create an impulse response from a hardware sweep recording"));
+		GridBagConstraints c = new GridBagConstraints();
+		c.insets = new Insets(7, 8, 7, 8);
+		c.gridy = 0;
+		addPath(panel, c, "Mechana source sweep", sweepPath, false);
+		addPath(panel, c, "Recorded wet sweep return", recordedSweepPath, false);
+		addSavePath(panel, c, "Output IR WAV", generatedIrPath);
+		c.gridx = 1;
+		c.weightx = 1;
+		c.fill = GridBagConstraints.NONE;
+		c.anchor = GridBagConstraints.WEST;
+		panel.add(generateIr, c);
+		c.gridy++;
+		c.gridx = 0;
+		c.gridwidth = 3;
+		c.fill = GridBagConstraints.HORIZONTAL;
+		panel.add(new JLabel("<html>Record the supplied sweep through the reverb at 100% wet. Keep the leading and "
+				+ "trailing silence, then select that recording here. The generated WAV can be selected directly in "
+				+ "the Apply Reverb tab.</html>"), c);
+		return panel;
+	}
+
 	private JScrollPane buildHistory() {
 		jobTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		jobTable.setFillsViewportHeight(true);
@@ -163,14 +205,23 @@ final class StandaloneReverbFrame extends JFrame {
 		JPanel panel = new JPanel(new BorderLayout(8, 8));
 		panel.setBorder(BorderFactory.createEmptyBorder(8, 16, 14, 16));
 		progress.setStringPainted(true);
-		panel.add(status, BorderLayout.WEST);
+		JPanel resultActions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 6, 0));
+		resultActions.add(status);
+		resultActions.add(playOutput);
+		resultActions.add(showOutput);
+		playOutput.setEnabled(false);
+		showOutput.setEnabled(false);
+		panel.add(resultActions, BorderLayout.WEST);
 		panel.add(progress, BorderLayout.CENTER);
 		return panel;
 	}
 
 	private void configureActions() {
 		run.addActionListener(event -> submit());
+		generateIr.addActionListener(event -> generateImpulseResponse());
 		cancel.addActionListener(event -> engine.cancel());
+		playOutput.addActionListener(event -> openLatestOutput(false));
+		showOutput.addActionListener(event -> openLatestOutput(true));
 		reveal.addActionListener(event -> {
 			ReverbJob selected = selectedJob();
 			if (selected != null)
@@ -183,19 +234,67 @@ final class StandaloneReverbFrame extends JFrame {
 		artifactRoot.getDocument().addDocumentListener(listener(this::reloadHistory));
 	}
 
+	private void generateImpulseResponse() {
+		Path sweep = path(sweepPath);
+		Path recorded = path(recordedSweepPath);
+		Path output = path(generatedIrPath);
+		if (sweep == null || recorded == null || output == null) {
+			showError("Choose the source sweep, recorded wet return, and output IR WAV.");
+			return;
+		}
+		generateIr.setEnabled(false);
+		run.setEnabled(false);
+		status.setText("Generating impulse response…");
+		progress.setValue(0);
+		Thread.ofVirtual().name("mechana-ir-deconvolution").start(() -> {
+			try {
+				SweepDeconvolver.Result result = new SweepDeconvolver().deconvolve(sweep, recorded, output,
+						percent -> SwingUtilities.invokeLater(() -> progress.setValue(percent)));
+				Files.writeString(output.resolveSibling(output.getFileName() + ".txt"),
+						"Mechana impulse-response generation\n\nOriginal sweep: " + sweep + "\nRecorded wet return: "
+								+ recorded + "\nOutput IR: " + output + "\nSample rate: " + result.sampleRate()
+								+ " Hz\nChannels: " + result.channels() + "\nFrames: " + result.frames()
+								+ "\nCapture latency: " + result.latencyMilliseconds() + " ms\nRecovered peak: "
+								+ result.peak() + "\nAlgorithm: regularized FFT deconvolution\n");
+				SwingUtilities.invokeLater(() -> {
+					irPath.setText(output.toString());
+					status.setText("IR ready — " + output.getFileName() + " — "
+							+ String.format("%.2f seconds, %.1f ms capture latency",
+									result.frames() / (double) result.sampleRate(), result.latencyMilliseconds()));
+					generationFinished();
+				});
+			} catch (IOException | RuntimeException failure) {
+				SwingUtilities.invokeLater(() -> {
+					showError(failure.getMessage());
+					status.setText("IR generation failed");
+					generationFinished();
+				});
+			}
+		});
+	}
+
+	private void generationFinished() {
+		generateIr.setEnabled(true);
+		run.setEnabled(true);
+	}
+
 	private void configureSuggestedName() {
 		outputOverridden = !"reverberated.wav".equals(outputName.getText());
 		outputName.getDocument().addDocumentListener(listener(() -> outputOverridden = true));
 		Runnable update = () -> {
 			if (outputOverridden || dryPath.getText().isBlank() || irPath.getText().isBlank())
 				return;
-			String suggested = stem(dryPath.getText(), "audio") + "-reverb-ir-" + stem(irPath.getText(), "impulse")
-					+ "-wet" + token(wet.getText()) + "-dry" + token(dry.getText()) + "-pre" + token(preDelay.getText())
-					+ "ms-norm-" + (normalizeIr.isSelected() ? "on" : "off") + ".wav";
+			String suggested = suggestedOutputName(dryPath.getText(), irPath.getText(), wet.getText(), dry.getText(),
+					preDelay.getText(), normalizeIr.isSelected());
 			outputName.setText(suggested);
 			outputOverridden = false;
 		};
-		for (JTextField field : List.of(dryPath, irPath, wet, dry, preDelay))
+		for (JTextField field : List.of(dryPath, irPath))
+			field.getDocument().addDocumentListener(listener(() -> {
+				outputOverridden = false;
+				update.run();
+			}));
+		for (JTextField field : List.of(wet, dry, preDelay))
 			field.getDocument().addDocumentListener(listener(update));
 		normalizeIr.addActionListener(event -> update.run());
 		update.run();
@@ -222,6 +321,32 @@ final class StandaloneReverbFrame extends JFrame {
 		if (!"RUNNING".equals(job.status())) {
 			run.setEnabled(true);
 			cancel.setEnabled(false);
+			if ("SUCCEEDED".equals(job.status()))
+				setLatestOutput(job.artifactDirectory().resolve(job.outputName()));
+		}
+	}
+
+	private void setLatestOutput(Path output) {
+		latestOutput = output;
+		boolean available = output != null && Files.isRegularFile(output);
+		playOutput.setEnabled(available);
+		showOutput.setEnabled(available);
+	}
+
+	private void openLatestOutput(boolean revealInFinder) {
+		Path output = latestOutput;
+		if (output == null || !Files.isRegularFile(output)) {
+			showError("The completed output WAV is no longer available.");
+			setLatestOutput(null);
+			return;
+		}
+		try {
+			if (revealInFinder && System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac"))
+				new ProcessBuilder("/usr/bin/open", "-R", output.toString()).start();
+			else
+				Desktop.getDesktop().open(output.toFile());
+		} catch (IOException | UnsupportedOperationException failure) {
+			showError(failure.getMessage());
 		}
 	}
 
@@ -237,6 +362,17 @@ final class StandaloneReverbFrame extends JFrame {
 		addRow(panel, c, label, field);
 		JButton choose = new JButton("Choose…");
 		choose.addActionListener(event -> choose(field, directory));
+		c.gridx = 2;
+		c.weightx = 0;
+		c.fill = GridBagConstraints.NONE;
+		panel.add(choose, c);
+		c.gridy++;
+	}
+
+	private void addSavePath(JPanel panel, GridBagConstraints c, String label, JTextField field) {
+		addRow(panel, c, label, field);
+		JButton choose = new JButton("Choose…");
+		choose.addActionListener(event -> chooseOutput(field));
 		c.gridx = 2;
 		c.weightx = 0;
 		c.fill = GridBagConstraints.NONE;
@@ -267,6 +403,18 @@ final class StandaloneReverbFrame extends JFrame {
 			chooser.setSelectedFile(new File(target.getText()));
 		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
 			target.setText(chooser.getSelectedFile().getAbsolutePath());
+	}
+
+	private void chooseOutput(JTextField target) {
+		JFileChooser chooser = new JFileChooser();
+		chooser.setDialogTitle("Save generated impulse response");
+		chooser.setFileFilter(new FileNameExtensionFilter("WAV impulse response (.wav)", "wav"));
+		if (!target.getText().isBlank())
+			chooser.setSelectedFile(new File(target.getText()));
+		if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+			String selected = chooser.getSelectedFile().getAbsolutePath();
+			target.setText(selected.toLowerCase(java.util.Locale.ROOT).endsWith(".wav") ? selected : selected + ".wav");
+		}
 	}
 
 	private void chooseBundledProfile() {
@@ -302,6 +450,11 @@ final class StandaloneReverbFrame extends JFrame {
 
 	private static Path path(JTextField field) {
 		return field.getText().isBlank() ? null : Path.of(field.getText().strip());
+	}
+
+	private static String bundledSweepDefault() {
+		Path sweep = BundledProfiles.sweep();
+		return sweep == null ? "" : sweep.toString();
 	}
 
 	private static double decimal(JTextField field, String label) {
