@@ -207,7 +207,7 @@ final class DescriptorForm extends JPanel {
 	}
 
 	private static String fileStem(String path, String fallback) {
-		String fileName = new File(path).getName().replaceFirst("(?i)\\.wav$", "");
+		String fileName = new File(path).getName().replaceFirst("(?i)\\.(?:wav|wave|m4a|aac|mp4|aif|aiff)$", "");
 		String stem = fileName.replaceAll("[^A-Za-z0-9._-]+", "-").replaceAll("^-+|-+$", "");
 		return stem.isBlank() ? fallback : stem;
 	}

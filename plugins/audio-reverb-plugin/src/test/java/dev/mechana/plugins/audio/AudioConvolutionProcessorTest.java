@@ -49,6 +49,33 @@ class AudioConvolutionProcessorTest {
 	}
 
 	@Test
+	void fadesOnlyDirectDrySignalAtSourceBoundary() throws IOException {
+		double[] source = new double[30];
+		java.util.Arrays.fill(source, 0.5);
+		Path output = temporary.resolve("dry-fade.wav");
+		var result = processor(wav("dry-fade-source.wav", new double[][]{source}),
+				wav("dry-fade-ir.wav", new double[][]{{1, 0, 0, 0, 0}}), output, options(0, 1, 0, false));
+		double[] actual = read(output)[0];
+		assertEquals(34, result.frames());
+		assertEquals(0.5, actual[19], 2e-7);
+		assertEquals(0.5, actual[20], 2e-7);
+		assertEquals(0.5 * 4 / 9, actual[25], 2e-7);
+		assertEquals(0, actual[29], 2e-7);
+		assertArrayEquals(new double[]{0, 0, 0, 0}, java.util.Arrays.copyOfRange(actual, 30, 34), 2e-7);
+	}
+
+	@Test
+	void dryFadeDoesNotShortenOrModifyWetTail() throws IOException {
+		double[] source = new double[30];
+		source[29] = 0.5;
+		Path output = temporary.resolve("wet-tail.wav");
+		var result = processor(wav("wet-tail-source.wav", new double[][]{source}),
+				wav("wet-tail-ir.wav", new double[][]{{1, 0.5, 0.25}}), output, options(1, 0, 0, false));
+		assertEquals(32, result.frames());
+		assertArrayEquals(new double[]{0.5, 0.25, 0.125}, java.util.Arrays.copyOfRange(read(output)[0], 29, 32), 2e-7);
+	}
+
+	@Test
 	void reportsGlobalGainAppliedByPeakProtection() throws IOException {
 		Path dry = wav("dry.wav", new double[][]{{0.8}});
 		Path ir = wav("ir.wav", new double[][]{{1}});

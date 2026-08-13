@@ -125,8 +125,11 @@ result metadata, a machine-readable `job.json`, and a human-readable
 successful job enables **Play Output**, which launches the generated WAV in the
 Mac's default player, and **Show in Finder**, which reveals and selects that exact
 WAV. A
-recipient needs to provide PCM or float WAV inputs with matching sample rates;
-Voice Memos must first be exported or converted to a supported WAV format.
+recipient may select WAV/WAVE, M4A with AAC or Apple Lossless (including Voice
+Memos), raw AAC, MP4 containing AAC audio, or AIFF dry audio. The bundled permissively
+licensed pure-Java decoders, MP4 parsers, and windowed-sinc resampler convert
+it to a 24-bit WAV at the selected IR's sample rate before invoking the
+convolution plugin. IR inputs remain WAV-only.
 Six starter IRs are included in the bundle: the five synthetic small room,
 medium room, short large room, large stone church, and vocal plate profiles, plus
 Scott's first measured RVB hardware profile. **Choose a bundled IR

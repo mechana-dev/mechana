@@ -15,6 +15,7 @@
  */
 package dev.mechana.localreverb;
 
+import dev.mechana.plugins.audio.DryAudioImporter;
 import java.nio.file.Path;
 
 /**
@@ -24,8 +25,8 @@ import java.nio.file.Path;
 public record ReverbRequest(Path dryPath, Path irPath, Path artifactRoot, String outputName, double wet, double dry,
 		double preDelayMilliseconds, boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
 	public ReverbRequest {
-		dryPath = requiredFile(dryPath, "Dry WAV");
-		irPath = requiredFile(irPath, "Impulse-response WAV");
+		dryPath = requiredDryFile(dryPath);
+		irPath = requiredWav(irPath, "Impulse-response WAV");
 		if (artifactRoot == null)
 			throw new IllegalArgumentException("Artifacts folder is required");
 		if (outputName == null || outputName.isBlank())
@@ -37,7 +38,15 @@ public record ReverbRequest(Path dryPath, Path irPath, Path artifactRoot, String
 			throw new IllegalArgumentException("One or more reverb controls are outside the allowed range");
 	}
 
-	private static Path requiredFile(Path path, String label) {
+	private static Path requiredDryFile(Path path) {
+		if (path == null || !java.nio.file.Files.isRegularFile(path))
+			throw new IllegalArgumentException("Dry audio does not exist");
+		if (!DryAudioImporter.supports(path))
+			throw new IllegalArgumentException("Dry audio must be WAV, M4A, MP3, AIFF, CAF, or FLAC");
+		return path.toAbsolutePath().normalize();
+	}
+
+	private static Path requiredWav(Path path, String label) {
 		if (path == null || !java.nio.file.Files.isRegularFile(path))
 			throw new IllegalArgumentException(label + " does not exist");
 		Path fileName = path.getFileName();

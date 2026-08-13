@@ -110,6 +110,12 @@ class DescriptorFormTest {
 		assertEquals("my-version.wav", form.values().get("outputName"));
 	}
 
+	@Test
+	void reverbNameUsesCompressedDrySourceStem() {
+		assertEquals("Scott-Voice-reverb-ir-Small-Plate-wet0p35-dry1-pre20ms-norm-on.wav", DescriptorForm
+				.suggestedReverbOutputName("/tmp/Scott Voice.m4a", "/tmp/Small Plate.wav", "0.35", "1", "20", "true"));
+	}
+
 	private static JobLauncherDescriptor reverbDescriptor() {
 		return new JobLauncherDescriptor("audio-convolution-reverb", "Reverb", "/api/jobs/audio-reverb", List.of(
 				new SubmissionField("dryPath", "Dry", "file", true, "", null, null, List.of(), "", List.of("wav")),

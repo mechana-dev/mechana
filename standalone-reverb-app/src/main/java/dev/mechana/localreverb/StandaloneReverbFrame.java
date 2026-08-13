@@ -131,7 +131,7 @@ final class StandaloneReverbFrame extends JFrame {
 		GridBagConstraints c = new GridBagConstraints();
 		c.insets = new Insets(5, 8, 5, 8);
 		c.gridy = 0;
-		addPath(panel, c, "Dry audio WAV", dryPath, false);
+		addPath(panel, c, "Dry audio", dryPath, false);
 		addPath(panel, c, "Impulse response WAV", irPath, false);
 		JButton profiles = new JButton("Choose a bundled IR profile…");
 		profiles.addActionListener(event -> chooseBundledProfile());
@@ -397,6 +397,9 @@ final class StandaloneReverbFrame extends JFrame {
 		JFileChooser chooser = new JFileChooser();
 		if (directory)
 			chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+		else if (target == dryPath)
+			chooser.setFileFilter(new FileNameExtensionFilter("Audio (.wav, .m4a, .aac, .mp4, .aiff)", "wav", "wave",
+					"m4a", "aac", "mp4", "aif", "aiff"));
 		else
 			chooser.setFileFilter(new FileNameExtensionFilter("WAV audio (.wav)", "wav"));
 		if (!target.getText().isBlank())
@@ -476,7 +479,7 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private static String stem(String path, String fallback) {
-		String fileName = new File(path).getName().replaceFirst("(?i)\\.wav$", "");
+		String fileName = new File(path).getName().replaceFirst("(?i)\\.(?:wav|wave|m4a|aac|mp4|aif|aiff)$", "");
 		String value = fileName.replaceAll("[^A-Za-z0-9._-]+", "-").replaceAll("^-+|-+$", "");
 		return value.isBlank() ? fallback : value;
 	}

@@ -68,6 +68,12 @@ class LocalReverbEngineTest {
 	}
 
 	@Test
+	void descriptiveNameUsesCompressedDrySourceStem() {
+		assertEquals("Scott-Voice-reverb-ir-Small-Room-wet0p35-dry1-pre20ms-norm-on.wav", StandaloneReverbFrame
+				.suggestedOutputName("/tmp/Scott Voice.m4a", "/tmp/Small Room.wav", "0.35", "1", "20", true));
+	}
+
+	@Test
 	void suggestedNameChangesWithEitherAudioInput() {
 		String first = StandaloneReverbFrame.suggestedOutputName("/tmp/Voice One.wav", "/tmp/Room One.wav", "0.35",
 				"1.0", "20", true);
