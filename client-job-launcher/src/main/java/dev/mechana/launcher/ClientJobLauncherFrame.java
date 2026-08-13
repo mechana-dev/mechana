@@ -47,6 +47,7 @@ final class ClientJobLauncherFrame extends JFrame {
 	private final JPanel forms = new JPanel(new CardLayout());
 	private final JButton start = new JButton("Start");
 	private final JButton abort = new JButton("Abort selected");
+	private final JButton openArtifacts = new JButton("Open artifacts folder");
 	private final JButton purge = new JButton("Purge selected");
 	private final JButton purgeAll = new JButton("Purge all");
 	private final DefaultTableModel jobsModel = new ReadOnlyTableModel();
@@ -82,6 +83,7 @@ final class ClientJobLauncherFrame extends JFrame {
 		submission.add(forms, BorderLayout.CENTER);
 		JPanel historyActions = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		historyActions.add(new JLabel("Jobs and completed history"));
+		historyActions.add(openArtifacts);
 		historyActions.add(purge);
 		historyActions.add(purgeAll);
 		JPanel history = new JPanel(new BorderLayout());
@@ -95,8 +97,10 @@ final class ClientJobLauncherFrame extends JFrame {
 		capabilities.addActionListener(event -> showSelectedForm());
 		start.addActionListener(event -> submit());
 		abort.addActionListener(event -> abortSelected());
+		openArtifacts.addActionListener(event -> openSelectedArtifacts());
 		purge.addActionListener(event -> purgeSelected());
 		purgeAll.addActionListener(event -> purgeAll());
+		jobs.getSelectionModel().addListSelectionListener(event -> updateControls());
 		setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		setSize(980, 720);
 		setLocationByPlatform(true);
@@ -233,11 +237,19 @@ final class ClientJobLauncherFrame extends JFrame {
 			return completed;
 		}, ignored -> refreshJobs());
 	}
-	private void mutateSelected(boolean purgeJob) {
-		int row = jobs.getSelectedRow();
-		if (row < 0 || row >= jobItems.size())
+	private void openSelectedArtifacts() {
+		LauncherJob job = selectedJob();
+		if (job == null || !job.purgeAllowed())
 			return;
-		LauncherJob job = jobItems.get(row);
+		run(() -> {
+			client.revealArtifacts(serverUri(), job.jobId());
+			return job.jobId();
+		}, ignored -> connectionState.setText("Opened artifacts for " + job.jobId()));
+	}
+	private void mutateSelected(boolean purgeJob) {
+		LauncherJob job = selectedJob();
+		if (job == null)
+			return;
 		if (purgeJob && !job.purgeAllowed()) {
 			showError(new IllegalStateException("Only completed, server-owned history can be purged"));
 			return;
@@ -263,6 +275,8 @@ final class ClientJobLauncherFrame extends JFrame {
 	}
 
 	private void showJobs(List<LauncherJob> items) {
+		LauncherJob selected = selectedJob();
+		String selectedJobId = selected == null ? null : selected.jobId();
 		jobItems = List.copyOf(items);
 		for (LauncherJob job : jobItems)
 			if (Set.of("FAILED", "CANCELLED").contains(job.status())) {
@@ -274,10 +288,35 @@ final class ClientJobLauncherFrame extends JFrame {
 					abandonedPlugin.dataPlane().close();
 			}
 		jobsModel.setRowCount(0);
-		for (LauncherJob job : jobItems)
+		int selectedRow = rowForJobId(jobItems, selectedJobId);
+		for (int row = 0; row < jobItems.size(); row++) {
+			LauncherJob job = jobItems.get(row);
 			jobsModel.addRow(new Object[]{job.jobId(), job.plugin(), job.status(), job.progress() + "%",
 					String.join(", ", job.workerAssignments()), job.completedAt(), artifactSummary(job.artifacts())});
+		}
+		if (selectedRow >= 0) {
+			int selectedViewRow = jobs.convertRowIndexToView(selectedRow);
+			jobs.setRowSelectionInterval(selectedViewRow, selectedViewRow);
+		}
 		continueClientAssemblies();
+		updateControls();
+	}
+
+	static int rowForJobId(List<LauncherJob> items, String jobId) {
+		if (jobId == null)
+			return -1;
+		for (int row = 0; row < items.size(); row++)
+			if (jobId.equals(items.get(row).jobId()))
+				return row;
+		return -1;
+	}
+
+	private LauncherJob selectedJob() {
+		int viewRow = jobs.getSelectedRow();
+		if (viewRow < 0)
+			return null;
+		int row = jobs.convertRowIndexToModel(viewRow);
+		return row < jobItems.size() ? jobItems.get(row) : null;
 	}
 
 	private ClientVideoRequest clientVideoRequest(JobLauncherDescriptor descriptor, Map<String, Object> values) {
@@ -465,7 +504,9 @@ final class ClientJobLauncherFrame extends JFrame {
 		connect.setEnabled(!busy);
 		start.setEnabled(!busy && capabilities.getItemCount() > 0);
 		abort.setEnabled(!busy);
-		purge.setEnabled(!busy);
+		LauncherJob selected = selectedJob();
+		openArtifacts.setEnabled(!busy && selected != null && selected.purgeAllowed());
+		purge.setEnabled(!busy && selected != null && selected.purgeAllowed());
 		purgeAll.setEnabled(!busy && jobItems.stream().anyMatch(LauncherJob::purgeAllowed));
 	}
 	private void showError(Throwable failure) {

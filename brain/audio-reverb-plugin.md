@@ -9,6 +9,9 @@ an impulse-response WAV are staged as immutable worker inputs. The plugin emits 
 24-bit PCM WAV, and the coordinator publishes it through the selected artifact
 store. `server-local` is the only submission placement enabled in this slice;
 the descriptor remains provider-shaped without claiming client-direct support.
+The launcher also offers an optional shared artifacts root. The server preserves
+its normal durable job artifacts and mirrors each successful reverb job into a
+separate `<root>/<job-id>/` directory for convenient collection and Finder access.
 
 The DSP layer is separated into WAV I/O, an internal radix-2 FFT, IR preparation,
 uniform partitioned convolution, and streaming block orchestration. The dry input

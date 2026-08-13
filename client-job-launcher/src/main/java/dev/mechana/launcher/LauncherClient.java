@@ -112,6 +112,11 @@ final class LauncherClient {
 		mutate(HttpRequest.newBuilder(server.resolve("/api/jobs/completed")).DELETE().build());
 	}
 
+	void revealArtifacts(URI server, String jobId) throws IOException, InterruptedException {
+		mutate(HttpRequest.newBuilder(server.resolve("/api/jobs/" + jobId + "/reveal-artifacts"))
+				.POST(HttpRequest.BodyPublishers.noBody()).build());
+	}
+
 	private <T> T read(URI uri, TypeReference<T> type) throws IOException, InterruptedException {
 		HttpResponse<byte[]> response = http.send(HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(10)).build(),
 				HttpResponse.BodyHandlers.ofByteArray());

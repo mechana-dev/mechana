@@ -1462,3 +1462,16 @@ cloud providers remain future direction; see `brain/current-state.md` and
   stereo 48 kHz/24-bit WAV at the configured -1 dBFS headroom.
 - Documented future frequency-domain contribution/overlap-add decomposition.
   Hardware sweep deconvolution remains separate future/helper tooling.
+
+## 2026-08-13 05:35 EDT — Improve launcher job selection and artifact access
+
+- Preserved the selected job by stable job ID while the launcher's periodic job
+  refresh rebuilds its table, fixing the selection disappearing after each poll.
+- Added an **Open artifacts folder** action for the selected completed job. The
+  server reveals the correct Finder folder through its loopback-only endpoint.
+- Added an optional Reverb **Shared artifacts folder** descriptor field. Successful
+  jobs retain their normal durable server artifacts and are additionally mirrored
+  into `<selected root>/<job ID>/`; failed or missing mirrors fall back to the
+  normal completed-job artifact directory.
+- Added launcher selection and descriptor coverage and verified the affected
+  server, protocol, plugin, and launcher modules.

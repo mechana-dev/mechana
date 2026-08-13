@@ -20,8 +20,10 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
   Blender render, and pure-Java convolution reverb and submits through their
   existing server endpoints.
 - Convolution reverb provides two WAV pickers, an output artifact name, wet and
-  dry levels, pre-delay, IR normalization, peak protection, and headroom. Its POC
-  placement is server-local and its task count is limited to one.
+  dry levels, pre-delay, IR normalization, peak protection, headroom, and an
+  optional shared artifacts folder. When selected, each successful reverb job is
+  copied into `<selected folder>/<job ID>/` while its durable server record is
+  retained. Its POC placement is server-local and its task count is limited to one.
 - FFmpeg video includes `Start offset in seconds`, default `0`, which selects the
   beginning of the requested compression range for server-local and client-local
   jobs. Duration is measured from that offset.
@@ -36,7 +38,11 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
 - Capability names do not include transient worker counts. Availability still
   comes from the live schedulable fleet and becomes stale on disconnect.
 - Refreshes active and completed jobs, including progress, worker assignments,
-  diagnostics, completion time, and provider-aware artifact references.
+  diagnostics, completion time, and provider-aware artifact references. Periodic
+  refresh preserves the selected job instead of clearing the selection.
+- Opens the selected completed job's artifact folder directly in Finder. Reverb
+  jobs with a successfully populated shared folder open that job-specific folder;
+  other jobs open their normal server artifact folder.
 - Aborts active jobs and purges selected or all completed server-owned
   history/artifacts. Bulk purge requires confirmation and does not affect active
   jobs.

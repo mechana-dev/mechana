@@ -440,7 +440,7 @@ public final class MechanaServer implements AutoCloseable {
 						&& path.endsWith("/reveal-artifacts")) {
 					requireLoopback(exchange);
 					String jobId = path.substring("/api/jobs/".length(), path.length() - "/reveal-artifacts".length());
-					revealInFileManager(completedJobs.artifactsDirectory(jobId));
+					revealInFileManager(visibleArtifactsDirectory(jobId));
 					sendEmpty(exchange, 204);
 					return;
 				}
@@ -1005,6 +1005,14 @@ public final class MechanaServer implements AutoCloseable {
 	private String submitAudioReverb(AudioReverbJobSubmitRequest request) throws IOException {
 		Path dry = requireWav(request.dryPath(), "Dry audio");
 		Path ir = requireWav(request.irPath(), "Impulse response");
+		Path artifactRoot = request.artifactRoot().isBlank()
+				? null
+				: Path.of(request.artifactRoot()).toAbsolutePath().normalize();
+		if (artifactRoot != null) {
+			Files.createDirectories(artifactRoot);
+			if (!Files.isDirectory(artifactRoot) || !Files.isWritable(artifactRoot))
+				throw new IllegalArgumentException("Shared artifacts folder must be writable: " + artifactRoot);
+		}
 		String dryToken = UUID.randomUUID().toString();
 		String irToken = UUID.randomUUID().toString();
 		try (InputStream bytes = Files.newInputStream(dry)) {
@@ -1024,10 +1032,26 @@ public final class MechanaServer implements AutoCloseable {
 				List.of(new WorkSpec(1, parameters, "Convolution",
 						Map.of("dry", Objects.requireNonNull(dry.getFileName()).toString(), "ir",
 								Objects.requireNonNull(ir.getFileName()).toString()))),
-				Map.of("dry", dry.toString(), "ir", ir.toString(), "output", request.outputName()),
+				artifactRoot == null
+						? Map.of("dry", dry.toString(), "ir", ir.toString(), "output", request.outputName())
+						: Map.of("dry", dry.toString(), "ir", ir.toString(), "output", request.outputName(),
+								"artifactRoot", artifactRoot.toString()),
 				audioPluginLocation);
-		audioJobs.put(jobId, new AudioJob(List.of(dryToken, irToken), request.outputName(), new ConcurrentHashMap<>()));
+		audioJobs.put(jobId, new AudioJob(List.of(dryToken, irToken), request.outputName(), artifactRoot,
+				new ConcurrentHashMap<>()));
 		return jobId;
+	}
+
+	private Path visibleArtifactsDirectory(String jobId) {
+		InMemoryJobMonitor.Snapshot snapshot = completedJobs.find(jobId)
+				.orElseThrow(() -> new IllegalArgumentException("Unknown completed job: " + jobId));
+		String configured = snapshot.details().get("artifactRoot");
+		if (configured != null && !configured.isBlank()) {
+			Path sharedDirectory = Path.of(configured).toAbsolutePath().normalize().resolve(jobId);
+			if (Files.isDirectory(sharedDirectory))
+				return sharedDirectory;
+		}
+		return completedJobs.artifactsDirectory(jobId);
 	}
 
 	private static Path requireWav(String value, String label) {
@@ -1599,8 +1623,10 @@ public final class MechanaServer implements AutoCloseable {
 			if (blender != null && "SUCCEEDED".equals(snapshot.stage()))
 				registerCompletedArtifacts(jobId, blender.outputs());
 			AudioJob audio = audioJobs.get(jobId);
-			if (audio != null && "SUCCEEDED".equals(snapshot.stage()))
+			if (audio != null && "SUCCEEDED".equals(snapshot.stage())) {
 				registerCompletedArtifacts(jobId, audio.outputs());
+				mirrorAudioArtifacts(jobId, audio);
+			}
 		} catch (IOException failure) {
 			System.err.printf("Could not archive completed job %s: %s%n", jobId, failure.getMessage());
 		} finally {
@@ -1636,6 +1662,21 @@ public final class MechanaServer implements AutoCloseable {
 				blender.batches().values().forEach(this::deleteArtifactQuietly);
 				deleteTree(blender.scratch());
 			}
+		}
+	}
+
+	private void mirrorAudioArtifacts(String jobId, AudioJob audio) throws IOException {
+		if (audio.artifactRoot() == null)
+			return;
+		Path destination = audio.artifactRoot().resolve(jobId).normalize();
+		if (!destination.startsWith(audio.artifactRoot()))
+			throw new IOException("Invalid shared artifact destination for job " + jobId);
+		Files.createDirectories(destination);
+		Path source = completedJobs.artifactsDirectory(jobId);
+		try (var files = Files.list(source)) {
+			for (Path file : files.filter(Files::isRegularFile).toList())
+				Files.copy(file, destination.resolve(Objects.requireNonNull(file.getFileName())),
+						java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 		}
 	}
 
@@ -2039,7 +2080,7 @@ public final class MechanaServer implements AutoCloseable {
 			ConcurrentMap<String, dev.mechana.api.ArtifactReference> outputs) {
 	}
 
-	private record AudioJob(List<String> inputTokens, String outputName,
+	private record AudioJob(List<String> inputTokens, String outputName, Path artifactRoot,
 			ConcurrentMap<String, dev.mechana.api.ArtifactReference> outputs) {
 	}
 
