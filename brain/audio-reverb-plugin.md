@@ -23,6 +23,10 @@ identity and status, submitted/completed timestamps, processing and wall-clock
 duration, worker assignments, input filenames/paths/sizes, every submission
 control, output artifact metadata, sizes, providers, and SHA-256 values. Successful
 jobs using a shared artifact root mirror this report with the rest of the folder.
+For successful jobs, the report also records the processor's actual global output
+gain as a linear multiplier and dB value and states whether peak protection
+engaged. The worker returns this measured result rather than asking the server to
+infer it from configured controls.
 
 The DSP layer is separated into WAV I/O, an internal radix-2 FFT, IR preparation,
 uniform partitioned convolution, and streaming block orchestration. The dry input

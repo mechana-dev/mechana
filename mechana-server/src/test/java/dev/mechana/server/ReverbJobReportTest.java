@@ -37,7 +37,7 @@ class ReverbJobReportTest {
 				"jobs/job-1/artifacts/Scott-Voice-reverb.wav", "abc123");
 
 		String report = ReverbJobReport.render(Instant.parse("2026-08-13T10:00:00Z"), snapshot, request, 48_000, 24_000,
-				List.of(output));
+				0.5, List.of(output));
 
 		assertTrue(report.contains("Job ID: job-1"));
 		assertTrue(report.contains("Wall-clock duration: 2.000 seconds"));
@@ -47,6 +47,8 @@ class ReverbJobReportTest {
 		assertTrue(report.contains("Wet level: 0.35"));
 		assertTrue(report.contains("Normalize IR: Yes"));
 		assertTrue(report.contains("Safe headroom: 1.0 dB"));
+		assertTrue(report.contains("Applied output gain: 0.500000000 (-6.021 dB)"));
+		assertTrue(report.contains("Peak protection engaged: Yes"));
 		assertTrue(report.contains("Shared artifact root: /audio/results"));
 		assertTrue(report.contains("- Scott-Voice-reverb.wav"));
 		assertTrue(report.contains("123,456 bytes"));

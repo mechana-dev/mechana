@@ -48,13 +48,18 @@ public final class AudioConvolutionReverbPlugin implements TaskPlugin {
 					decimal(parameters, "preDelayMilliseconds"), bool(parameters, "normalizeIr"),
 					bool(parameters, "peakProtection"), decimal(parameters, "headroomDecibels"),
 					AudioConvolutionProcessor.DEFAULT_BLOCK_SIZE);
-			new AudioConvolutionProcessor().process(Path.of(required(parameters, "dryPath")),
-					Path.of(required(parameters, "irPath")), output, scratch, options, percent -> {
+			AudioConvolutionProcessor.Result result = new AudioConvolutionProcessor().process(
+					Path.of(required(parameters, "dryPath")), Path.of(required(parameters, "irPath")), output, scratch,
+					options, percent -> {
 						if (context.isCancellationRequested())
 							throw new CancelledException();
 						context.reportProgress(percent);
 					});
+			Path resultMetadata = scratch.resolve("reverb-result.properties");
+			Files.writeString(resultMetadata,
+					"appliedGain=" + Double.toString(result.appliedGain()) + System.lineSeparator());
 			context.publishArtifact("reverberated.wav", output);
+			context.publishArtifact("reverb-result.properties", resultMetadata);
 		} catch (CancelledException cancelled) {
 			throw new PluginExecutionException("Audio convolution was cancelled", cancelled);
 		} catch (IOException | RuntimeException failure) {

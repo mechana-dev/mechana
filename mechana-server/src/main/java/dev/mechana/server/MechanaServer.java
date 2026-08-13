@@ -752,7 +752,7 @@ public final class MechanaServer implements AutoCloseable {
 				publications = ocr.batches();
 			else if (blender != null && name.matches("frames-[0-9]{5}\\.zip"))
 				publications = blender.batches();
-			else if (audio != null && "reverberated.wav".equals(name))
+			else if (audio != null && Set.of("reverberated.wav", "reverb-result.properties").contains(name))
 				publications = audio.outputs();
 			else
 				throw new IllegalArgumentException("Unexpected task artifact");
@@ -1041,7 +1041,7 @@ public final class MechanaServer implements AutoCloseable {
 								"artifactRoot", artifactRoot.toString()),
 				audioPluginLocation);
 		audioJobs.put(jobId, new AudioJob(List.of(dryToken, irToken), request, artifactRoot, submittedAt, dryBytes,
-				irBytes, new ConcurrentHashMap<>()));
+				irBytes, new java.util.concurrent.atomic.AtomicReference<>(), new ConcurrentHashMap<>()));
 		return jobId;
 	}
 
@@ -1495,6 +1495,19 @@ public final class MechanaServer implements AutoCloseable {
 			dev.mechana.api.ArtifactReference intermediate = audio.outputs().remove("reverberated.wav");
 			if (intermediate == null)
 				throw new IOException("Worker did not publish reverberated.wav");
+			dev.mechana.api.ArtifactReference resultMetadata = audio.outputs().remove("reverb-result.properties");
+			if (resultMetadata == null)
+				throw new IOException("Worker did not publish Reverb result metadata");
+			Path stagedMetadata = workRoot.resolve(jobId).resolve("reverb-result.properties");
+			stageArtifact(resultMetadata, stagedMetadata);
+			java.util.Properties properties = new java.util.Properties();
+			try (InputStream input = Files.newInputStream(stagedMetadata)) {
+				properties.load(input);
+			}
+			double appliedGain = Double.parseDouble(properties.getProperty("appliedGain", ""));
+			if (!Double.isFinite(appliedGain) || appliedGain <= 0 || appliedGain > 1)
+				throw new IOException("Worker published an invalid applied gain");
+			audio.appliedGain().set(appliedGain);
 			Path staged = workRoot.resolve(jobId).resolve(audio.outputName());
 			stageArtifact(intermediate, staged);
 			try (InputStream bytes = Files.newInputStream(staged)) {
@@ -1502,7 +1515,7 @@ public final class MechanaServer implements AutoCloseable {
 						defaultArtifactStore.put("jobs/" + jobId + "/artifacts/" + audio.outputName(), bytes));
 			}
 			scheduler.finishAssembly(jobId, null);
-		} catch (IOException failure) {
+		} catch (IOException | RuntimeException failure) {
 			scheduler.finishAssembly(jobId, "Audio assembly failed: " + failure.getMessage());
 		}
 	}
@@ -1689,7 +1702,7 @@ public final class MechanaServer implements AutoCloseable {
 	private void publishAudioJobReport(String jobId, InMemoryJobMonitor.Snapshot snapshot, AudioJob audio)
 			throws IOException {
 		String report = ReverbJobReport.render(audio.submittedAt(), snapshot, audio.request(), audio.dryBytes(),
-				audio.irBytes(), completedJobs.artifacts(jobId));
+				audio.irBytes(), audio.appliedGain().get(), completedJobs.artifacts(jobId));
 		dev.mechana.api.ArtifactReference artifact;
 		try (InputStream input = new ByteArrayInputStream(report.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
 			artifact = defaultArtifactStore.put("jobs/" + jobId + "/artifacts/reverb-job-report.txt", input);
@@ -2099,6 +2112,7 @@ public final class MechanaServer implements AutoCloseable {
 
 	private record AudioJob(List<String> inputTokens, AudioReverbJobSubmitRequest request, Path artifactRoot,
 			Instant submittedAt, long dryBytes, long irBytes,
+			java.util.concurrent.atomic.AtomicReference<Double> appliedGain,
 			ConcurrentMap<String, dev.mechana.api.ArtifactReference> outputs) {
 		String outputName() {
 			return request.outputName();

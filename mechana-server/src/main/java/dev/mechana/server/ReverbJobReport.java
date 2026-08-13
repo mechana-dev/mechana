@@ -28,7 +28,7 @@ final class ReverbJobReport {
 	}
 
 	static String render(Instant submittedAt, InMemoryJobMonitor.Snapshot snapshot, AudioReverbJobSubmitRequest request,
-			long dryBytes, long irBytes, List<CompletedJobStore.Artifact> artifacts) {
+			long dryBytes, long irBytes, Double appliedGain, List<CompletedJobStore.Artifact> artifacts) {
 		StringBuilder report = new StringBuilder(1_500);
 		report.append("Mechana Reverb Job Report\n");
 		report.append("==========================\n\n");
@@ -61,6 +61,8 @@ final class ReverbJobReport {
 		line(report, "Normalize IR", yesNo(request.normalizeIr()));
 		line(report, "Peak protection", yesNo(request.peakProtection()));
 		line(report, "Safe headroom", request.headroomDecibels() + " dB");
+		line(report, "Applied output gain", appliedGain(appliedGain));
+		line(report, "Peak protection engaged", peakProtectionEngaged(request, appliedGain));
 		line(report, "Requested tasks", Integer.toString(request.taskCount()));
 		line(report, "Storage provider", request.storageProvider());
 		line(report, "Shared artifact root",
@@ -108,6 +110,19 @@ final class ReverbJobReport {
 
 	private static String yesNo(boolean value) {
 		return value ? "Yes" : "No";
+	}
+
+	private static String appliedGain(Double gain) {
+		if (gain == null || !Double.isFinite(gain) || gain <= 0)
+			return "Not available";
+		double decibels = 20 * Math.log10(gain);
+		return String.format(java.util.Locale.ROOT, "%.9f (%.3f dB)", gain, decibels);
+	}
+
+	private static String peakProtectionEngaged(AudioReverbJobSubmitRequest request, Double gain) {
+		if (gain == null || !Double.isFinite(gain) || gain <= 0)
+			return "Not available";
+		return yesNo(request.peakProtection() && gain < 1 - 1e-12);
 	}
 
 	private static String value(String value) {
