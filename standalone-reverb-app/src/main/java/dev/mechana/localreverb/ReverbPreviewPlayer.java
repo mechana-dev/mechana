@@ -26,6 +26,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
@@ -40,13 +41,17 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private static final int BLOCK_SIZE = 1024;
 	private static final int DRY_END_FADE_MILLISECONDS = 10;
 	private static final int PARAMETER_RAMP_MILLISECONDS = 20;
+	private static final int IR_CROSSFADE_MILLISECONDS = 50;
 	private static final int MAX_PRE_DELAY_MILLISECONDS = 10_000;
 	private static final double NORMALIZED_IR_PEAK = Math.pow(10, -1.0 / 20);
 	private final AtomicBoolean stopped = new AtomicBoolean(true);
+	private final AtomicLong irLoadSequence = new AtomicLong();
 	private final Object pauseLock = new Object();
 	private volatile boolean paused;
 	private volatile Thread playbackThread;
 	private volatile AudioSink activeSink;
+	private volatile ConvolutionBank pendingBank;
+	private volatile int previewSampleRate;
 	private volatile LiveParameters liveParameters = new LiveParameters(0, 0, 0, false, true, 1);
 
 	enum State {
@@ -159,6 +164,8 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 
 	void stop() {
 		stopped.set(true);
+		irLoadSequence.incrementAndGet();
+		pendingBank = null;
 		synchronized (pauseLock) {
 			paused = false;
 			pauseLock.notifyAll();
@@ -175,8 +182,39 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		return !stopped.get();
 	}
 
+	void changeImpulseResponse(Path path, Consumer<Path> success, Consumer<String> failure) {
+		Objects.requireNonNull(path, "path");
+		Objects.requireNonNull(success, "success");
+		Objects.requireNonNull(failure, "failure");
+		int sampleRate = previewSampleRate;
+		long request = irLoadSequence.incrementAndGet();
+		if (!isActive() || sampleRate < 1) {
+			failure.accept("Start the preview before changing its impulse response.");
+			return;
+		}
+		Thread.ofVirtual().name("mechana-reverb-ir-loader").start(() -> {
+			try {
+				ConvolutionBank bank = prepareBank(path, sampleRate);
+				if (!isActive() || previewSampleRate != sampleRate || irLoadSequence.get() != request)
+					return;
+				pendingBank = bank;
+				success.accept(path);
+			} catch (IOException | RuntimeException loadFailure) {
+				failure.accept(rootMessage(loadFailure));
+			}
+		});
+	}
+
+	void changeImpulseResponseNow(Path path) throws IOException {
+		int sampleRate = previewSampleRate;
+		if (!isActive() || sampleRate < 1)
+			throw new IOException("Start the preview before changing its impulse response.");
+		pendingBank = prepareBank(path, sampleRate);
+	}
+
 	private void stream(Settings settings, AudioSinkFactory sinkFactory, Consumer<State> state) throws IOException {
 		ImpulseResponse ir = ImpulseResponse.read(settings.irPath(), false);
+		previewSampleRate = ir.sampleRate();
 		Path temporaryDirectory = Files.createTempDirectory("mechana-reverb-preview-");
 		Path converted = temporaryDirectory.resolve("dry.wav");
 		try {
@@ -185,35 +223,33 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 				WavFile.Format format = source.format();
 				if (format.channels() > 2 || ir.channelCount() > 2)
 					throw new IOException("Preview supports mono or stereo audio");
-				int outputChannels = Math.max(format.channels(), ir.channelCount());
+				int outputChannels = 2;
 				long preDelay = Math.round(settings.preDelayMilliseconds() * format.sampleRate() / 1000.0);
 				long outputFrames = Math.max(format.frames(), format.frames() + ir.length() - 1L + preDelay);
 				try (AudioSink sink = sinkFactory.open(format.sampleRate(), outputChannels)) {
 					activeSink = sink;
 					sink.start();
 					state.accept(State.PLAYING);
-					process(source, format, ir, outputChannels, outputFrames, sink);
+					process(source, format, new ConvolutionBank(ir, outputChannels), outputChannels, outputFrames,
+							sink);
 					if (!stopped.get())
 						sink.drain();
 				}
 			}
 		} finally {
+			previewSampleRate = 0;
+			pendingBank = null;
 			Files.deleteIfExists(converted);
 			Files.deleteIfExists(temporaryDirectory);
 		}
 	}
 
-	private void process(WavFile.Reader source, WavFile.Format format, ImpulseResponse ir, int outputChannels,
+	private void process(WavFile.Reader source, WavFile.Format format, ConvolutionBank initialBank, int outputChannels,
 			long outputFrames, AudioSink sink) throws IOException {
-		PartitionedConvolver[] convolvers = new PartitionedConvolver[outputChannels];
 		VariableDelayLine[] delays = new VariableDelayLine[outputChannels];
-		for (int channel = 0; channel < outputChannels; channel++) {
-			convolvers[channel] = new PartitionedConvolver(ir.channel(Math.min(channel, ir.channelCount() - 1)),
-					BLOCK_SIZE);
+		for (int channel = 0; channel < outputChannels; channel++)
 			delays[channel] = new VariableDelayLine(format.sampleRate(), liveParameters.preDelayMilliseconds());
-		}
-		double normalizationGain = normalizationGain(ir);
-		SmoothedValue wetLevel = new SmoothedValue(effectiveWet(liveParameters, normalizationGain));
+		SmoothedValue wetLevel = new SmoothedValue(liveParameters.wet());
 		SmoothedValue dryLevel = new SmoothedValue(liveParameters.dry());
 		SmoothedValue headroom = new SmoothedValue(headroomTarget(liveParameters));
 		int rampFrames = Math.max(1, format.sampleRate() * PARAMETER_RAMP_MILLISECONDS / 1000);
@@ -222,6 +258,11 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		long sourcePosition = 0;
 		long outputPosition = 0;
 		long requiredOutputFrames = outputFrames;
+		int maximumIrLength = initialBank.length();
+		ConvolutionBank activeBank = initialBank;
+		ConvolutionBank transitionBank = null;
+		int crossfadeFrame = 0;
+		int crossfadeFrames = Math.max(1, format.sampleRate() * IR_CROSSFADE_MILLISECONDS / 1000);
 		while (outputPosition < requiredOutputFrames && !stopped.get()) {
 			awaitResume();
 			if (stopped.get())
@@ -231,29 +272,41 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			int sourceFrames = sourcePosition < format.frames()
 					? source.read(input, 0, (int) Math.min(BLOCK_SIZE, format.frames() - sourcePosition))
 					: 0;
-			double[][] wet = new double[outputChannels][];
-			for (int channel = 0; channel < outputChannels; channel++)
-				wet[channel] = convolvers[channel].process(input[Math.min(channel, input.length - 1)], sourceFrames);
+			if (transitionBank == null && pendingBank != null) {
+				transitionBank = pendingBank;
+				pendingBank = null;
+				maximumIrLength = Math.max(maximumIrLength, transitionBank.length());
+				crossfadeFrame = 0;
+			}
+			double[][] wet = activeBank.process(input, sourceFrames);
+			double[][] transitionWet = transitionBank == null ? null : transitionBank.process(input, sourceFrames);
 			LiveParameters blockParameters = liveParameters;
 			long requestedDelay = Math.round(blockParameters.preDelayMilliseconds() * format.sampleRate() / 1000.0);
-			requiredOutputFrames = Math.max(requiredOutputFrames, format.frames() + ir.length() - 1L + requestedDelay);
+			requiredOutputFrames = Math.max(requiredOutputFrames,
+					format.frames() + maximumIrLength - 1L + requestedDelay);
 			int frames = (int) Math.min(BLOCK_SIZE, requiredOutputFrames - outputPosition);
 			int byteIndex = 0;
 			for (int frame = 0; frame < frames; frame++) {
 				LiveParameters parameters = liveParameters;
-				wetLevel.target(effectiveWet(parameters, normalizationGain), rampFrames);
+				wetLevel.target(parameters.wet(), rampFrames);
 				dryLevel.target(parameters.dry(), rampFrames);
 				headroom.target(headroomTarget(parameters), rampFrames);
 				double currentWet = wetLevel.next();
 				double currentDry = dryLevel.next();
 				double currentHeadroom = headroom.next();
+				double blend = transitionBank == null ? 0 : Math.min(1, (double) crossfadeFrame / crossfadeFrames);
 				for (int channel = 0; channel < outputChannels; channel++) {
 					long absolute = outputPosition + frame;
 					double direct = absolute < format.frames()
 							? input[Math.min(channel, input.length - 1)][frame]
 									* dryEndEnvelope(absolute, format.frames(), format.sampleRate())
 							: 0;
-					double delayed = delays[channel].push(wet[channel][frame], parameters.preDelayMilliseconds());
+					double wetSample = wet[channel][frame]
+							* (parameters.normalizeIr() ? activeBank.normalizationGain() : 1);
+					if (transitionBank != null)
+						wetSample = wetSample * (1 - blend) + transitionWet[channel][frame] * blend
+								* (parameters.normalizeIr() ? transitionBank.normalizationGain() : 1);
+					double delayed = delays[channel].push(wetSample, parameters.preDelayMilliseconds());
 					double sample = direct * currentDry + delayed * currentWet;
 					if (parameters.peakProtection())
 						sample = Math.max(-currentHeadroom, Math.min(currentHeadroom, sample));
@@ -262,6 +315,12 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					pcm[byteIndex++] = (byte) value;
 					pcm[byteIndex++] = (byte) (value >>> 8);
 				}
+				if (transitionBank != null && crossfadeFrame < crossfadeFrames)
+					crossfadeFrame++;
+			}
+			if (transitionBank != null && crossfadeFrame >= crossfadeFrames) {
+				activeBank = transitionBank;
+				transitionBank = null;
 			}
 			sink.write(pcm, byteIndex);
 			sourcePosition += sourceFrames;
@@ -277,8 +336,44 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		return peak > NORMALIZED_IR_PEAK ? NORMALIZED_IR_PEAK / peak : 1;
 	}
 
-	private static double effectiveWet(LiveParameters parameters, double normalizationGain) {
-		return parameters.wet() * (parameters.normalizeIr() ? normalizationGain : 1);
+	private static ConvolutionBank prepareBank(Path path, int sampleRate) throws IOException {
+		ImpulseResponse ir = ImpulseResponse.read(path, false);
+		if (ir.sampleRate() != sampleRate)
+			throw new IOException("The new IR is " + ir.sampleRate() + " Hz, but this preview is " + sampleRate
+					+ " Hz. Stop and restart preview to use it.");
+		if (ir.channelCount() > 2)
+			throw new IOException("Preview supports mono or stereo impulse responses");
+		return new ConvolutionBank(ir, 2);
+	}
+
+	private static final class ConvolutionBank {
+		private final PartitionedConvolver[] convolvers;
+		private final double normalizationGain;
+		private final int length;
+
+		private ConvolutionBank(ImpulseResponse ir, int outputChannels) {
+			convolvers = new PartitionedConvolver[outputChannels];
+			for (int channel = 0; channel < outputChannels; channel++)
+				convolvers[channel] = new PartitionedConvolver(ir.channel(Math.min(channel, ir.channelCount() - 1)),
+						BLOCK_SIZE);
+			normalizationGain = ReverbPreviewPlayer.normalizationGain(ir);
+			length = ir.length();
+		}
+
+		private double[][] process(double[][] input, int frames) {
+			double[][] output = new double[convolvers.length][];
+			for (int channel = 0; channel < convolvers.length; channel++)
+				output[channel] = convolvers[channel].process(input[Math.min(channel, input.length - 1)], frames);
+			return output;
+		}
+
+		private double normalizationGain() {
+			return normalizationGain;
+		}
+
+		private int length() {
+			return length;
+		}
 	}
 
 	private static double headroomTarget(LiveParameters parameters) {

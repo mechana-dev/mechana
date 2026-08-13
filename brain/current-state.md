@@ -94,7 +94,9 @@ This file reports repository evidence, not desired future status.
   play, pause/resume, and stop controls; this preview creates no job artifact and
   retains the complete reverb tail. Wet/dry, pre-delay, IR normalization, peak
   protection, and headroom edits take effect during playback with short smoothed
-  transitions.
+  transitions. The pre-delay slider is limited to 0–200 ms (with a numeric
+  override), and selecting a same-sample-rate mono or stereo IR during playback
+  prepares it in the background and crossfades it into the active preview.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,

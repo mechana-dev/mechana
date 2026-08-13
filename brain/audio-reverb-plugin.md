@@ -92,13 +92,19 @@ partitioned-convolution primitives to the default system audio output without
 creating a job artifact. Preview supports play, pause/resume, and stop, performs
 the same dry-audio decoding and sample-rate conversion, and plays the complete IR
 tail. Paired sliders and numeric override fields control wet level, dry level,
-and pre-delay. Those controls plus IR normalization, peak protection, and
+and pre-delay; the pre-delay slider spans 0–200 ms while its numeric override
+continues to accept larger precise values. Those controls plus IR normalization, peak protection, and
 headroom take effect during playback with a 20 ms transition that avoids
 control-change clicks. Normalization is an exact linear gain change on the live
 wet convolution result, so it does not restart or approximate the IR. Because
 streaming cannot know the future global peak, preview peak
 protection is an instantaneous ceiling at the selected headroom; offline export
 retains its deterministic two-pass global gain.
+Changing the selected IR during playback prepares its FFT partitions away from
+the audio thread, then crossfades to it over 50 ms. Mono and stereo profiles may
+be interchanged; the replacement must match the active preview sample rate, or
+the user must stop and restart preview so dry-audio preparation can target the
+new rate.
 The application bundle carries the five synthetic development IRs previously used
 for listening tests and exposes them through a dedicated chooser. It also bundles
 the standardized 48 kHz/24-bit stereo Mechana sweep and provides a **Create IR

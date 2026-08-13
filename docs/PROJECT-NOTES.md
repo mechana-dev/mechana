@@ -1672,3 +1672,16 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added synchronized sliders plus numeric override fields for wet level, dry
   level, and pre-delay so preview parameters can be explored continuously or
   entered precisely.
+
+## 2026-08-13 17:46 EDT — Switch reverb profiles during preview
+
+- Limited the pre-delay slider to the practical 0–200 ms range while preserving
+  the numeric field for larger explicit values.
+- Changing the IR path or choosing a bundled profile during playback now prepares
+  the replacement partitioned convolver away from the playback thread and
+  crossfades to it over 50 ms without restarting the recording.
+- Preview uses a stable stereo output so mono and stereo IRs can be interchanged.
+  A replacement IR must match the active preview sample rate; restarting preview
+  prepares the dry recording for an IR with a different rate.
+- Added numerical coverage proving that the old response is heard before the
+  switch and the new response after the crossfade.

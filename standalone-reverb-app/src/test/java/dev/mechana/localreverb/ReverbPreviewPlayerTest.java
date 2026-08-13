@@ -35,10 +35,11 @@ class ReverbPreviewPlayerTest {
 		byte[] pcm = ReverbPreviewPlayer
 				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, false, false, 1));
 
-		assertEquals(3 * 2, pcm.length);
+		assertEquals(3 * 2 * 2, pcm.length);
 		assertEquals(0.25, sample(pcm, 0), 1.0 / 32768);
-		assertEquals(-0.5, sample(pcm, 1), 1.0 / 32768);
-		assertEquals(0.125, sample(pcm, 2), 1.0 / 32768);
+		assertEquals(0.25, sample(pcm, 1), 1.0 / 32768);
+		assertEquals(-0.5, sample(pcm, 2), 1.0 / 32768);
+		assertEquals(0.125, sample(pcm, 4), 1.0 / 32768);
 	}
 
 	@Test
@@ -78,8 +79,8 @@ class ReverbPreviewPlayerTest {
 
 		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings, player -> player.update(1, 0, 0, true, false, 1));
 
-		assertEquals(0.5, sample(pcm, 500), 1.0 / 32768);
-		assertEquals(0.5 * Math.pow(10, -1.0 / 20), sample(pcm, 2_500), 2.0 / 32768);
+		assertEquals(0.5, sample(pcm, 500 * 2), 1.0 / 32768);
+		assertEquals(0.5 * Math.pow(10, -1.0 / 20), sample(pcm, 2_500 * 2), 2.0 / 32768);
 	}
 
 	@Test
@@ -92,9 +93,30 @@ class ReverbPreviewPlayerTest {
 
 		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings, player -> player.update(1, 0, 10, false, false, 1));
 
-		assertEquals((3_000 + 480) * 2, pcm.length);
-		assertTrue(Math.abs(sample(pcm, 2_000)) < 1.0 / 32768);
-		assertEquals(0.75, sample(pcm, 2_480), 2.0 / 32768);
+		assertEquals((3_000 + 480) * 2 * 2, pcm.length);
+		assertTrue(Math.abs(sample(pcm, 2_000 * 2)) < 1.0 / 32768);
+		assertEquals(0.75, sample(pcm, 2_480 * 2), 2.0 / 32768);
+	}
+
+	@Test
+	void changesImpulseResponseDuringPlaybackWithACrossfade() throws Exception {
+		double[] source = new double[5_000];
+		java.util.Arrays.fill(source, 0.25);
+		Path dry = wav("dry.wav", 48_000, new double[][]{source});
+		Path firstIr = wav("first-ir.wav", 48_000, new double[][]{{1}});
+		Path secondIr = wav("second-ir.wav", 48_000, new double[][]{{-1}});
+		var settings = new ReverbPreviewPlayer.Settings(dry, firstIr, 1, 0, 0, false, false, 1);
+
+		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings, player -> {
+			try {
+				player.changeImpulseResponseNow(secondIr);
+			} catch (java.io.IOException failure) {
+				throw new java.io.UncheckedIOException(failure);
+			}
+		});
+
+		assertEquals(0.25, sample(pcm, 500 * 2), 1.0 / 32768);
+		assertEquals(-0.25, sample(pcm, 4_000 * 2), 2.0 / 32768);
 	}
 
 	private Path wav(String name, int sampleRate, double[][] channels) throws Exception {

@@ -47,6 +47,7 @@ import javax.swing.JSlider;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.Timer;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
@@ -71,7 +72,8 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField preDelay = field("preDelayMilliseconds", "20");
 	private final JSlider wetSlider = new JSlider(0, 200, sliderValue(wet, 100, 35));
 	private final JSlider drySlider = new JSlider(0, 200, sliderValue(dry, 100, 100));
-	private final JSlider preDelaySlider = new JSlider(0, 10_000, sliderValue(preDelay, 1, 20));
+	private final JSlider preDelaySlider = new JSlider(0, 200, Math.min(200, sliderValue(preDelay, 1, 20)));
+	private final Timer irPreviewChangeTimer = new Timer(350, event -> updatePreviewImpulseResponse());
 	private final JCheckBox normalizeIr = check("normalizeIr", true);
 	private final JCheckBox peakProtection = check("peakProtection", true);
 	private final JTextField headroom = field("headroomDecibels", "1.0");
@@ -156,7 +158,7 @@ final class StandaloneReverbFrame extends JFrame {
 		addRow(panel, c, "Output WAV name", outputName);
 		addRow(panel, c, "Wet level (0–2)", sliderWithOverride(wetSlider, wet));
 		addRow(panel, c, "Dry level (0–2)", sliderWithOverride(drySlider, dry));
-		addRow(panel, c, "Pre-delay (ms)", sliderWithOverride(preDelaySlider, preDelay));
+		addRow(panel, c, "Pre-delay (0–200 ms slider)", sliderWithOverride(preDelaySlider, preDelay));
 		addRow(panel, c, "Normalize IR", normalizeIr);
 		addRow(panel, c, "Peak protection", peakProtection);
 		addRow(panel, c, "Safe headroom (dB)", headroom);
@@ -233,6 +235,7 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void configureActions() {
+		irPreviewChangeTimer.setRepeats(false);
 		run.addActionListener(event -> submit());
 		preview.addActionListener(event -> startPreview());
 		pausePreview.addActionListener(event -> previewPlayer
@@ -246,6 +249,10 @@ final class StandaloneReverbFrame extends JFrame {
 			field.getDocument().addDocumentListener(listener(this::updatePreviewParameters));
 		normalizeIr.addActionListener(event -> updatePreviewParameters());
 		peakProtection.addActionListener(event -> updatePreviewParameters());
+		irPath.getDocument().addDocumentListener(listener(() -> {
+			if (previewPlayer.isActive())
+				irPreviewChangeTimer.restart();
+		}));
 		reveal.addActionListener(event -> {
 			ReverbJob selected = selectedJob();
 			if (selected != null)
@@ -281,10 +288,11 @@ final class StandaloneReverbFrame extends JFrame {
 				return;
 			try {
 				int value = (int) Math.round(Double.parseDouble(override.getText().strip()) * scale);
-				if (value >= slider.getMinimum() && value <= slider.getMaximum() && value != slider.getValue()) {
+				int boundedValue = Math.max(slider.getMinimum(), Math.min(slider.getMaximum(), value));
+				if (boundedValue != slider.getValue()) {
 					synchronizingLiveControls = true;
 					try {
-						slider.setValue(value);
+						slider.setValue(boundedValue);
 					} finally {
 						synchronizingLiveControls = false;
 					}
@@ -428,6 +436,19 @@ final class StandaloneReverbFrame extends JFrame {
 		} catch (IllegalArgumentException ignored) {
 			// A partially edited numeric field takes effect as soon as it becomes valid.
 		}
+	}
+
+	private void updatePreviewImpulseResponse() {
+		Path selectedIr = path(irPath);
+		if (!previewPlayer.isActive() || selectedIr == null || !Files.isRegularFile(selectedIr))
+			return;
+		status.setText("Preparing new impulse response…");
+		previewPlayer.changeImpulseResponse(selectedIr,
+				loaded -> SwingUtilities.invokeLater(() -> status.setText("Playing with " + loaded.getFileName())),
+				message -> SwingUtilities.invokeLater(() -> {
+					showError(message);
+					status.setText("Could not change impulse response");
+				}));
 	}
 
 	private void stopPreview() {
