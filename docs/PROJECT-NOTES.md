@@ -1508,3 +1508,13 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Kept the established machine-readable `job-summary.json` and
   `transfer-summary.json`; this plain-text report is the first plugin-specific
   provenance slice and a model for a later generalized reporting contract.
+
+## 2026-08-13 06:25 EDT — Record actual Reverb peak-protection gain
+
+- Propagated the convolution processor's measured `appliedGain` from the sandboxed
+  worker through a small result-metadata artifact into completed Reverb state.
+- Added the linear multiplier, dB equivalent, and explicit peak-protection-engaged
+  result to `reverb-job-report.txt`. Failed jobs that never reach output gain
+  calculation report the value as unavailable rather than inferring it.
+- Added numerical coverage showing a 1.6 peak is reduced exactly to the configured
+  -1 dBFS target and report coverage for the corresponding 0.5 / -6.021 dB result.

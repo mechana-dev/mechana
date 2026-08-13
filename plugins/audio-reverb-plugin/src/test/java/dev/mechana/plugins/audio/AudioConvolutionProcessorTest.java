@@ -49,6 +49,17 @@ class AudioConvolutionProcessorTest {
 	}
 
 	@Test
+	void reportsGlobalGainAppliedByPeakProtection() throws IOException {
+		Path dry = wav("dry.wav", new double[][]{{0.8}});
+		Path ir = wav("ir.wav", new double[][]{{1}});
+		Path output = temporary.resolve("output.wav");
+		var result = processor(dry, ir, output, options(1, 1, 0, true));
+		double target = Math.pow(10, -1.0 / 20);
+		assertEquals(target / 1.6, result.appliedGain(), 1e-7);
+		assertEquals(target, read(output)[0][0], 2e-7);
+	}
+
+	@Test
 	void monoSourcePreservesStereoIrRouting() throws IOException {
 		Path dry = wav("dry.wav", new double[][]{{0.5}});
 		Path ir = wav("ir.wav", new double[][]{{1, 0.5}, {0.25, -0.25}});
