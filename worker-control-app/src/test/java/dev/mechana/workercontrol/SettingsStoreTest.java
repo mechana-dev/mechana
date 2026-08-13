@@ -99,6 +99,17 @@ class SettingsStoreTest {
 	}
 
 	@Test
+	void addsAudioReverbToPreviouslyCompletePluginSelections() throws Exception {
+		Path file = temporary.resolve("settings.properties");
+		Files.writeString(file, "settings-version=4\nhost.0=marks-macbook-air-m4\nlast-host=marks-macbook-air-m4\n"
+				+ "profile.0.capabilities=sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render\n");
+
+		SettingsStore.HostSettings loaded = new SettingsStore(file).load().profiles().get("marks-macbook-air-m4");
+
+		assertEquals(SettingsStore.ALL_SUPPORTED_PLUGINS, loaded.capabilities());
+	}
+
+	@Test
 	void migratesKnownVersionTwoProfilesAwayFromLocalhostCoordinator() throws Exception {
 		Path file = temporary.resolve("settings.properties");
 		Files.writeString(file, "settings-version=2\nhost.0=srv959600\nlast-host=srv959600\nprofile.0.port=8790\n"

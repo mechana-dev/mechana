@@ -29,7 +29,8 @@ import java.util.Map;
 import java.util.Properties;
 
 final class SettingsStore {
-	static final String ALL_SUPPORTED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render";
+	static final String ALL_SUPPORTED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render,audio-convolution-reverb";
+	private static final String PRE_AUDIO_SUPPORTED_PLUGINS = "sleep,video-ffmpeg,fractal-render,ocr-tesseract,blender-render";
 	static final String FLEET_COORDINATOR = "http://marks-macbook-air-m4:8787";
 	static final String REPOSITORY_AGENT_JAR = "worker-host-agent/target/mechana-worker-host-agent.jar";
 	static final String REPOSITORY_WORKER_JAR = "mechana-worker/target/mechana-worker.jar";
@@ -131,7 +132,7 @@ final class SettingsStore {
 				p.getProperty(prefix + "token", defaults.token()),
 				Integer.parseInt(p.getProperty(prefix + "count", Integer.toString(defaults.count()))),
 				AgentClient.LaunchMode.valueOf(p.getProperty(prefix + "launch-mode", defaults.launchMode().name())),
-				p.getProperty(prefix + "capabilities", defaults.capabilities()),
+				migrateCapabilities(p.getProperty(prefix + "capabilities", defaults.capabilities())),
 				p.getProperty(prefix + "ssh-user", defaults.sshUser()),
 				Integer.parseInt(p.getProperty(prefix + "ssh-port", Integer.toString(defaults.sshPort()))),
 				p.getProperty(prefix + "identity-file", defaults.identityFile()),
@@ -174,6 +175,10 @@ final class SettingsStore {
 
 	private static String migrateSandboxRoot(String value) {
 		return "/var/lib/mechana-sandbox".equals(value) ? "~/.mechana/sandbox" : value;
+	}
+
+	private static String migrateCapabilities(String value) {
+		return PRE_AUDIO_SUPPORTED_PLUGINS.equals(value) ? ALL_SUPPORTED_PLUGINS : value;
 	}
 
 	static String defaultAgentJar() {

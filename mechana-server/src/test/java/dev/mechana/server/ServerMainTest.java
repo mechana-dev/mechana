@@ -24,6 +24,8 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ServerMainTest {
+	@org.junit.jupiter.api.io.TempDir
+	Path temporary;
 	@Test
 	void restartCommandContainsOnlyServerConfiguration() throws Exception {
 		List<String> command = ServerMain.restartCommand(8787, "http://mba.example:8787", Path.of("server-data"));
@@ -48,12 +50,37 @@ class ServerMainTest {
 					plugins.sleep());
 			assertEquals(Path.of("/Applications/Mechana Server.app/Contents/app/mechana-plugin-blender-render.jar"),
 					plugins.blender());
+			assertEquals(Path.of("/Applications/Mechana Server.app/Contents/app/mechana-plugin-audio-reverb.jar"),
+					plugins.audio());
 		} finally {
 			if (originalAppPath == null) {
 				System.clearProperty("jpackage.app-path");
 			} else {
 				System.setProperty("jpackage.app-path", originalAppPath);
 			}
+		}
+	}
+
+	@Test
+	void packagedDaemonFallsBackToPluginBesideItsClasspathJar() throws Exception {
+		String originalAppPath = System.getProperty("jpackage.app-path");
+		String originalClasspath = System.getProperty("java.class.path");
+		Path serverJar = temporary.resolve("app/mechana-server.jar");
+		Path audioJar = temporary.resolve("app/mechana-plugin-audio-reverb.jar");
+		java.nio.file.Files.createDirectories(serverJar.getParent());
+		java.nio.file.Files.createFile(serverJar);
+		java.nio.file.Files.createFile(audioJar);
+		try {
+			System.clearProperty("jpackage.app-path");
+			System.setProperty("java.class.path", serverJar.toString());
+
+			assertEquals(audioJar.toAbsolutePath(), ServerMain.PluginJars.configured().audio());
+		} finally {
+			if (originalAppPath == null)
+				System.clearProperty("jpackage.app-path");
+			else
+				System.setProperty("jpackage.app-path", originalAppPath);
+			System.setProperty("java.class.path", originalClasspath);
 		}
 	}
 

@@ -221,6 +221,26 @@ public final class Messages {
 		}
 	}
 
+	public record AudioReverbJobSubmitRequest(String dryPath, String irPath, String outputName, int taskCount,
+			double wet, double dry, double preDelayMilliseconds, boolean normalizeIr, boolean peakProtection,
+			double headroomDecibels, String storageProvider) {
+		public AudioReverbJobSubmitRequest {
+			Objects.requireNonNull(dryPath, "dryPath");
+			Objects.requireNonNull(irPath, "irPath");
+			outputName = outputName == null || outputName.isBlank() ? "reverberated.wav" : outputName;
+			storageProvider = storageProvider == null || storageProvider.isBlank() ? "server-local" : storageProvider;
+			if (!"server-local".equals(storageProvider))
+				throw new IllegalArgumentException("Audio reverb POC currently supports server-local storage only");
+			if (!outputName.matches("[A-Za-z0-9._-]+\\.wav") || taskCount < 0 || taskCount > 1)
+				throw new IllegalArgumentException("Audio output name must be a safe .wav file name");
+			if (!Double.isFinite(wet) || !Double.isFinite(dry) || wet < 0 || wet > 2 || dry < 0 || dry > 2
+					|| !Double.isFinite(preDelayMilliseconds) || preDelayMilliseconds < 0
+					|| preDelayMilliseconds > 10_000 || !Double.isFinite(headroomDecibels) || headroomDecibels < 0
+					|| headroomDecibels > 24)
+				throw new IllegalArgumentException("Invalid audio reverb controls");
+		}
+	}
+
 	public record OcrJobSubmitRequest(String sourcePath, int taskCount, int dpi, String language, String title,
 			int firstPage, int pageCount, String storageProvider, List<ArtifactReference> clientPages,
 			String clientOutputUrl) {

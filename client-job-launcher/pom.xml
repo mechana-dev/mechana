@@ -10,6 +10,11 @@
   <name>Mechana :: Client Job Launcher</name>
   <dependencies>
     <dependency>
+      <groupId>dev.mechana</groupId>
+      <artifactId>mechana-plugin-audio-reverb</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
       <groupId>com.github.spotbugs</groupId>
       <artifactId>spotbugs-annotations</artifactId>
       <version>4.9.8</version>

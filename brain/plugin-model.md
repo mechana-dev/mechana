@@ -1,5 +1,10 @@
 # Plugin model
 
+The implemented audio convolution POC is documented in
+[audio-reverb-plugin.md](audio-reverb-plugin.md). It preserves the plugin boundary:
+the worker stages artifact bytes into attempt-local paths, while the plugin owns
+WAV interpretation and DSP and knows nothing about provider APIs.
+
 Last reviewed: 2026-08-06
 
 ## Accepted contract

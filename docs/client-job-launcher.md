@@ -17,7 +17,11 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
 - Renders submission fields, defaults, bounds, input pickers, output-provider
   information, and resource guidance from server-provided descriptors.
 - Includes descriptors for sleep, FFmpeg video, fractal render, Tesseract OCR,
-  and Blender render and submits through their existing server endpoints.
+  Blender render, and pure-Java convolution reverb and submits through their
+  existing server endpoints.
+- Convolution reverb provides two WAV pickers, an output artifact name, wet and
+  dry levels, pre-delay, IR normalization, peak protection, and headroom. Its POC
+  placement is server-local and its task count is limited to one.
 - FFmpeg video includes `Start offset in seconds`, default `0`, which selects the
   beginning of the requested compression range for server-local and client-local
   jobs. Duration is measured from that offset.
