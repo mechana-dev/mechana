@@ -16,6 +16,7 @@
 package dev.mechana.server;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -69,6 +70,8 @@ class JobLauncherCatalogTest {
 		assertEquals("/api/jobs/audio-reverb", descriptor.submitPath());
 		assertEquals(List.of("wav"), fields.get("dryPath").acceptedExtensions());
 		assertEquals(List.of("wav"), fields.get("irPath").acceptedExtensions());
+		assertEquals("directory", fields.get("artifactRoot").type());
+		assertFalse(fields.get("artifactRoot").required());
 		assertEquals(List.of("true", "false"), fields.get("normalizeIr").choices());
 		assertEquals(List.of("server-local"), fields.get("storageProvider").choices());
 	}

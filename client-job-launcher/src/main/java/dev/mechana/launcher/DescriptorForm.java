@@ -24,8 +24,10 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.io.File;
-import java.util.Locale;
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.prefs.Preferences;
@@ -40,6 +42,8 @@ final class DescriptorForm extends JPanel {
 	private final JLabel outputSummary = new JLabel();
 	@SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "Swing panels are not deserialized")
 	private final transient Map<SubmissionField, JComponent> editors = new LinkedHashMap<>();
+	private boolean updatingSuggestedOutputName;
+	private boolean outputNameOverridden;
 
 	DescriptorForm(JobLauncherDescriptor descriptor, Preferences settings) {
 		super(new BorderLayout(8, 8));
@@ -81,6 +85,7 @@ final class DescriptorForm extends JPanel {
 				.orElse(null);
 		if (storage instanceof JComboBox<?> choice)
 			choice.addActionListener(event -> updatePlacementControls());
+		configureSuggestedOutputName();
 		updatePlacementControls();
 		updateOutputSummary();
 		add(outputSummary, BorderLayout.SOUTH);
@@ -150,6 +155,116 @@ final class DescriptorForm extends JPanel {
 			}
 		});
 		return text;
+	}
+
+	private void configureSuggestedOutputName() {
+		if (!"audio-convolution-reverb".equals(descriptor.capabilityId()))
+			return;
+		JTextField output = textEditor("outputName");
+		if (output == null)
+			return;
+		String defaultName = field("outputName").defaultValue();
+		outputNameOverridden = !output.getText().isBlank() && !output.getText().equals(defaultName)
+				&& !output.getText().matches(".+-reverb-(?:ir-.+-)?wet.+-dry.+-pre.+ms-norm-(on|off)\\.wav");
+		output.getDocument().addDocumentListener(changeListener(() -> {
+			if (!updatingSuggestedOutputName)
+				outputNameOverridden = true;
+		}));
+		for (String name : List.of("dryPath", "irPath", "wet", "dry", "preDelayMilliseconds")) {
+			JTextField source = textEditor(name);
+			if (source != null)
+				source.getDocument().addDocumentListener(changeListener(this::updateSuggestedOutputName));
+		}
+		JComponent normalize = editor("normalizeIr");
+		if (normalize instanceof JComboBox<?> choice)
+			choice.addActionListener(event -> updateSuggestedOutputName());
+		updateSuggestedOutputName();
+	}
+
+	private void updateSuggestedOutputName() {
+		if (outputNameOverridden)
+			return;
+		JTextField output = textEditor("outputName");
+		String dryPath = value("dryPath");
+		String irPath = value("irPath");
+		if (output == null || dryPath.isBlank() || irPath.isBlank())
+			return;
+		String suggestion = suggestedReverbOutputName(dryPath, irPath, value("wet"), value("dry"),
+				value("preDelayMilliseconds"), value("normalizeIr"));
+		updatingSuggestedOutputName = true;
+		try {
+			output.setText(suggestion);
+		} finally {
+			updatingSuggestedOutputName = false;
+		}
+	}
+
+	static String suggestedReverbOutputName(String dryPath, String irPath, String wet, String dry, String preDelay,
+			String normalizeIr) {
+		return fileStem(dryPath, "audio") + "-reverb-ir-" + fileStem(irPath, "impulse") + "-wet" + numberToken(wet)
+				+ "-dry" + numberToken(dry) + "-pre" + numberToken(preDelay) + "ms-norm-"
+				+ (Boolean.parseBoolean(normalizeIr) ? "on" : "off") + ".wav";
+	}
+
+	private static String fileStem(String path, String fallback) {
+		String fileName = new File(path).getName().replaceFirst("(?i)\\.wav$", "");
+		String stem = fileName.replaceAll("[^A-Za-z0-9._-]+", "-").replaceAll("^-+|-+$", "");
+		return stem.isBlank() ? fallback : stem;
+	}
+
+	private static String numberToken(String value) {
+		try {
+			return new BigDecimal(value.strip()).stripTrailingZeros().toPlainString().replace('-', 'm').replace('.',
+					'p');
+		} catch (NumberFormatException ignored) {
+			return value.strip().replaceAll("[^A-Za-z0-9]+", "-");
+		}
+	}
+
+	private static DocumentListener changeListener(Runnable change) {
+		return new DocumentListener() {
+			@Override
+			public void insertUpdate(DocumentEvent event) {
+				change.run();
+			}
+			@Override
+			public void removeUpdate(DocumentEvent event) {
+				change.run();
+			}
+			@Override
+			public void changedUpdate(DocumentEvent event) {
+				change.run();
+			}
+		};
+	}
+
+	private SubmissionField field(String name) {
+		return editors.keySet().stream().filter(item -> name.equals(item.name())).findFirst().orElseThrow();
+	}
+
+	private JComponent editor(String name) {
+		return editors.entrySet().stream().filter(entry -> name.equals(entry.getKey().name())).map(Map.Entry::getValue)
+				.findFirst().orElse(null);
+	}
+
+	private JTextField textEditor(String name) {
+		JComponent editor = editor(name);
+		return editor instanceof JTextField text ? text : null;
+	}
+
+	private String value(String name) {
+		JComponent editor = editor(name);
+		return editor == null ? "" : editorValue(editor);
+	}
+
+	void setValue(String name, String value) {
+		JComponent editor = editor(name);
+		if (editor instanceof JTextField text)
+			text.setText(value);
+		else if (editor instanceof JComboBox<?> choice)
+			choice.setSelectedItem(value);
+		else
+			throw new IllegalArgumentException("Unknown form field: " + name);
 	}
 
 	private static String editorValue(JComponent editor) {

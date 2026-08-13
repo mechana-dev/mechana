@@ -1462,3 +1462,49 @@ cloud providers remain future direction; see `brain/current-state.md` and
   stereo 48 kHz/24-bit WAV at the configured -1 dBFS headroom.
 - Documented future frequency-domain contribution/overlap-add decomposition.
   Hardware sweep deconvolution remains separate future/helper tooling.
+
+## 2026-08-13 05:35 EDT — Improve launcher job selection and artifact access
+
+- Preserved the selected job by stable job ID while the launcher's periodic job
+  refresh rebuilds its table, fixing the selection disappearing after each poll.
+- Added an **Open artifacts folder** action for the selected completed job. The
+  server reveals the correct Finder folder through its loopback-only endpoint.
+- Added an optional Reverb **Shared artifacts folder** descriptor field. Successful
+  jobs retain their normal durable server artifacts and are additionally mirrored
+  into `<selected root>/<job ID>/`; failed or missing mirrors fall back to the
+  normal completed-job artifact directory.
+- Added launcher selection and descriptor coverage and verified the affected
+  server, protocol, plugin, and launcher modules.
+
+## 2026-08-13 05:45 EDT — Suggest descriptive Reverb output filenames
+
+- Made the Reverb output artifact name follow the selected dry WAV stem plus wet
+  level, dry level, pre-delay, and IR-normalization controls. Decimal points are
+  encoded as `p` so the result remains valid under the existing artifact-name
+  contract; peak protection and safe headroom are intentionally omitted.
+- Kept the field editable: the live suggestion stops changing once the user types
+  an explicit output name. Remembered generated names remain recognizable as
+  suggestions when the launcher is reopened.
+- Added coverage for initial generation, parameter-driven updates, normalization,
+  filename sanitization, and manual override preservation.
+
+## 2026-08-13 06:00 EDT — Include the IR name in Reverb output filenames
+
+- Extended the live Reverb output suggestion with the selected impulse-response
+  WAV stem: `<dry>-reverb-ir-<ir>-wet<wet>-dry<dry>-pre<ms>ms-norm-<on|off>.wav`.
+- Both input names are extension-free and filename-safe. Changing either input
+  updates the suggestion unless the user has supplied an explicit override.
+
+## 2026-08-13 06:10 EDT — Add a human-readable Reverb job report
+
+- Added `reverb-job-report.txt` to every terminal Reverb job's durable artifacts.
+  The report captures job identity/status, submission and completion timestamps,
+  processing and wall-clock duration, worker assignments, input names/paths/sizes,
+  every Reverb control, storage selection, and output artifact metadata including
+  sizes, providers, and SHA-256 values.
+- Successful jobs configured with a shared artifact root mirror the report beside
+  the output WAV and existing JSON summaries. Failed Reverb jobs retain the report
+  in normal server-owned completed history for diagnosis.
+- Kept the established machine-readable `job-summary.json` and
+  `transfer-summary.json`; this plain-text report is the first plugin-specific
+  provenance slice and a model for a later generalized reporting contract.

@@ -223,12 +223,13 @@ public final class Messages {
 
 	public record AudioReverbJobSubmitRequest(String dryPath, String irPath, String outputName, int taskCount,
 			double wet, double dry, double preDelayMilliseconds, boolean normalizeIr, boolean peakProtection,
-			double headroomDecibels, String storageProvider) {
+			double headroomDecibels, String storageProvider, String artifactRoot) {
 		public AudioReverbJobSubmitRequest {
 			Objects.requireNonNull(dryPath, "dryPath");
 			Objects.requireNonNull(irPath, "irPath");
 			outputName = outputName == null || outputName.isBlank() ? "reverberated.wav" : outputName;
 			storageProvider = storageProvider == null || storageProvider.isBlank() ? "server-local" : storageProvider;
+			artifactRoot = artifactRoot == null ? "" : artifactRoot.strip();
 			if (!"server-local".equals(storageProvider))
 				throw new IllegalArgumentException("Audio reverb POC currently supports server-local storage only");
 			if (!outputName.matches("[A-Za-z0-9._-]+\\.wav") || taskCount < 0 || taskCount > 1)

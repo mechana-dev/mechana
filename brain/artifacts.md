@@ -81,6 +81,12 @@ The distributed Sleep slice publishes its terminal `job-summary.json` through
 shape as every other artifact while the dashboard snapshot remains control-plane
 state. Purge still deletes the server-owned job directory.
 
+Reverb additionally publishes `reverb-job-report.txt` as a human-readable
+provenance companion. It records the submitted inputs and controls, lifecycle
+timing, workers, status, and output artifact metadata. This is the first
+plugin-specific report slice; a future shared reporting contract can extend the
+same provenance pattern to every plugin without replacing `job-summary.json`.
+
 Fractal, OCR, and Blender publish lease-fenced ZIP batches as artifact references,
 stage and verify them into private assembly scratch, and publish final result trees
 through the output store. OCR rasterized page inputs and the packed Blender scene

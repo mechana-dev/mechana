@@ -89,4 +89,38 @@ class DescriptorFormTest {
 		assertEquals("Output: Client-selected output directory (client-local) — FFmpeg",
 				new DescriptorForm(descriptor, settings).outputSummary());
 	}
+
+	@Test
+	void suggestsReverbOutputNameFromDryFileAndSoundParametersUntilOverridden() {
+		Preferences settings = Preferences.userRoot().node("dev/mechana/test/" + UUID.randomUUID());
+		DescriptorForm form = new DescriptorForm(reverbDescriptor(), settings);
+		form.setValue("dryPath", "/tmp/Scott Voice.wav");
+		form.setValue("irPath", "/tmp/Small Plate.WAV");
+		assertEquals("Scott-Voice-reverb-ir-Small-Plate-wet0p35-dry1-pre20ms-norm-on.wav",
+				form.values().get("outputName"));
+
+		form.setValue("wet", "0.2");
+		form.setValue("preDelayMilliseconds", "7.5");
+		form.setValue("normalizeIr", "false");
+		assertEquals("Scott-Voice-reverb-ir-Small-Plate-wet0p2-dry1-pre7p5ms-norm-off.wav",
+				form.values().get("outputName"));
+
+		form.setValue("outputName", "my-version.wav");
+		form.setValue("wet", "0.8");
+		assertEquals("my-version.wav", form.values().get("outputName"));
+	}
+
+	private static JobLauncherDescriptor reverbDescriptor() {
+		return new JobLauncherDescriptor("audio-convolution-reverb", "Reverb", "/api/jobs/audio-reverb", List.of(
+				new SubmissionField("dryPath", "Dry", "file", true, "", null, null, List.of(), "", List.of("wav")),
+				new SubmissionField("irPath", "IR", "file", true, "", null, null, List.of(), "", List.of("wav")),
+				new SubmissionField("outputName", "Output", "text", true, "reverberated.wav", null, null, List.of(),
+						""),
+				new SubmissionField("wet", "Wet", "decimal", true, "0.35", 0d, 2d, List.of(), ""),
+				new SubmissionField("dry", "Dry", "decimal", true, "1.0", 0d, 2d, List.of(), ""),
+				new SubmissionField("preDelayMilliseconds", "Pre", "decimal", true, "20", 0d, 10000d, List.of(), ""),
+				new SubmissionField("normalizeIr", "Normalize", "choice", true, "true", null, null,
+						List.of("true", "false"), "")),
+				new OutputDescriptor("server-local", "directory", "Artifacts", false), "small", 1, "now");
+	}
 }

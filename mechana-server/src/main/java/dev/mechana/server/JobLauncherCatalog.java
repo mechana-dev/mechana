@@ -47,6 +47,7 @@ final class JobLauncherCatalog {
 						"Pure Java; one worker; memory scales with IR length and FFT partitions",
 						commonStorage("server-local"), file("dryPath", "Dry audio WAV", "", "wav"),
 						file("irPath", "Impulse response WAV", "", "wav"),
+						directory("artifactRoot", "Shared artifacts folder (optional)"),
 						text("outputName", "Output artifact name", "reverberated.wav"),
 						integer("taskCount", "Tasks (0 = fleet)", "0", 0, 1), decimal("wet", "Wet level", "0.35", 0, 2),
 						decimal("dry", "Dry level", "1.0", 0, 2),
