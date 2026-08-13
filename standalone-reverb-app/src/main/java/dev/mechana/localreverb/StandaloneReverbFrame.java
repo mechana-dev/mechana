@@ -59,6 +59,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private static final long serialVersionUID = 1L;
 	private final transient Preferences settings = Preferences.userNodeForPackage(StandaloneReverbFrame.class);
 	private final transient LocalReverbEngine engine = new LocalReverbEngine();
+	private final transient ReverbPreviewPlayer previewPlayer = new ReverbPreviewPlayer();
 	private final JTextField dryPath = field("dryPath", "");
 	private final JTextField irPath = field("irPath", "");
 	private final JTextField artifactRoot = field("artifactRoot",
@@ -75,6 +76,9 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField generatedIrPath = field("generatedIrPath",
 			Path.of(System.getProperty("user.home"), "Documents", "RVB_Plug-IR.wav").toString());
 	private final JButton run = new JButton("Run Reverb");
+	private final JButton preview = new JButton("Play Preview");
+	private final JButton pausePreview = new JButton("Pause");
+	private final JButton stopPreview = new JButton("Stop Preview");
 	private final JButton generateIr = new JButton("Generate IR Profile");
 	private final JButton cancel = new JButton("Cancel");
 	private final JButton reveal = new JButton("Show Artifacts");
@@ -96,6 +100,7 @@ final class StandaloneReverbFrame extends JFrame {
 		addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent event) {
+				previewPlayer.close();
 				engine.close();
 				dispose();
 			}
@@ -155,9 +160,14 @@ final class StandaloneReverbFrame extends JFrame {
 		c.anchor = GridBagConstraints.WEST;
 		JPanel buttons = new JPanel();
 		buttons.add(run);
+		buttons.add(preview);
+		buttons.add(pausePreview);
+		buttons.add(stopPreview);
 		buttons.add(cancel);
 		panel.add(buttons, c);
 		cancel.setEnabled(false);
+		pausePreview.setEnabled(false);
+		stopPreview.setEnabled(false);
 		return panel;
 	}
 
@@ -218,6 +228,10 @@ final class StandaloneReverbFrame extends JFrame {
 
 	private void configureActions() {
 		run.addActionListener(event -> submit());
+		preview.addActionListener(event -> startPreview());
+		pausePreview.addActionListener(event -> previewPlayer
+				.togglePause(state -> SwingUtilities.invokeLater(() -> updatePreviewState(state))));
+		stopPreview.addActionListener(event -> stopPreview());
 		generateIr.addActionListener(event -> generateImpulseResponse());
 		cancel.addActionListener(event -> engine.cancel());
 		playOutput.addActionListener(event -> openLatestOutput(false));
@@ -235,6 +249,7 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void generateImpulseResponse() {
+		stopPreview();
 		Path sweep = path(sweepPath);
 		Path recorded = path(recordedSweepPath);
 		Path output = path(generatedIrPath);
@@ -301,6 +316,7 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void submit() {
+		stopPreview();
 		try {
 			ReverbRequest request = new ReverbRequest(path(dryPath), path(irPath), path(artifactRoot),
 					outputName.getText().strip(), decimal(wet, "Wet level"), decimal(dry, "Dry level"),
@@ -312,6 +328,68 @@ final class StandaloneReverbFrame extends JFrame {
 		} catch (IOException | RuntimeException failure) {
 			showError(failure.getMessage());
 		}
+	}
+
+	private void startPreview() {
+		try {
+			Path selectedDry = path(dryPath);
+			Path selectedIr = path(irPath);
+			if (selectedDry == null || !Files.isRegularFile(selectedDry))
+				throw new IllegalArgumentException("Choose a readable dry audio file.");
+			if (selectedIr == null || !Files.isRegularFile(selectedIr))
+				throw new IllegalArgumentException("Choose a readable impulse-response WAV.");
+			var settings = new ReverbPreviewPlayer.Settings(selectedDry, selectedIr, decimal(wet, "Wet level"),
+					decimal(dry, "Dry level"), decimal(preDelay, "Pre-delay"), normalizeIr.isSelected(),
+					peakProtection.isSelected(), decimal(headroom, "Safe headroom"));
+			previewPlayer.play(settings, state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)),
+					message -> SwingUtilities.invokeLater(() -> {
+						showError(message);
+						status.setText("Preview failed");
+						previewFinished();
+					}));
+		} catch (RuntimeException failure) {
+			showError(failure.getMessage());
+		}
+	}
+
+	private void stopPreview() {
+		if (previewPlayer.isActive()) {
+			previewPlayer.stop();
+			status.setText("Preview stopped");
+		}
+		previewFinished();
+	}
+
+	private void updatePreviewState(ReverbPreviewPlayer.State state) {
+		switch (state) {
+			case PREPARING -> status.setText("Preparing real-time preview…");
+			case PLAYING -> {
+				status.setText("Playing reverb preview through the default audio output");
+				pausePreview.setText("Pause");
+			}
+			case PAUSED -> {
+				status.setText("Reverb preview paused");
+				pausePreview.setText("Resume");
+			}
+			case STOPPED -> status.setText("Preview stopped");
+			case FINISHED -> {
+				status.setText("Preview finished — full reverb tail played");
+				previewFinished();
+			}
+		}
+		if (state == ReverbPreviewPlayer.State.PREPARING || state == ReverbPreviewPlayer.State.PLAYING
+				|| state == ReverbPreviewPlayer.State.PAUSED) {
+			preview.setEnabled(false);
+			pausePreview.setEnabled(state != ReverbPreviewPlayer.State.PREPARING);
+			stopPreview.setEnabled(true);
+		}
+	}
+
+	private void previewFinished() {
+		preview.setEnabled(true);
+		pausePreview.setEnabled(false);
+		pausePreview.setText("Pause");
+		stopPreview.setEnabled(false);
 	}
 
 	private void update(ReverbJob job) {

@@ -87,6 +87,13 @@ plugin result metadata, and `reverb-job-report.txt`. The packaged **Mechana
 Reverb.app** opens no network listener and includes its Java runtime. This is an
 explicit application composition, not a second reverb implementation or a new
 general local plugin runtime contract.
+The Apply Reverb tab can also stream the selected recording through the same
+partitioned-convolution primitives to the default system audio output without
+creating a job artifact. Preview supports play, pause/resume, and stop, performs
+the same dry-audio decoding and sample-rate conversion, and plays the complete IR
+tail. Because streaming cannot know the future global peak, preview peak
+protection is an instantaneous ceiling at the selected headroom; offline export
+retains its deterministic two-pass global gain.
 The application bundle carries the five synthetic development IRs previously used
 for listening tests and exposes them through a dedicated chooser. It also bundles
 the standardized 48 kHz/24-bit stereo Mechana sweep and provides a **Create IR

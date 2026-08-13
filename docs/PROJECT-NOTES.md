@@ -1646,3 +1646,15 @@ cloud providers remain future direction; see `brain/current-state.md` and
   output-tail length remain unchanged.
 - Added numerical coverage for the dry boundary envelope and for an unmodified,
   full-length wet tail.
+
+## 2026-08-13 17:08 EDT — Add streaming reverb preview
+
+- Added Play Preview, Pause/Resume, and Stop Preview controls to the standalone
+  Reverb app. Preview streams the chosen recording through the existing
+  partitioned convolution primitives to the default system output and creates no
+  job or output artifact.
+- Preview uses the existing dry-audio decoder and sample-rate converter, preserves
+  mono/stereo IR routing, pre-delay, wet/dry mix, direct-signal end smoothing, and
+  the complete reverb tail.
+- Streaming peak protection uses an instantaneous ceiling at the configured
+  headroom. Offline jobs retain their deterministic two-pass global gain.

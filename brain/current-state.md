@@ -89,7 +89,10 @@ This file reports repository evidence, not desired future status.
   a single-threaded local task context. Its Swing UI contains no server or worker
   settings, retains reloadable per-job JSON state and human-readable reports in a
   selected artifacts root, supports cancellation and Finder reveal, and packages
-  as a macOS app with a bundled Java runtime.
+  as a macOS app with a bundled Java runtime. The app can stream an existing dry
+  recording through the selected IR to the default system audio output with
+  play, pause/resume, and stop controls; this preview creates no job artifact and
+  retains the complete reverb tail.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,
