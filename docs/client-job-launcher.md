@@ -27,6 +27,9 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
   from both base names plus wet, dry, pre-delay, and IR-normalization settings;
   the suggestion follows input and control changes until the user overrides the
   name. Its POC placement is server-local and its task count is limited to one.
+  Each terminal Reverb job also includes a human-readable
+  `reverb-job-report.txt` with its inputs, complete controls, timing, workers,
+  status, and output artifact metadata.
 - FFmpeg video includes `Start offset in seconds`, default `0`, which selects the
   beginning of the requested compression range for server-local and client-local
   jobs. Duration is measured from that offset.

@@ -1494,3 +1494,17 @@ cloud providers remain future direction; see `brain/current-state.md` and
   WAV stem: `<dry>-reverb-ir-<ir>-wet<wet>-dry<dry>-pre<ms>ms-norm-<on|off>.wav`.
 - Both input names are extension-free and filename-safe. Changing either input
   updates the suggestion unless the user has supplied an explicit override.
+
+## 2026-08-13 06:10 EDT — Add a human-readable Reverb job report
+
+- Added `reverb-job-report.txt` to every terminal Reverb job's durable artifacts.
+  The report captures job identity/status, submission and completion timestamps,
+  processing and wall-clock duration, worker assignments, input names/paths/sizes,
+  every Reverb control, storage selection, and output artifact metadata including
+  sizes, providers, and SHA-256 values.
+- Successful jobs configured with a shared artifact root mirror the report beside
+  the output WAV and existing JSON summaries. Failed Reverb jobs retain the report
+  in normal server-owned completed history for diagnosis.
+- Kept the established machine-readable `job-summary.json` and
+  `transfer-summary.json`; this plain-text report is the first plugin-specific
+  provenance slice and a model for a later generalized reporting contract.

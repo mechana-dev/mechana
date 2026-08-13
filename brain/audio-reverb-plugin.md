@@ -17,6 +17,13 @@ the wet, dry, pre-delay, and IR-normalization controls. The suggestion remains l
 until the user types an explicit override; peak protection and headroom are
 intentionally omitted from the filename.
 
+Every terminal Reverb job publishes `reverb-job-report.txt` beside the existing
+machine-readable summaries and any output WAV. The plain-text report records job
+identity and status, submitted/completed timestamps, processing and wall-clock
+duration, worker assignments, input filenames/paths/sizes, every submission
+control, output artifact metadata, sizes, providers, and SHA-256 values. Successful
+jobs using a shared artifact root mirror this report with the rest of the folder.
+
 The DSP layer is separated into WAV I/O, an internal radix-2 FFT, IR preparation,
 uniform partitioned convolution, and streaming block orchestration. The dry input
 is read in blocks. IR partitions and their spectra are precomputed. A temporary
