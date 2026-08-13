@@ -31,7 +31,7 @@ import java.util.UUID;
 
 final class WorkerManager {
 	private static final Set<String> IMPLEMENTED_SANDBOX_PLUGINS = Set.of("sleep", "video-ffmpeg", "fractal-render",
-			"ocr-tesseract", "blender-render", "audio-convolution-reverb");
+			"ocr-tesseract", "blender-render", "audio-convolution-reverb", "audio-ir-deconvolution");
 	record WorkerStatus(String id, long pid, Instant startedAt, boolean alive) {
 	}
 	record LaunchRequest(int count, WorkerLaunchMode mode, String capabilities) {

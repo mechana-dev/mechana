@@ -14,7 +14,7 @@ if [[ ! -d "${SOURCE}" ]]; then
 fi
 
 mkdir -p "${DESTINATION}"
-for app in "Mechana Server.app" "Mechana Worker Control.app" "Mechana Job Launcher.app"; do
+for app in "Mechana Server.app" "Mechana Worker Control.app" "Mechana Job Launcher.app" "Mechana Reverb.app"; do
 	if [[ ! -d "${SOURCE}/${app}" ]]; then
 		print -u2 "Missing built app: ${SOURCE}/${app}"
 		exit 1

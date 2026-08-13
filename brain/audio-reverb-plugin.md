@@ -40,8 +40,11 @@ with a stereo IR produces stereo output; stereo source and IR channels are paire
 a mono IR is applied independently to both dry channels. The full convolution
 tail and optional pre-delay are retained.
 
-Controls are wet level, dry level, pre-delay, IR peak normalization, output peak
-protection, and safe headroom. No external executable, native DSP library, or
+Controls are wet level, dry level, pre-delay, safe IR peak normalization, output
+peak protection, and safe headroom. IR normalization is attenuation-only: peaks
+above -1 dBFS are reduced to -1 dBFS, while quieter measured responses retain
+their captured gain. This prevents hardware IRs from being unintentionally
+amplified before convolution. No external executable, native DSP library, or
 third-party FFT dependency is used.
 
 ## Future distributed decomposition
@@ -54,5 +57,33 @@ lease-fenced overlap-add assembly. Any such plan must define boundary overlap,
 floating-point summation order, tail ownership, and deterministic assembly before
 claiming multi-worker equivalence.
 
-Hardware sweep deconvolution is related helper tooling, not part of this plugin.
-Scott's recorded hardware response must first be converted into a usable IR WAV.
+The reusable pure-Java `SweepDeconvolver` helper converts an exact excitation
+sweep plus its recorded 100%-wet return into a convolution-ready IR. It uses
+regularized frequency-domain division, preserves the captured response gain,
+aligns to the recovered impulse, estimates the audible tail, retains a short
+pre-roll, and fades the final 50 ms. This is preparation tooling rather than a
+distributed plugin capability.
+
+## Standalone macOS composition
+
+`standalone-reverb-app` invokes `AudioConvolutionReverbPlugin` directly through a
+local `TaskContext`, so local and distributed execution share the plugin entry
+point and DSP implementation. It runs one job at a time, publishes into a selected
+`<artifact-root>/<job-id>/` directory, and retains `job.json`, the output WAV,
+plugin result metadata, and `reverb-job-report.txt`. The packaged **Mechana
+Reverb.app** opens no network listener and includes its Java runtime. This is an
+explicit application composition, not a second reverb implementation or a new
+general local plugin runtime contract.
+The application bundle carries the five synthetic development IRs previously used
+for listening tests and exposes them through a dedicated chooser. It also bundles
+the standardized 48 kHz/24-bit stereo Mechana sweep and provides a **Create IR
+from Sweep** tab. A user selects a recorded wet return and output path; the app
+generates the aligned, trimmed IR locally and selects it for immediate use in the
+Apply Reverb tab. The unrestricted IR chooser continues to accept compatible WAVs
+created elsewhere.
+
+The companion `audio-ir-deconvolution` capability uses the same module and DSP
+code as the standalone app. It accepts an original sweep WAV plus the hardware
+unit's recorded wet return, requires matching sample rates, and emits a trimmed
+24-bit convolution-ready IR. Both paths use regularized FFT division, preserve
+captured gain, align the impulse, estimate the decay tail, and fade the trim edge.

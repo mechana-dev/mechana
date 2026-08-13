@@ -18,6 +18,12 @@ Last reviewed: 2026-08-09
 
 ## Stable shape
 
+The standalone Reverb composition is an explicit local/demo boundary: it depends
+on the concrete audio plugin, supplies platform-owned lifecycle and artifact
+publication locally, and does not change the plugin contract. It invokes the same
+plugin entry point used by workers but has no scheduler, leases, worker registry,
+HTTP listener, or distributed data plane.
+
 Mechana separates the control plane from the data plane and keeps the execution
 core task-agnostic. A plugin encapsulates the complete computational contract for
 its domain: supported input/output descriptions, processing options, authoritative

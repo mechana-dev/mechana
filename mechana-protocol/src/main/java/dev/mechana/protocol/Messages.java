@@ -242,6 +242,21 @@ public final class Messages {
 		}
 	}
 
+	public record AudioIrJobSubmitRequest(String sweepPath, String recordedReturnPath, String outputName, int taskCount,
+			String storageProvider, String artifactRoot) {
+		public AudioIrJobSubmitRequest {
+			Objects.requireNonNull(sweepPath, "sweepPath");
+			Objects.requireNonNull(recordedReturnPath, "recordedReturnPath");
+			outputName = outputName == null || outputName.isBlank() ? "impulse-response.wav" : outputName;
+			storageProvider = storageProvider == null || storageProvider.isBlank() ? "server-local" : storageProvider;
+			artifactRoot = artifactRoot == null ? "" : artifactRoot.strip();
+			if (!"server-local".equals(storageProvider))
+				throw new IllegalArgumentException("IR generation currently supports server-local storage only");
+			if (!outputName.matches("[A-Za-z0-9._-]+\\.wav") || taskCount < 0 || taskCount > 1)
+				throw new IllegalArgumentException("IR output name must be a safe .wav file name");
+		}
+	}
+
 	public record OcrJobSubmitRequest(String sourcePath, int taskCount, int dpi, String language, String title,
 			int firstPage, int pageCount, String storageProvider, List<ArtifactReference> clientPages,
 			String clientOutputUrl) {
