@@ -12,10 +12,10 @@ the descriptor remains provider-shaped without claiming client-direct support.
 The launcher also offers an optional shared artifacts root. The server preserves
 its normal durable job artifacts and mirrors each successful reverb job into a
 separate `<root>/<job-id>/` directory for convenient collection and Finder access.
-The launcher suggests an output filename based on the dry source stem and the wet,
-dry, pre-delay, and IR-normalization controls. The suggestion remains live until
-the user types an explicit override; peak protection and headroom are intentionally
-omitted from the filename.
+The launcher suggests an output filename based on the dry source and IR stems plus
+the wet, dry, pre-delay, and IR-normalization controls. The suggestion remains live
+until the user types an explicit override; peak protection and headroom are
+intentionally omitted from the filename.
 
 The DSP layer is separated into WAV I/O, an internal radix-2 FFT, IR preparation,
 uniform partitioned convolution, and streaming block orchestration. The dry input

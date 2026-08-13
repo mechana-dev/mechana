@@ -165,12 +165,12 @@ final class DescriptorForm extends JPanel {
 			return;
 		String defaultName = field("outputName").defaultValue();
 		outputNameOverridden = !output.getText().isBlank() && !output.getText().equals(defaultName)
-				&& !output.getText().matches(".+-reverb-wet.+-dry.+-pre.+ms-norm-(on|off)\\.wav");
+				&& !output.getText().matches(".+-reverb-(?:ir-.+-)?wet.+-dry.+-pre.+ms-norm-(on|off)\\.wav");
 		output.getDocument().addDocumentListener(changeListener(() -> {
 			if (!updatingSuggestedOutputName)
 				outputNameOverridden = true;
 		}));
-		for (String name : List.of("dryPath", "wet", "dry", "preDelayMilliseconds")) {
+		for (String name : List.of("dryPath", "irPath", "wet", "dry", "preDelayMilliseconds")) {
 			JTextField source = textEditor(name);
 			if (source != null)
 				source.getDocument().addDocumentListener(changeListener(this::updateSuggestedOutputName));
@@ -186,9 +186,10 @@ final class DescriptorForm extends JPanel {
 			return;
 		JTextField output = textEditor("outputName");
 		String dryPath = value("dryPath");
-		if (output == null || dryPath.isBlank())
+		String irPath = value("irPath");
+		if (output == null || dryPath.isBlank() || irPath.isBlank())
 			return;
-		String suggestion = suggestedReverbOutputName(dryPath, value("wet"), value("dry"),
+		String suggestion = suggestedReverbOutputName(dryPath, irPath, value("wet"), value("dry"),
 				value("preDelayMilliseconds"), value("normalizeIr"));
 		updatingSuggestedOutputName = true;
 		try {
@@ -198,14 +199,17 @@ final class DescriptorForm extends JPanel {
 		}
 	}
 
-	static String suggestedReverbOutputName(String dryPath, String wet, String dry, String preDelay,
+	static String suggestedReverbOutputName(String dryPath, String irPath, String wet, String dry, String preDelay,
 			String normalizeIr) {
-		String fileName = new File(dryPath).getName().replaceFirst("(?i)\\.wav$", "");
+		return fileStem(dryPath, "audio") + "-reverb-ir-" + fileStem(irPath, "impulse") + "-wet" + numberToken(wet)
+				+ "-dry" + numberToken(dry) + "-pre" + numberToken(preDelay) + "ms-norm-"
+				+ (Boolean.parseBoolean(normalizeIr) ? "on" : "off") + ".wav";
+	}
+
+	private static String fileStem(String path, String fallback) {
+		String fileName = new File(path).getName().replaceFirst("(?i)\\.wav$", "");
 		String stem = fileName.replaceAll("[^A-Za-z0-9._-]+", "-").replaceAll("^-+|-+$", "");
-		if (stem.isBlank())
-			stem = "audio";
-		return stem + "-reverb-wet" + numberToken(wet) + "-dry" + numberToken(dry) + "-pre" + numberToken(preDelay)
-				+ "ms-norm-" + (Boolean.parseBoolean(normalizeIr) ? "on" : "off") + ".wav";
+		return stem.isBlank() ? fallback : stem;
 	}
 
 	private static String numberToken(String value) {

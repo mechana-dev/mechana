@@ -1487,3 +1487,10 @@ cloud providers remain future direction; see `brain/current-state.md` and
   suggestions when the launcher is reopened.
 - Added coverage for initial generation, parameter-driven updates, normalization,
   filename sanitization, and manual override preservation.
+
+## 2026-08-13 06:00 EDT — Include the IR name in Reverb output filenames
+
+- Extended the live Reverb output suggestion with the selected impulse-response
+  WAV stem: `<dry>-reverb-ir-<ir>-wet<wet>-dry<dry>-pre<ms>ms-norm-<on|off>.wav`.
+- Both input names are extension-free and filename-safe. Changing either input
+  updates the suggestion unless the user has supplied an explicit override.
