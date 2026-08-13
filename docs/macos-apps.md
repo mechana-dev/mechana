@@ -1,15 +1,21 @@
 # Mechana macOS apps
 
-Mechana provides three native macOS application bundles for local development:
+Mechana provides four native macOS application bundles for local development:
 
 - **Mechana Server.app** starts or reveals its dedicated local server dashboard window.
 - **Mechana Worker Control.app** runs Worker Control as an ordinary desktop app.
 - **Mechana Job Launcher.app** runs the Client Job Launcher as an ordinary desktop app.
+- **Mechana Reverb.app** runs the production convolution-reverb plugin entirely
+  on one Mac, with no server, worker, network connection, or separate Java installation.
 
 The bundles are unsigned local-development builds. They include a Java runtime,
 so Finder and Dock launches do not depend on a shell, `JAVA_HOME`, Maven, or a
 Terminal window. Distribution to other users will require an Apple Developer ID,
 code signing, hardened-runtime validation, and notarization.
+
+The build also writes `Mechana-Reverb-macOS-arm64.zip`, preserving the application
+bundle for transfer to another Apple Silicon Mac. Because development builds are
+not notarized, a recipient may need to Control-click the app and choose **Open**.
 
 ## Build and install
 
@@ -35,7 +41,7 @@ packaging/macos/build-apps.sh --install
 The installer copies the bundles to `/Applications`, so they appear under Finder's
 standard **Applications** shortcut. Drag each app from there to the Dock. Set
 `MECHANA_APP_DESTINATION` when invoking the installer only if a different location
-is explicitly required. Rebuilding is deterministic from the shaded application JARs, three
+is explicitly required. Rebuilding is deterministic from the shaded application JARs, the
 function-specific Mechana icon variants, the current Java 25 `jpackage`, macOS's
 Swift compiler and WebKit framework, and a bundled runtime image.
 
@@ -88,7 +94,7 @@ packaging/macos/server-control.sh restart
 `stop` unloads the per-user agent, so `KeepAlive` does not immediately start it
 again. Opening **Mechana Server.app** bootstraps it again.
 
-## Worker Control and Job Launcher lifecycle
+## Desktop launcher lifecycle
 
 Both Swing tools use their existing entry points and settings locations. Their
 `jpackage` launchers appear as ordinary GUI applications and do not allocate a
@@ -100,6 +106,19 @@ operation does not depend on a repository working directory. Existing profiles
 using the former repository-relative defaults migrate to the bundled copies;
 explicit custom deployment paths are preserved.
 
+The standalone Reverb app uses the same `AudioConvolutionReverbPlugin` class as a
+distributed worker. It supplies a local task context and executes one job at a
+time without opening a network listener. Job history, the WAV output, plugin
+result metadata, a machine-readable `job.json`, and a human-readable
+`reverb-job-report.txt` are retained under the selected artifacts folder. A
+recipient needs to provide PCM or float WAV inputs with matching sample rates;
+Voice Memos must first be exported or converted to a supported WAV format.
+Five synthetic starter IRs are included in the bundle: small room, medium room,
+short large room, large stone church, and vocal plate. **Choose a bundled IR
+profile…** opens that collection. The normal IR chooser accepts a user's own
+compatible deconvolved IR WAV from any location; the raw recorded sweep return is
+not itself an impulse response.
+
 ## Local verification
 
 After installation, Finder-equivalent launches can be exercised with:
@@ -108,6 +127,7 @@ After installation, Finder-equivalent launches can be exercised with:
 open "/Applications/Mechana Server.app"
 open "/Applications/Mechana Worker Control.app"
 open "/Applications/Mechana Job Launcher.app"
+open "/Applications/Mechana Reverb.app"
 ```
 
 Use Activity Monitor or `launchctl print gui/$(id -u)/dev.mechana.server` to

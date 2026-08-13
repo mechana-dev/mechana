@@ -77,6 +77,11 @@ This file reports repository evidence, not desired future status.
   descriptor exposes WAV inputs, output name, wet/dry, pre-delay, IR
   normalization, peak protection, and headroom. Hardware sweep deconvolution and
   multi-worker contribution assembly remain future work.
+- A separate `standalone-reverb-app` module runs that exact plugin class through
+  a single-threaded local task context. Its Swing UI contains no server or worker
+  settings, retains reloadable per-job JSON state and human-readable reports in a
+  selected artifacts root, supports cancellation and Finder reveal, and packages
+  as a macOS app with a bundled Java runtime.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,

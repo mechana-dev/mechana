@@ -56,3 +56,18 @@ claiming multi-worker equivalence.
 
 Hardware sweep deconvolution is related helper tooling, not part of this plugin.
 Scott's recorded hardware response must first be converted into a usable IR WAV.
+
+## Standalone macOS composition
+
+`standalone-reverb-app` invokes `AudioConvolutionReverbPlugin` directly through a
+local `TaskContext`, so local and distributed execution share the plugin entry
+point and DSP implementation. It runs one job at a time, publishes into a selected
+`<artifact-root>/<job-id>/` directory, and retains `job.json`, the output WAV,
+plugin result metadata, and `reverb-job-report.txt`. The packaged **Mechana
+Reverb.app** opens no network listener and includes its Java runtime. This is an
+explicit application composition, not a second reverb implementation or a new
+general local plugin runtime contract.
+The application bundle carries the five synthetic development IRs previously used
+for listening tests and exposes them through a dedicated chooser. Its unrestricted
+IR file chooser also accepts user-created compatible WAVs. Hardware sweep-return
+deconvolution remains a required external preparation step.

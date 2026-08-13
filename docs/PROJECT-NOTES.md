@@ -1518,3 +1518,20 @@ cloud providers remain future direction; see `brain/current-state.md` and
   calculation report the value as unavailable rather than inferring it.
 - Added numerical coverage showing a 1.6 peak is reduced exactly to the configured
   -1 dBFS target and report coverage for the corresponding 0.5 / -6.021 dB result.
+
+## 2026-08-13 07:05 EDT — Add standalone macOS Reverb application
+
+- Added a server-free Swing application that invokes the production
+  `AudioConvolutionReverbPlugin` class locally, one job at a time. It retains the
+  same controls and descriptive output naming without exposing server, worker,
+  task-count, or network settings.
+- Added local cancellation, progress, reloadable job history, Finder artifact
+  reveal, per-job JSON state, result metadata, and a human-readable report with
+  plugin version, parameters, input provenance, output size, and SHA-256.
+- Extended macOS packaging with **Mechana Reverb.app**, its bundled Java runtime,
+  Applications-folder installation, and a transfer-safe Apple Silicon ZIP. The
+  development bundle remains unsigned and unnotarized.
+- Bundled the five existing synthetic room/plate IR profiles with an in-app
+  profile chooser and instructions for selecting arbitrary deconvolved hardware
+  IR WAVs. Raw hardware sweep recordings remain inputs to future deconvolution
+  tooling rather than valid direct plugin inputs.
