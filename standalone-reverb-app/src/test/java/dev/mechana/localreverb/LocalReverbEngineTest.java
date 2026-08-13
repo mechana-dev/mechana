@@ -74,6 +74,13 @@ class LocalReverbEngineTest {
 	}
 
 	@Test
+	void liveControlSlidersProduceEditableNumericValues() {
+		assertEquals("0.35", StandaloneReverbFrame.sliderText(35, 100));
+		assertEquals("1", StandaloneReverbFrame.sliderText(100, 100));
+		assertEquals("45", StandaloneReverbFrame.sliderText(45, 1));
+	}
+
+	@Test
 	void suggestedNameChangesWithEitherAudioInput() {
 		String first = StandaloneReverbFrame.suggestedOutputName("/tmp/Voice One.wav", "/tmp/Room One.wav", "0.35",
 				"1.0", "20", true);

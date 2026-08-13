@@ -43,6 +43,7 @@ import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
+import javax.swing.JSlider;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
@@ -68,6 +69,9 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField wet = field("wet", "0.35");
 	private final JTextField dry = field("dry", "1.0");
 	private final JTextField preDelay = field("preDelayMilliseconds", "20");
+	private final JSlider wetSlider = new JSlider(0, 200, sliderValue(wet, 100, 35));
+	private final JSlider drySlider = new JSlider(0, 200, sliderValue(dry, 100, 100));
+	private final JSlider preDelaySlider = new JSlider(0, 10_000, sliderValue(preDelay, 1, 20));
 	private final JCheckBox normalizeIr = check("normalizeIr", true);
 	private final JCheckBox peakProtection = check("peakProtection", true);
 	private final JTextField headroom = field("headroomDecibels", "1.0");
@@ -89,6 +93,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JobTableModel jobs = new JobTableModel();
 	private final JTable jobTable = new JTable(jobs);
 	private boolean outputOverridden;
+	private boolean synchronizingLiveControls;
 	private transient Path latestOutput;
 
 	StandaloneReverbFrame() {
@@ -110,6 +115,7 @@ final class StandaloneReverbFrame extends JFrame {
 		split.setResizeWeight(0.62);
 		add(split, BorderLayout.CENTER);
 		add(buildStatus(), BorderLayout.SOUTH);
+		configureLiveControls();
 		configureActions();
 		configureSuggestedName();
 		reloadHistory();
@@ -148,9 +154,9 @@ final class StandaloneReverbFrame extends JFrame {
 		c.gridy++;
 		addPath(panel, c, "Artifacts folder", artifactRoot, true);
 		addRow(panel, c, "Output WAV name", outputName);
-		addRow(panel, c, "Wet level (0–2)", wet);
-		addRow(panel, c, "Dry level (0–2)", dry);
-		addRow(panel, c, "Pre-delay (ms)", preDelay);
+		addRow(panel, c, "Wet level (0–2)", sliderWithOverride(wetSlider, wet));
+		addRow(panel, c, "Dry level (0–2)", sliderWithOverride(drySlider, dry));
+		addRow(panel, c, "Pre-delay (ms)", sliderWithOverride(preDelaySlider, preDelay));
 		addRow(panel, c, "Normalize IR", normalizeIr);
 		addRow(panel, c, "Peak protection", peakProtection);
 		addRow(panel, c, "Safe headroom (dB)", headroom);
@@ -250,6 +256,63 @@ final class StandaloneReverbFrame extends JFrame {
 				}
 		});
 		artifactRoot.getDocument().addDocumentListener(listener(this::reloadHistory));
+	}
+
+	private void configureLiveControls() {
+		configureLiveControl(wetSlider, wet, 100);
+		configureLiveControl(drySlider, dry, 100);
+		configureLiveControl(preDelaySlider, preDelay, 1);
+	}
+
+	private void configureLiveControl(JSlider slider, JTextField override, int scale) {
+		override.setColumns(7);
+		slider.addChangeListener(event -> {
+			if (synchronizingLiveControls)
+				return;
+			synchronizingLiveControls = true;
+			try {
+				override.setText(sliderText(slider.getValue(), scale));
+			} finally {
+				synchronizingLiveControls = false;
+			}
+		});
+		override.getDocument().addDocumentListener(listener(() -> {
+			if (synchronizingLiveControls)
+				return;
+			try {
+				int value = (int) Math.round(Double.parseDouble(override.getText().strip()) * scale);
+				if (value >= slider.getMinimum() && value <= slider.getMaximum() && value != slider.getValue()) {
+					synchronizingLiveControls = true;
+					try {
+						slider.setValue(value);
+					} finally {
+						synchronizingLiveControls = false;
+					}
+				}
+			} catch (NumberFormatException ignored) {
+				// Keep the last slider value while the override is partially edited.
+			}
+		}));
+	}
+
+	private static JPanel sliderWithOverride(JSlider slider, JTextField override) {
+		JPanel panel = new JPanel(new BorderLayout(8, 0));
+		panel.add(slider, BorderLayout.CENTER);
+		panel.add(override, BorderLayout.EAST);
+		return panel;
+	}
+
+	private static int sliderValue(JTextField field, int scale, int fallback) {
+		try {
+			int value = (int) Math.round(Double.parseDouble(field.getText().strip()) * scale);
+			return Math.max(0, Math.min(scale == 1 ? 10_000 : 200, value));
+		} catch (NumberFormatException invalid) {
+			return fallback;
+		}
+	}
+
+	static String sliderText(int value, int scale) {
+		return scale == 1 ? Integer.toString(value) : BigDecimal.valueOf(value, 2).stripTrailingZeros().toPlainString();
 	}
 
 	private void generateImpulseResponse() {

@@ -91,8 +91,9 @@ The Apply Reverb tab can also stream the selected recording through the same
 partitioned-convolution primitives to the default system audio output without
 creating a job artifact. Preview supports play, pause/resume, and stop, performs
 the same dry-audio decoding and sample-rate conversion, and plays the complete IR
-tail. Wet level, dry level, pre-delay, IR normalization, peak protection, and
-headroom changes take effect during playback with a 20 ms transition that avoids
+tail. Paired sliders and numeric override fields control wet level, dry level,
+and pre-delay. Those controls plus IR normalization, peak protection, and
+headroom take effect during playback with a 20 ms transition that avoids
 control-change clicks. Normalization is an exact linear gain change on the live
 wet convolution result, so it does not restart or approximate the IR. Because
 streaming cannot know the future global peak, preview peak

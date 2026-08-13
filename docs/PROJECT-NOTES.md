@@ -1669,3 +1669,6 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Live normalization applies the exact attenuation-only IR normalization factor
   to the ongoing wet result, which is mathematically equivalent to rebuilding
   the convolver with the scaled IR but avoids interrupting playback.
+- Added synchronized sliders plus numeric override fields for wet level, dry
+  level, and pre-delay so preview parameters can be explored continuously or
+  entered precisely.
