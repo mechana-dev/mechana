@@ -1616,3 +1616,33 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Prefer a portable ZIP for early testing. A later installer and public release
   should add Windows code signing to reduce Microsoft Defender SmartScreen
   warnings. A Windows GitHub Actions runner can automate the native package.
+
+## 2026-08-13 15:20 EDT — Accept flexible dry audio for Reverb
+
+- Reverb now converts dry WAV files to the selected IR's sample rate before
+  staging, so 44.1 kHz voice recordings can be used directly with 48 kHz IRs.
+- The server and standalone app also accept M4A/AAC and AIFF dry sources. An
+  Apache-2.0 pure-Java AAC decoder and 32-tap windowed-sinc resampler produce the
+  worker-ready 24-bit WAV; no external converter is required. IR inputs and
+  outputs remain WAV, and worker-side convolution remains pure Java.
+- Output naming and job provenance retain the original dry source filename.
+
+## 2026-08-13 16:13 EDT — Decode ALAC M4A and fragmented audio MP4
+
+- Diagnosed `musta.m4a` as 16-bit stereo Apple Lossless rather than AAC and
+  corrected decoded-stream length handling so its full 346.4 seconds import.
+- Added BSD-3-Clause pure-Java ALAC decoding and `.mp4` audio-track selection.
+- Added permissively licensed pure-Java MP4 parsing for fragmented AAC files such
+  as `jack1.mp4`, whose samples reside in `moof`/`mdat` fragments rather than the
+  conventional sample table. IR selection remains WAV-only.
+
+## 2026-08-13 16:28 EDT — Smooth the dry-to-reverb-tail boundary
+
+- Diagnosed a small abrupt level change in a 720 ms source that ended while its
+  last 20–50 ms still contained audible signal. The full convolution tail was
+  already present and decayed cleanly to zero.
+- Added a 10 ms fade to only the direct dry component at the source boundary.
+  Wet convolution input, IR response, pre-delay, normalization, and the complete
+  output-tail length remain unchanged.
+- Added numerical coverage for the dry boundary envelope and for an unmodified,
+  full-length wet tail.

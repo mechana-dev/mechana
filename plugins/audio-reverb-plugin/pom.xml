@@ -11,6 +11,26 @@
   <name>Mechana :: Plugin :: Audio Convolution Reverb</name>
   <dependencies>
     <dependency>
+      <groupId>com.tianscar.javasound</groupId>
+      <artifactId>javasound-aac</artifactId>
+      <version>0.9.8</version>
+    </dependency>
+    <dependency>
+      <groupId>com.tianscar.javasound</groupId>
+      <artifactId>javasound-alac</artifactId>
+      <version>0.2.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jcodec</groupId>
+      <artifactId>jcodec</artifactId>
+      <version>0.2.5</version>
+    </dependency>
+    <dependency>
+      <groupId>org.mp4parser</groupId>
+      <artifactId>muxer</artifactId>
+      <version>1.9.56</version>
+    </dependency>
+    <dependency>
       <groupId>dev.mechana</groupId>
       <artifactId>mechana-api</artifactId>
       <version>${project.version}</version>

@@ -47,7 +47,7 @@ final class ReverbJobReport {
 			line(report, "Error", snapshot.error());
 
 		section(report, "Inputs");
-		line(report, "Dry WAV", fileName(request.dryPath()));
+		line(report, "Dry audio", fileName(request.dryPath()));
 		line(report, "Dry source path", request.dryPath());
 		line(report, "Dry input size", bytes(dryBytes));
 		line(report, "Impulse-response WAV", fileName(request.irPath()));

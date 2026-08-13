@@ -19,11 +19,15 @@ java -jar client-job-launcher/target/mechana-client-job-launcher.jar
 - Includes descriptors for sleep, FFmpeg video, fractal render, Tesseract OCR,
   Blender render, and pure-Java convolution reverb and submits through their
   existing server endpoints.
-- Convolution reverb provides two WAV pickers, an output artifact name, wet and
+- Convolution reverb provides a flexible dry-audio picker, a WAV-only IR picker, an output artifact name, wet and
   dry levels, pre-delay, attenuation-only IR normalization, peak protection,
   headroom, and an optional shared artifacts folder. When selected, each successful reverb job is
   copied into `<selected folder>/<job ID>/` while its durable server record is
-  retained. After the dry and IR WAVs are selected, the output name is suggested
+  retained. Dry audio may be WAV/WAVE, M4A with AAC or Apple Lossless, raw AAC,
+  MP4 containing AAC audio, or AIFF; it is decoded to 24-bit
+  PCM WAV and converted to the selected IR's sample rate before worker staging.
+  The IR remains WAV-only. After
+  the dry audio and IR WAV are selected, the output name is suggested
   from both base names plus wet, dry, pre-delay, and IR-normalization settings;
   the suggestion follows input and control changes until the user overrides the
   name. Its POC placement is server-local and its task count is limited to one.

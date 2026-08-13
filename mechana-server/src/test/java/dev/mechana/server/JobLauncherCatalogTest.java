@@ -75,12 +75,13 @@ class JobLauncherCatalogTest {
 	}
 
 	@Test
-	void audioDescriptorIsSchemaDrivenAndWavSpecific() {
+	void audioDescriptorAllowsFlexibleDryAudioButKeepsIrWavSpecific() {
 		var descriptor = JobLauncherCatalog.available(Map.of("audio-convolution-reverb", 1)).getFirst();
 		var fields = descriptor.fields().stream()
 				.collect(java.util.stream.Collectors.toMap(field -> field.name(), field -> field));
 		assertEquals("/api/jobs/audio-reverb", descriptor.submitPath());
-		assertEquals(List.of("wav"), fields.get("dryPath").acceptedExtensions());
+		assertEquals(List.of("wav", "wave", "m4a", "aac", "mp4", "aif", "aiff"),
+				fields.get("dryPath").acceptedExtensions());
 		assertEquals(List.of("wav"), fields.get("irPath").acceptedExtensions());
 		assertEquals("directory", fields.get("artifactRoot").type());
 		assertFalse(fields.get("artifactRoot").required());

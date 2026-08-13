@@ -42,7 +42,7 @@ class ReverbJobReportTest {
 		assertTrue(report.contains("Job ID: job-1"));
 		assertTrue(report.contains("Wall-clock duration: 2.000 seconds"));
 		assertTrue(report.contains("Workers: mba-worker"));
-		assertTrue(report.contains("Dry WAV: Scott Voice.wav"));
+		assertTrue(report.contains("Dry audio: Scott Voice.wav"));
 		assertTrue(report.contains("Impulse-response WAV: Small Plate.wav"));
 		assertTrue(report.contains("Wet level: 0.35"));
 		assertTrue(report.contains("Normalize IR: Yes"));

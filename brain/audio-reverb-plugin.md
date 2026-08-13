@@ -34,18 +34,31 @@ is read in blocks. IR partitions and their spectra are precomputed. A temporary
 double-precision stream permits deterministic second-pass peak protection without
 retaining the complete source or output in memory.
 
-Inputs may be mono or stereo, 16-bit PCM, 24-bit PCM, or 32-bit IEEE float WAV.
-Output is mono or stereo 24-bit PCM. Sample rates must match. A mono dry source
+IR inputs remain WAV-only. Dry inputs may be WAV/WAVE, M4A containing AAC or
+Apple Lossless (ALAC), raw AAC, MP4 containing AAC audio, or AIFF. Before staging, dry audio
+is decoded to 24-bit PCM WAV and converted to the IR sample rate; matching-rate
+WAVs pass through unchanged. The Apache-2.0 `javasound-aac` library provides a
+pure-Java AAC/M4A decoder, a BSD-3-Clause ALAC decoder, and a 32-tap windowed-sinc resampler performs sample-rate
+conversion. The worker-side convolution remains pure Java and receives matching-rate WAVs.
+
+Worker WAV inputs may be mono or stereo, 16-bit PCM, 24-bit PCM, or 32-bit IEEE float WAV.
+Output is mono or stereo 24-bit PCM. A mono dry source
 with a stereo IR produces stereo output; stereo source and IR channels are paired;
 a mono IR is applied independently to both dry channels. The full convolution
-tail and optional pre-delay are retained.
+tail and optional pre-delay are retained. The direct dry component receives a
+10 ms end fade so a source cut off while still active transitions cleanly into
+the wet-only tail; the samples sent through convolution are unchanged.
 
 Controls are wet level, dry level, pre-delay, safe IR peak normalization, output
 peak protection, and safe headroom. IR normalization is attenuation-only: peaks
 above -1 dBFS are reduced to -1 dBFS, while quieter measured responses retain
 their captured gain. This prevents hardware IRs from being unintentionally
 amplified before convolution. No external executable, native DSP library, or
-third-party FFT dependency is used.
+third-party FFT dependency is used. The only audio import dependency is
+`com.tianscar.javasound:javasound-aac:0.9.8` (Apache-2.0),
+`com.tianscar.javasound:javasound-alac:0.2.3` (BSD-3-Clause), JCodec 0.2.5
+(BSD-2-Clause), and mp4parser 1.9.56 (Apache-2.0). The MP4 parsers provide a
+fallback for fragmented MP4 files whose audio samples are stored in movie fragments.
 
 ## Future distributed decomposition
 

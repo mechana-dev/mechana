@@ -20,6 +20,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import dev.mechana.api.TaskContext;
 import dev.mechana.plugins.audio.AudioConvolutionReverbPlugin;
+import dev.mechana.plugins.audio.DryAudioImporter;
+import dev.mechana.plugins.audio.WavFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -102,9 +104,15 @@ public final class LocalReverbEngine implements AutoCloseable {
 
 	private void execute(ReverbRequest request, Consumer<ReverbJob> listener) {
 		Path metadata = current.artifactDirectory().resolve("reverb-result.properties");
+		Path convertedDry = current.artifactDirectory().resolve(".prepared-dry.wav");
 		try {
+			int sampleRate;
+			try (WavFile.Reader ir = WavFile.open(request.irPath())) {
+				sampleRate = ir.format().sampleRate();
+			}
+			Path preparedDry = DryAudioImporter.prepare(request.dryPath(), sampleRate, convertedDry);
 			new AudioConvolutionReverbPlugin()
-					.execute(new LocalTaskContext(request, current.artifactDirectory(), percent -> {
+					.execute(new LocalTaskContext(request, preparedDry, current.artifactDirectory(), percent -> {
 						current = current.withProgress(percent);
 						listener.accept(current);
 					}));
@@ -120,6 +128,11 @@ public final class LocalReverbEngine implements AutoCloseable {
 			current = current.terminal(cancellation.get() ? "CANCELLED" : "FAILED", message);
 		}
 		try {
+			Files.deleteIfExists(convertedDry);
+		} catch (IOException ignored) {
+			// The job result remains valid if temporary-import cleanup fails.
+		}
+		try {
 			writeState(current, request);
 		} catch (IOException persistenceFailure) {
 			current = current.terminal("FAILED", "Could not save job history: " + rootMessage(persistenceFailure));
@@ -132,10 +145,11 @@ public final class LocalReverbEngine implements AutoCloseable {
 		private final Path directory;
 		private final java.util.function.IntConsumer progress;
 
-		private LocalTaskContext(ReverbRequest request, Path directory, java.util.function.IntConsumer progress) {
+		private LocalTaskContext(ReverbRequest request, Path preparedDry, Path directory,
+				java.util.function.IntConsumer progress) {
 			this.directory = directory;
 			this.progress = progress;
-			parameters = Map.of("dryPath", request.dryPath().toString(), "irPath", request.irPath().toString(), "wet",
+			parameters = Map.of("dryPath", preparedDry.toString(), "irPath", request.irPath().toString(), "wet",
 					Double.toString(request.wet()), "dry", Double.toString(request.dry()), "preDelayMilliseconds",
 					Double.toString(request.preDelayMilliseconds()), "normalizeIr",
 					Boolean.toString(request.normalizeIr()), "peakProtection",
@@ -216,7 +230,7 @@ public final class LocalReverbEngine implements AutoCloseable {
 
 				Inputs
 				------
-				Dry WAV: %s
+				Dry audio: %s
 				Dry source path: %s
 				Dry input size: %,d bytes
 				Impulse-response WAV: %s

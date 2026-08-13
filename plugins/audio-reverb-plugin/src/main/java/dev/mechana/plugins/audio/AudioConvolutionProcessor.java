@@ -28,6 +28,7 @@ import java.util.function.IntConsumer;
 
 /** Streams a dry WAV through channel-aware partitioned convolution. */
 public final class AudioConvolutionProcessor {
+	private static final int DRY_END_FADE_MILLISECONDS = 10;
 	public static final int DEFAULT_BLOCK_SIZE = 2048;
 
 	public record Options(double wet, double dry, double preDelayMilliseconds, boolean normalizeIr,
@@ -106,6 +107,7 @@ public final class AudioConvolutionProcessor {
 						long absolute = outputPosition + frame;
 						double drySample = absolute < format.frames()
 								? input[Math.min(channel, input.length - 1)][frame]
+										* dryEndEnvelope(absolute, format.frames(), format.sampleRate())
 								: 0;
 						double wetSample = delays[channel].push(wet[channel][frame]);
 						double sample = drySample * options.dry() + wetSample * options.wet();
@@ -118,6 +120,13 @@ public final class AudioConvolutionProcessor {
 			}
 		}
 		return peak;
+	}
+
+	private static double dryEndEnvelope(long frame, long totalFrames, int sampleRate) {
+		long fadeFrames = Math.round(DRY_END_FADE_MILLISECONDS * sampleRate / 1000.0);
+		if (fadeFrames < 2 || totalFrames <= fadeFrames || frame < totalFrames - fadeFrames)
+			return 1;
+		return (double) (totalFrames - frame - 1) / (fadeFrames - 1);
 	}
 
 	private static void write(Path spool, Path output, int sampleRate, int channels, long frames, double gain)

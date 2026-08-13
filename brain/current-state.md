@@ -80,6 +80,11 @@ This file reports repository evidence, not desired future status.
   pure-Java helper and standalone-app workflow deconvolve recorded wet sweep
   returns into aligned, tail-trimmed IRs. Multi-worker contribution assembly
   remains future work.
+- Reverb dry-audio import accepts WAV/WAVE, M4A with AAC or ALAC, raw AAC,
+  fragmented or conventional MP4 containing AAC audio, and AIFF, and
+  converts them to a 24-bit WAV at the selected IR's sample rate before worker
+  staging. AAC/M4A decoding and resampling are pure Java. IR capture and
+  convolution inputs remain WAV-based.
 - A separate `standalone-reverb-app` module runs that exact plugin class through
   a single-threaded local task context. Its Swing UI contains no server or worker
   settings, retains reloadable per-job JSON state and human-readable reports in a

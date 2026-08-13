@@ -26,6 +26,8 @@ import dev.mechana.coordinator.Scheduler;
 import dev.mechana.coordinator.Scheduler.PluginLocation;
 import dev.mechana.coordinator.Scheduler.WorkSpec;
 import dev.mechana.api.ArtifactStore;
+import dev.mechana.plugins.audio.DryAudioImporter;
+import dev.mechana.plugins.audio.WavFile;
 import dev.mechana.protocol.Messages.JobStatusResponse;
 import dev.mechana.protocol.Messages.ArtifactReference;
 import dev.mechana.protocol.Messages.AudioReverbJobSubmitRequest;
@@ -1024,7 +1026,7 @@ public final class MechanaServer implements AutoCloseable {
 	}
 
 	private String submitAudioReverb(AudioReverbJobSubmitRequest request) throws IOException {
-		Path dry = requireWav(request.dryPath(), "Dry audio");
+		Path dry = requireDryAudio(request.dryPath());
 		Path ir = requireWav(request.irPath(), "Impulse response");
 		long dryBytes = Files.size(dry);
 		long irBytes = Files.size(ir);
@@ -1039,8 +1041,18 @@ public final class MechanaServer implements AutoCloseable {
 		}
 		String dryToken = UUID.randomUUID().toString();
 		String irToken = UUID.randomUUID().toString();
-		try (InputStream bytes = Files.newInputStream(dry)) {
-			audioInputs.put(dryToken, defaultArtifactStore.put("audio-staging/" + dryToken + "/dry.wav", bytes));
+		Path conversionDirectory = Files.createTempDirectory("mechana-dry-import-");
+		try {
+			int targetSampleRate;
+			try (WavFile.Reader input = WavFile.open(ir)) {
+				targetSampleRate = input.format().sampleRate();
+			}
+			Path prepared = DryAudioImporter.prepare(dry, targetSampleRate, conversionDirectory.resolve("dry.wav"));
+			try (InputStream bytes = Files.newInputStream(prepared)) {
+				audioInputs.put(dryToken, defaultArtifactStore.put("audio-staging/" + dryToken + "/dry.wav", bytes));
+			}
+		} finally {
+			deleteTree(conversionDirectory);
 		}
 		try (InputStream bytes = Files.newInputStream(ir)) {
 			audioInputs.put(irToken, defaultArtifactStore.put("audio-staging/" + irToken + "/ir.wav", bytes));
@@ -1121,6 +1133,14 @@ public final class MechanaServer implements AutoCloseable {
 		if (!Files.isRegularFile(path) || fileName == null
 				|| !fileName.toString().toLowerCase(java.util.Locale.ROOT).endsWith(".wav"))
 			throw new IllegalArgumentException(label + " must be an existing .wav file: " + path);
+		return path;
+	}
+
+	private static Path requireDryAudio(String value) {
+		Path path = Path.of(value).toAbsolutePath().normalize();
+		if (!Files.isRegularFile(path) || !DryAudioImporter.supports(path))
+			throw new IllegalArgumentException(
+					"Dry audio must be an existing WAV, M4A, MP3, AIFF, CAF, or FLAC file: " + path);
 		return path;
 	}
 
