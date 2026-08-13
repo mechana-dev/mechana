@@ -68,6 +68,35 @@ class ReverbPreviewPlayerTest {
 		assertEquals(Math.pow(10, -6.0 / 20), sample(pcm, 0), 1.0 / 32768);
 	}
 
+	@Test
+	void wetDryAndNormalizationChangesTakeEffectDuringPlayback() throws Exception {
+		double[] source = new double[3_000];
+		java.util.Arrays.fill(source, 0.5);
+		Path dry = wav("dry.wav", 48_000, new double[][]{source});
+		Path ir = wav("ir.wav", 48_000, new double[][]{{1}});
+		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 0, 1, 0, false, false, 1);
+
+		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings, player -> player.update(1, 0, 0, true, false, 1));
+
+		assertEquals(0.5, sample(pcm, 500), 1.0 / 32768);
+		assertEquals(0.5 * Math.pow(10, -1.0 / 20), sample(pcm, 2_500), 2.0 / 32768);
+	}
+
+	@Test
+	void increasedPredelayTakesEffectAndExtendsPreviewTail() throws Exception {
+		double[] source = new double[3_000];
+		source[2_000] = 0.75;
+		Path dry = wav("dry.wav", 48_000, new double[][]{source});
+		Path ir = wav("ir.wav", 48_000, new double[][]{{1}});
+		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, false, false, 1);
+
+		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings, player -> player.update(1, 0, 10, false, false, 1));
+
+		assertEquals((3_000 + 480) * 2, pcm.length);
+		assertTrue(Math.abs(sample(pcm, 2_000)) < 1.0 / 32768);
+		assertEquals(0.75, sample(pcm, 2_480), 2.0 / 32768);
+	}
+
 	private Path wav(String name, int sampleRate, double[][] channels) throws Exception {
 		Path path = temporary.resolve(name);
 		try (WavFile.Writer writer = WavFile.create24Bit(path, sampleRate, channels.length, channels[0].length)) {

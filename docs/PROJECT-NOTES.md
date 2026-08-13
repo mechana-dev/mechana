@@ -1658,3 +1658,14 @@ cloud providers remain future direction; see `brain/current-state.md` and
   the complete reverb tail.
 - Streaming peak protection uses an instantaneous ceiling at the configured
   headroom. Offline jobs retain their deterministic two-pass global gain.
+
+## 2026-08-13 17:20 EDT — Make preview controls live
+
+- Wet level, dry level, pre-delay, IR normalization, peak protection, and safe
+  headroom now update an active standalone-app preview without restarting it.
+- Added 20 ms parameter smoothing and an interpolated variable pre-delay line to
+  prevent control changes from producing clicks. Increasing pre-delay also
+  extends preview playback so the delayed tail remains complete.
+- Live normalization applies the exact attenuation-only IR normalization factor
+  to the ongoing wet result, which is mathematically equivalent to rebuilding
+  the convolver with the scaled IR but avoids interrupting playback.

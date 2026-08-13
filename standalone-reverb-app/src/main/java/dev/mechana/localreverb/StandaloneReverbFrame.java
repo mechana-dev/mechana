@@ -236,6 +236,10 @@ final class StandaloneReverbFrame extends JFrame {
 		cancel.addActionListener(event -> engine.cancel());
 		playOutput.addActionListener(event -> openLatestOutput(false));
 		showOutput.addActionListener(event -> openLatestOutput(true));
+		for (JTextField field : List.of(wet, dry, preDelay, headroom))
+			field.getDocument().addDocumentListener(listener(this::updatePreviewParameters));
+		normalizeIr.addActionListener(event -> updatePreviewParameters());
+		peakProtection.addActionListener(event -> updatePreviewParameters());
 		reveal.addActionListener(event -> {
 			ReverbJob selected = selectedJob();
 			if (selected != null)
@@ -349,6 +353,17 @@ final class StandaloneReverbFrame extends JFrame {
 					}));
 		} catch (RuntimeException failure) {
 			showError(failure.getMessage());
+		}
+	}
+
+	private void updatePreviewParameters() {
+		if (!previewPlayer.isActive())
+			return;
+		try {
+			previewPlayer.update(decimal(wet, "Wet level"), decimal(dry, "Dry level"), decimal(preDelay, "Pre-delay"),
+					normalizeIr.isSelected(), peakProtection.isSelected(), decimal(headroom, "Safe headroom"));
+		} catch (IllegalArgumentException ignored) {
+			// A partially edited numeric field takes effect as soon as it becomes valid.
 		}
 	}
 

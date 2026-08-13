@@ -39,11 +39,15 @@ import javax.sound.sampled.SourceDataLine;
 final class ReverbPreviewPlayer implements AutoCloseable {
 	private static final int BLOCK_SIZE = 1024;
 	private static final int DRY_END_FADE_MILLISECONDS = 10;
+	private static final int PARAMETER_RAMP_MILLISECONDS = 20;
+	private static final int MAX_PRE_DELAY_MILLISECONDS = 10_000;
+	private static final double NORMALIZED_IR_PEAK = Math.pow(10, -1.0 / 20);
 	private final AtomicBoolean stopped = new AtomicBoolean(true);
 	private final Object pauseLock = new Object();
 	private volatile boolean paused;
 	private volatile Thread playbackThread;
 	private volatile AudioSink activeSink;
+	private volatile LiveParameters liveParameters = new LiveParameters(0, 0, 0, false, true, 1);
 
 	enum State {
 		PREPARING, PLAYING, PAUSED, STOPPED, FINISHED
@@ -59,6 +63,10 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					|| !Double.isFinite(headroomDecibels) || headroomDecibels < 0)
 				throw new IllegalArgumentException("Invalid preview settings");
 		}
+	}
+
+	private record LiveParameters(double wet, double dry, double preDelayMilliseconds, boolean normalizeIr,
+			boolean peakProtection, double headroomDecibels) {
 	}
 
 	interface AudioSink extends AutoCloseable {
@@ -97,6 +105,8 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			}
 		stopped.set(false);
 		paused = false;
+		update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.normalizeIr(),
+				settings.peakProtection(), settings.headroomDecibels());
 		Thread thread = Thread.ofVirtual().name("mechana-reverb-preview").start(() -> {
 			state.accept(State.PREPARING);
 			try {
@@ -113,6 +123,17 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			}
 		});
 		playbackThread = thread;
+	}
+
+	void update(double wet, double dry, double preDelayMilliseconds, boolean normalizeIr, boolean peakProtection,
+			double headroomDecibels) {
+		if (!Double.isFinite(wet) || wet < 0 || wet > 2 || !Double.isFinite(dry) || dry < 0 || dry > 2
+				|| !Double.isFinite(preDelayMilliseconds) || preDelayMilliseconds < 0
+				|| preDelayMilliseconds > MAX_PRE_DELAY_MILLISECONDS || !Double.isFinite(headroomDecibels)
+				|| headroomDecibels < 0)
+			throw new IllegalArgumentException("Invalid live preview settings");
+		liveParameters = new LiveParameters(wet, dry, preDelayMilliseconds, normalizeIr, peakProtection,
+				headroomDecibels);
 	}
 
 	void togglePause(Consumer<State> state) {
@@ -155,7 +176,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	}
 
 	private void stream(Settings settings, AudioSinkFactory sinkFactory, Consumer<State> state) throws IOException {
-		ImpulseResponse ir = ImpulseResponse.read(settings.irPath(), settings.normalizeIr());
+		ImpulseResponse ir = ImpulseResponse.read(settings.irPath(), false);
 		Path temporaryDirectory = Files.createTempDirectory("mechana-reverb-preview-");
 		Path converted = temporaryDirectory.resolve("dry.wav");
 		try {
@@ -171,7 +192,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					activeSink = sink;
 					sink.start();
 					state.accept(State.PLAYING);
-					process(source, format, ir, outputChannels, outputFrames, preDelay, settings, sink);
+					process(source, format, ir, outputChannels, outputFrames, sink);
 					if (!stopped.get())
 						sink.drain();
 				}
@@ -183,20 +204,25 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	}
 
 	private void process(WavFile.Reader source, WavFile.Format format, ImpulseResponse ir, int outputChannels,
-			long outputFrames, long preDelay, Settings settings, AudioSink sink) throws IOException {
+			long outputFrames, AudioSink sink) throws IOException {
 		PartitionedConvolver[] convolvers = new PartitionedConvolver[outputChannels];
-		DelayLine[] delays = new DelayLine[outputChannels];
+		VariableDelayLine[] delays = new VariableDelayLine[outputChannels];
 		for (int channel = 0; channel < outputChannels; channel++) {
 			convolvers[channel] = new PartitionedConvolver(ir.channel(Math.min(channel, ir.channelCount() - 1)),
 					BLOCK_SIZE);
-			delays[channel] = new DelayLine(preDelay);
+			delays[channel] = new VariableDelayLine(format.sampleRate(), liveParameters.preDelayMilliseconds());
 		}
+		double normalizationGain = normalizationGain(ir);
+		SmoothedValue wetLevel = new SmoothedValue(effectiveWet(liveParameters, normalizationGain));
+		SmoothedValue dryLevel = new SmoothedValue(liveParameters.dry());
+		SmoothedValue headroom = new SmoothedValue(headroomTarget(liveParameters));
+		int rampFrames = Math.max(1, format.sampleRate() * PARAMETER_RAMP_MILLISECONDS / 1000);
 		double[][] input = new double[format.channels()][BLOCK_SIZE];
 		byte[] pcm = new byte[BLOCK_SIZE * outputChannels * 2];
 		long sourcePosition = 0;
 		long outputPosition = 0;
-		double target = Math.pow(10, -settings.headroomDecibels() / 20);
-		while (outputPosition < outputFrames && !stopped.get()) {
+		long requiredOutputFrames = outputFrames;
+		while (outputPosition < requiredOutputFrames && !stopped.get()) {
 			awaitResume();
 			if (stopped.get())
 				break;
@@ -208,28 +234,55 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			double[][] wet = new double[outputChannels][];
 			for (int channel = 0; channel < outputChannels; channel++)
 				wet[channel] = convolvers[channel].process(input[Math.min(channel, input.length - 1)], sourceFrames);
-			int frames = (int) Math.min(BLOCK_SIZE, outputFrames - outputPosition);
+			LiveParameters blockParameters = liveParameters;
+			long requestedDelay = Math.round(blockParameters.preDelayMilliseconds() * format.sampleRate() / 1000.0);
+			requiredOutputFrames = Math.max(requiredOutputFrames, format.frames() + ir.length() - 1L + requestedDelay);
+			int frames = (int) Math.min(BLOCK_SIZE, requiredOutputFrames - outputPosition);
 			int byteIndex = 0;
-			for (int frame = 0; frame < frames; frame++)
+			for (int frame = 0; frame < frames; frame++) {
+				LiveParameters parameters = liveParameters;
+				wetLevel.target(effectiveWet(parameters, normalizationGain), rampFrames);
+				dryLevel.target(parameters.dry(), rampFrames);
+				headroom.target(headroomTarget(parameters), rampFrames);
+				double currentWet = wetLevel.next();
+				double currentDry = dryLevel.next();
+				double currentHeadroom = headroom.next();
 				for (int channel = 0; channel < outputChannels; channel++) {
 					long absolute = outputPosition + frame;
 					double direct = absolute < format.frames()
 							? input[Math.min(channel, input.length - 1)][frame]
 									* dryEndEnvelope(absolute, format.frames(), format.sampleRate())
 							: 0;
-					double sample = direct * settings.dry()
-							+ delays[channel].push(wet[channel][frame]) * settings.wet();
-					if (settings.peakProtection())
-						sample = Math.max(-target, Math.min(target, sample));
+					double delayed = delays[channel].push(wet[channel][frame], parameters.preDelayMilliseconds());
+					double sample = direct * currentDry + delayed * currentWet;
+					if (parameters.peakProtection())
+						sample = Math.max(-currentHeadroom, Math.min(currentHeadroom, sample));
 					int value = (int) Math.max(Short.MIN_VALUE,
 							Math.min(Short.MAX_VALUE, Math.round(sample * 32768.0)));
 					pcm[byteIndex++] = (byte) value;
 					pcm[byteIndex++] = (byte) (value >>> 8);
 				}
+			}
 			sink.write(pcm, byteIndex);
 			sourcePosition += sourceFrames;
 			outputPosition += frames;
 		}
+	}
+
+	private static double normalizationGain(ImpulseResponse ir) {
+		double peak = 0;
+		for (double[] channel : ir.channels())
+			for (double sample : channel)
+				peak = Math.max(peak, Math.abs(sample));
+		return peak > NORMALIZED_IR_PEAK ? NORMALIZED_IR_PEAK / peak : 1;
+	}
+
+	private static double effectiveWet(LiveParameters parameters, double normalizationGain) {
+		return parameters.wet() * (parameters.normalizeIr() ? normalizationGain : 1);
+	}
+
+	private static double headroomTarget(LiveParameters parameters) {
+		return Math.pow(10, -parameters.headroomDecibels() / 20);
 	}
 
 	private void awaitResume() throws IOException {
@@ -266,11 +319,20 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	}
 
 	static byte[] renderForTest(Settings settings) throws IOException {
+		return renderForTest(settings, ignored -> {
+		});
+	}
+
+	static byte[] renderForTest(Settings settings, Consumer<ReverbPreviewPlayer> afterFirstBlock) throws IOException {
 		ByteArrayOutputStream output = new ByteArrayOutputStream();
 		ReverbPreviewPlayer player = new ReverbPreviewPlayer();
 		player.stopped.set(false);
-		player.stream(settings, (sampleRate, channels) -> new MemoryAudioSink(output), ignored -> {
-		});
+		player.update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.normalizeIr(),
+				settings.peakProtection(), settings.headroomDecibels());
+		player.stream(settings,
+				(sampleRate, channels) -> new MemoryAudioSink(output, () -> afterFirstBlock.accept(player)),
+				ignored -> {
+				});
 		return output.toByteArray();
 	}
 
@@ -286,24 +348,77 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		stop();
 	}
 
-	private record DelayLine(double[] samples, int[] position) {
-		private DelayLine(long frames) throws IOException {
-			this(array(frames), new int[1]);
+	private static final class VariableDelayLine {
+		private final double[] samples;
+		private final double sampleRate;
+		private double delayFrames;
+		private double delayTarget;
+		private double delayStep;
+		private int remaining;
+		private int position;
+
+		private VariableDelayLine(int sampleRate, double initialMilliseconds) {
+			this.sampleRate = sampleRate;
+			samples = new double[sampleRate * MAX_PRE_DELAY_MILLISECONDS / 1000 + 2];
+			delayFrames = millisecondsToFrames(initialMilliseconds);
+			delayTarget = delayFrames;
 		}
 
-		private double push(double sample) {
-			if (samples.length == 0)
-				return sample;
-			double delayed = samples[position[0]];
-			samples[position[0]] = sample;
-			position[0] = (position[0] + 1) % samples.length;
-			return delayed;
+		private double push(double sample, double delayMilliseconds) {
+			samples[position] = sample;
+			double target = millisecondsToFrames(delayMilliseconds);
+			if (Double.compare(target, delayTarget) != 0) {
+				delayTarget = target;
+				remaining = Math.max(1, (int) (sampleRate * PARAMETER_RAMP_MILLISECONDS / 1000));
+				delayStep = (delayTarget - delayFrames) / remaining;
+			}
+			if (remaining > 0) {
+				delayFrames += delayStep;
+				if (--remaining == 0)
+					delayFrames = delayTarget;
+			}
+			double read = position - delayFrames;
+			while (read < 0)
+				read += samples.length;
+			int first = (int) Math.floor(read) % samples.length;
+			int second = (first + 1) % samples.length;
+			double fraction = read - Math.floor(read);
+			double result = samples[first] * (1 - fraction) + samples[second] * fraction;
+			position = (position + 1) % samples.length;
+			return result;
 		}
 
-		private static double[] array(long frames) throws IOException {
-			if (frames > Integer.MAX_VALUE)
-				throw new IOException("Preview pre-delay is too long");
-			return new double[(int) frames];
+		private double millisecondsToFrames(double milliseconds) {
+			return milliseconds * sampleRate / 1000.0;
+		}
+	}
+
+	private static final class SmoothedValue {
+		private double current;
+		private double target;
+		private double step;
+		private int remaining;
+
+		private SmoothedValue(double initial) {
+			current = initial;
+			target = initial;
+		}
+
+		private void target(double value, int frames) {
+			if (Double.compare(value, target) == 0)
+				return;
+			target = value;
+			remaining = frames;
+			step = (target - current) / frames;
+		}
+
+		private double next() {
+			if (remaining > 0) {
+				current += step;
+				if (--remaining == 0)
+					current = target;
+			}
+			return current;
 		}
 	}
 
@@ -345,7 +460,16 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		}
 	}
 
-	private record MemoryAudioSink(ByteArrayOutputStream output) implements AudioSink {
+	private static final class MemoryAudioSink implements AudioSink {
+		private final ByteArrayOutputStream output;
+		private final Runnable afterFirstWrite;
+		private boolean written;
+
+		private MemoryAudioSink(ByteArrayOutputStream output, Runnable afterFirstWrite) {
+			this.output = output;
+			this.afterFirstWrite = afterFirstWrite;
+		}
+
 		@Override
 		public void start() {
 		}
@@ -353,6 +477,10 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		@Override
 		public void write(byte[] samples, int length) {
 			output.write(samples, 0, length);
+			if (!written) {
+				written = true;
+				afterFirstWrite.run();
+			}
 		}
 
 		@Override

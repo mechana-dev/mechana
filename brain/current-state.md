@@ -92,7 +92,9 @@ This file reports repository evidence, not desired future status.
   as a macOS app with a bundled Java runtime. The app can stream an existing dry
   recording through the selected IR to the default system audio output with
   play, pause/resume, and stop controls; this preview creates no job artifact and
-  retains the complete reverb tail.
+  retains the complete reverb tail. Wet/dry, pre-delay, IR normalization, peak
+  protection, and headroom edits take effect during playback with short smoothed
+  transitions.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,
