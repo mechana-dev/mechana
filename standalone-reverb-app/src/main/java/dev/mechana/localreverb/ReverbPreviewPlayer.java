@@ -46,6 +46,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private static final double NORMALIZED_IR_PEAK = Math.pow(10, -1.0 / 20);
 	private final AtomicBoolean stopped = new AtomicBoolean(true);
 	private final AtomicLong irLoadSequence = new AtomicLong();
+	private final ImpulseResponseCache impulseResponseCache;
 	private final Object pauseLock = new Object();
 	private volatile boolean paused;
 	private volatile Thread playbackThread;
@@ -54,8 +55,16 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private volatile int previewSampleRate;
 	private volatile LiveParameters liveParameters = new LiveParameters(0, 0, 0, false, true, 1);
 
+	ReverbPreviewPlayer() {
+		this(new ImpulseResponseCache());
+	}
+
+	ReverbPreviewPlayer(ImpulseResponseCache impulseResponseCache) {
+		this.impulseResponseCache = Objects.requireNonNull(impulseResponseCache, "impulseResponseCache");
+	}
+
 	enum State {
-		PREPARING, PLAYING, PAUSED, STOPPED, FINISHED
+		PREPARING, REGENERATING_IR, PLAYING, PAUSED, STOPPED, FINISHED
 	}
 
 	record Settings(Path dryPath, Path irPath, double wet, double dry, double preDelayMilliseconds, boolean normalizeIr,
@@ -182,8 +191,9 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		return !stopped.get();
 	}
 
-	void changeImpulseResponse(Path path, Consumer<Path> success, Consumer<String> failure) {
+	void changeImpulseResponse(Path path, Runnable resampling, Consumer<Path> success, Consumer<String> failure) {
 		Objects.requireNonNull(path, "path");
+		Objects.requireNonNull(resampling, "resampling");
 		Objects.requireNonNull(success, "success");
 		Objects.requireNonNull(failure, "failure");
 		int sampleRate = previewSampleRate;
@@ -194,7 +204,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		}
 		Thread.ofVirtual().name("mechana-reverb-ir-loader").start(() -> {
 			try {
-				ConvolutionBank bank = prepareBank(path, sampleRate);
+				ConvolutionBank bank = prepareBank(path, sampleRate, resampling);
 				if (!isActive() || previewSampleRate != sampleRate || irLoadSequence.get() != request)
 					return;
 				pendingBank = bank;
@@ -209,18 +219,20 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		int sampleRate = previewSampleRate;
 		if (!isActive() || sampleRate < 1)
 			throw new IOException("Start the preview before changing its impulse response.");
-		pendingBank = prepareBank(path, sampleRate);
+		pendingBank = prepareBank(path, sampleRate, () -> {
+		});
 	}
 
 	private void stream(Settings settings, AudioSinkFactory sinkFactory, Consumer<State> state) throws IOException {
-		ImpulseResponse ir = ImpulseResponse.read(settings.irPath(), false);
-		previewSampleRate = ir.sampleRate();
 		Path temporaryDirectory = Files.createTempDirectory("mechana-reverb-preview-");
 		Path converted = temporaryDirectory.resolve("dry.wav");
 		try {
-			Path prepared = DryAudioImporter.prepare(settings.dryPath(), ir.sampleRate(), converted);
+			Path prepared = DryAudioImporter.prepareNative(settings.dryPath(), converted);
 			try (WavFile.Reader source = WavFile.open(prepared)) {
 				WavFile.Format format = source.format();
+				ImpulseResponse ir = ImpulseResponse.read(impulseResponseCache.prepare(settings.irPath(),
+						format.sampleRate(), () -> state.accept(State.REGENERATING_IR)), false);
+				previewSampleRate = format.sampleRate();
 				if (format.channels() > 2 || ir.channelCount() > 2)
 					throw new IOException("Preview supports mono or stereo audio");
 				int outputChannels = 2;
@@ -336,11 +348,8 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		return peak > NORMALIZED_IR_PEAK ? NORMALIZED_IR_PEAK / peak : 1;
 	}
 
-	private static ConvolutionBank prepareBank(Path path, int sampleRate) throws IOException {
-		ImpulseResponse ir = ImpulseResponse.read(path, false);
-		if (ir.sampleRate() != sampleRate)
-			throw new IOException("The new IR is " + ir.sampleRate() + " Hz, but this preview is " + sampleRate
-					+ " Hz. Stop and restart preview to use it.");
+	private ConvolutionBank prepareBank(Path path, int sampleRate, Runnable resampling) throws IOException {
+		ImpulseResponse ir = ImpulseResponse.read(impulseResponseCache.prepare(path, sampleRate, resampling), false);
 		if (ir.channelCount() > 2)
 			throw new IOException("Preview supports mono or stereo impulse responses");
 		return new ConvolutionBank(ir, 2);
@@ -420,7 +429,9 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 
 	static byte[] renderForTest(Settings settings, Consumer<ReverbPreviewPlayer> afterFirstBlock) throws IOException {
 		ByteArrayOutputStream output = new ByteArrayOutputStream();
-		ReverbPreviewPlayer player = new ReverbPreviewPlayer();
+		Path parent = Objects.requireNonNull(settings.dryPath().toAbsolutePath().getParent(), "dry audio parent");
+		Path cache = parent.resolve("preview-ir-cache");
+		ReverbPreviewPlayer player = new ReverbPreviewPlayer(new ImpulseResponseCache(cache));
 		player.stopped.set(false);
 		player.update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.normalizeIr(),
 				settings.peakProtection(), settings.headroomDecibels());

@@ -90,8 +90,13 @@ general local plugin runtime contract.
 The Apply Reverb tab can also stream the selected recording through the same
 partitioned-convolution primitives to the default system audio output without
 creating a job artifact. Preview supports play, pause/resume, and stop, performs
-the same dry-audio decoding and sample-rate conversion, and plays the complete IR
-tail. Paired sliders and numeric override fields control wet level, dry level,
+the same dry-audio decoding while preserving the recording's native sample rate,
+and plays the complete IR tail. A content-addressed cache beneath the user's macOS
+Library/Caches directory stores 24-bit IR variants resampled to each required dry
+sample rate. Matching-rate IRs pass through unchanged, and changing the source IR
+content selects a new cache entry automatically. Variants are created lazily so
+the user manages only the selected master IR; the status bar reports a sample-rate
+regeneration only on the first use of each IR/rate pair. Paired sliders and numeric override fields control wet level, dry level,
 and pre-delay; the pre-delay slider spans 0–200 ms while its numeric override
 continues to accept larger precise values. Those controls plus IR normalization, peak protection, and
 headroom take effect during playback with a 20 ms transition that avoids
@@ -100,11 +105,10 @@ wet convolution result, so it does not restart or approximate the IR. Because
 streaming cannot know the future global peak, preview peak
 protection is an instantaneous ceiling at the selected headroom; offline export
 retains its deterministic two-pass global gain.
-Changing the selected IR during playback prepares its FFT partitions away from
-the audio thread, then crossfades to it over 50 ms. Mono and stereo profiles may
-be interchanged; the replacement must match the active preview sample rate, or
-the user must stop and restart preview so dry-audio preparation can target the
-new rate.
+Changing the selected IR during playback prepares a cached sample-rate-matched
+variant and its FFT partitions away from the audio thread, then crossfades to it
+over 50 ms. Mono and stereo profiles with any supported WAV sample rate may be
+interchanged without restarting playback.
 The application bundle carries the five synthetic development IRs previously used
 for listening tests and exposes them through a dedicated chooser. It also bundles
 the standardized 48 kHz/24-bit stereo Mechana sweep and provides a **Create IR

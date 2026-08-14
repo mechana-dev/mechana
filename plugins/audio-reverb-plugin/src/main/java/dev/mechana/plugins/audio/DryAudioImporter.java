@@ -80,6 +80,43 @@ public final class DryAudioImporter {
 		}
 	}
 
+	/**
+	 * Decodes a dry input without changing its native sample rate. Matching PCM WAV
+	 * input is returned directly.
+	 */
+	public static Path prepareNative(Path source, Path output) throws IOException {
+		if (!Files.isRegularFile(source) || !supports(source))
+			throw new IOException("Unsupported dry audio file: " + source);
+		if ("wav".equals(extension(source)) || "wave".equals(extension(source))) {
+			try (WavFile.Reader ignored = WavFile.open(source)) {
+				return source;
+			}
+		}
+		try {
+			decodeWithJavaSound(source, output);
+			return output;
+		} catch (IOException | UnsupportedAudioFileException | IllegalArgumentException unsupported) {
+			if ("mp4".equals(extension(source))) {
+				try {
+					decodeAacMp4(source, output);
+					return output;
+				} catch (IOException | RuntimeException fallbackFailure) {
+					fallbackFailure.addSuppressed(unsupported);
+					throw new IOException("Could not decode MP4 audio " + source.getFileName(), fallbackFailure);
+				}
+			}
+			throw new IOException("Could not decode dry audio " + source.getFileName()
+					+ "; use WAV, M4A/AAC/ALAC, MP4 with AAC audio, or AIFF without DRM", unsupported);
+		}
+	}
+
+	/** Resamples a PCM WAV to a 24-bit PCM WAV at the requested rate. */
+	public static void resampleWav(Path source, int targetSampleRate, Path output) throws IOException {
+		if (targetSampleRate < 1)
+			throw new IllegalArgumentException("Target sample rate must be positive");
+		resample(source, targetSampleRate, output);
+	}
+
 	private static void convertAacMp4(Path source, int targetSampleRate, Path output) throws IOException {
 		Path parent = Objects.requireNonNull(output.toAbsolutePath().normalize().getParent());
 		Files.createDirectories(parent);
@@ -104,6 +141,30 @@ public final class DryAudioImporter {
 		} finally {
 			Files.deleteIfExists(raw);
 			Files.deleteIfExists(decoded);
+		}
+	}
+
+	private static void decodeAacMp4(Path source, Path output) throws IOException {
+		Path parent = Objects.requireNonNull(output.toAbsolutePath().normalize().getParent());
+		Files.createDirectories(parent);
+		Path raw = Files.createTempFile(parent, ".decoded-mp4-", ".pcm");
+		try (SeekableByteChannel channel = NIOUtils.readableChannel(source.toFile());
+				OutputStream sink = Files.newOutputStream(raw)) {
+			MP4Demuxer demuxer = MP4Demuxer.createRawMP4Demuxer(channel);
+			if (demuxer.getAudioTracks().isEmpty())
+				throw new IOException("MP4 contains no audio track");
+			DemuxerTrack track = demuxer.getAudioTracks().getFirst();
+			ByteBuffer privateData = track.getMeta().getCodecPrivate();
+			if (privateData == null)
+				throw new IOException("MP4 audio track is not AAC");
+			Track audio = MovieCreator.build(source.toString()).getTracks().stream()
+					.filter(candidate -> "soun".equals(candidate.getHandler())).findFirst()
+					.orElseThrow(() -> new IOException("MP4 contains no readable audio track"));
+			AudioFormat format = decodeAacPackets(audio, privateData, sink);
+			sink.close();
+			writeDecodedWav(raw, format, output);
+		} finally {
+			Files.deleteIfExists(raw);
 		}
 	}
 
@@ -159,6 +220,29 @@ public final class DryAudioImporter {
 		} finally {
 			Files.deleteIfExists(raw);
 			Files.deleteIfExists(decoded);
+		}
+	}
+
+	private static void decodeWithJavaSound(Path source, Path output)
+			throws IOException, UnsupportedAudioFileException {
+		Path parent = Objects.requireNonNull(output.toAbsolutePath().normalize().getParent());
+		Files.createDirectories(parent);
+		Path raw = Files.createTempFile(parent, ".decoded-dry-", ".pcm");
+		try (AudioInputStream input = AudioSystem.getAudioInputStream(source.toFile())) {
+			if (!AudioSystem.isConversionSupported(AudioFormat.Encoding.PCM_SIGNED, input.getFormat()))
+				throw new IllegalArgumentException("JDK audio conversion is unavailable");
+			try (AudioInputStream pcm = AudioSystem.getAudioInputStream(AudioFormat.Encoding.PCM_SIGNED, input)) {
+				AudioFormat pcmFormat = pcm.getFormat();
+				AudioFormat littleEndian = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, pcmFormat.getSampleRate(),
+						16, pcmFormat.getChannels(), pcmFormat.getChannels() * 2, pcmFormat.getSampleRate(), false);
+				try (AudioInputStream converted = AudioSystem.getAudioInputStream(littleEndian, pcm);
+						OutputStream sink = Files.newOutputStream(raw)) {
+					converted.transferTo(sink);
+				}
+				writeDecodedWav(raw, littleEndian, output);
+			}
+		} finally {
+			Files.deleteIfExists(raw);
 		}
 	}
 
