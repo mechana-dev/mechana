@@ -43,9 +43,11 @@ import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
+import javax.swing.JSlider;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.Timer;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
@@ -59,6 +61,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private static final long serialVersionUID = 1L;
 	private final transient Preferences settings = Preferences.userNodeForPackage(StandaloneReverbFrame.class);
 	private final transient LocalReverbEngine engine = new LocalReverbEngine();
+	private final transient ReverbPreviewPlayer previewPlayer = new ReverbPreviewPlayer();
 	private final JTextField dryPath = field("dryPath", "");
 	private final JTextField irPath = field("irPath", "");
 	private final JTextField artifactRoot = field("artifactRoot",
@@ -67,6 +70,10 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField wet = field("wet", "0.35");
 	private final JTextField dry = field("dry", "1.0");
 	private final JTextField preDelay = field("preDelayMilliseconds", "20");
+	private final JSlider wetSlider = new JSlider(0, 200, sliderValue(wet, 100, 35));
+	private final JSlider drySlider = new JSlider(0, 200, sliderValue(dry, 100, 100));
+	private final JSlider preDelaySlider = new JSlider(0, 200, Math.min(200, sliderValue(preDelay, 1, 20)));
+	private final Timer irPreviewChangeTimer = new Timer(350, event -> updatePreviewImpulseResponse());
 	private final JCheckBox normalizeIr = check("normalizeIr", true);
 	private final JCheckBox peakProtection = check("peakProtection", true);
 	private final JTextField headroom = field("headroomDecibels", "1.0");
@@ -75,6 +82,9 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField generatedIrPath = field("generatedIrPath",
 			Path.of(System.getProperty("user.home"), "Documents", "RVB_Plug-IR.wav").toString());
 	private final JButton run = new JButton("Run Reverb");
+	private final JButton preview = new JButton("Play Preview");
+	private final JButton pausePreview = new JButton("Pause");
+	private final JButton stopPreview = new JButton("Stop Preview");
 	private final JButton generateIr = new JButton("Generate IR Profile");
 	private final JButton cancel = new JButton("Cancel");
 	private final JButton reveal = new JButton("Show Artifacts");
@@ -85,6 +95,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JobTableModel jobs = new JobTableModel();
 	private final JTable jobTable = new JTable(jobs);
 	private boolean outputOverridden;
+	private boolean synchronizingLiveControls;
 	private transient Path latestOutput;
 
 	StandaloneReverbFrame() {
@@ -96,6 +107,7 @@ final class StandaloneReverbFrame extends JFrame {
 		addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent event) {
+				previewPlayer.close();
 				engine.close();
 				dispose();
 			}
@@ -105,6 +117,7 @@ final class StandaloneReverbFrame extends JFrame {
 		split.setResizeWeight(0.62);
 		add(split, BorderLayout.CENTER);
 		add(buildStatus(), BorderLayout.SOUTH);
+		configureLiveControls();
 		configureActions();
 		configureSuggestedName();
 		reloadHistory();
@@ -143,9 +156,9 @@ final class StandaloneReverbFrame extends JFrame {
 		c.gridy++;
 		addPath(panel, c, "Artifacts folder", artifactRoot, true);
 		addRow(panel, c, "Output WAV name", outputName);
-		addRow(panel, c, "Wet level (0–2)", wet);
-		addRow(panel, c, "Dry level (0–2)", dry);
-		addRow(panel, c, "Pre-delay (ms)", preDelay);
+		addRow(panel, c, "Wet level (0–2)", sliderWithOverride(wetSlider, wet));
+		addRow(panel, c, "Dry level (0–2)", sliderWithOverride(drySlider, dry));
+		addRow(panel, c, "Pre-delay (0–200 ms slider)", sliderWithOverride(preDelaySlider, preDelay));
 		addRow(panel, c, "Normalize IR", normalizeIr);
 		addRow(panel, c, "Peak protection", peakProtection);
 		addRow(panel, c, "Safe headroom (dB)", headroom);
@@ -155,9 +168,14 @@ final class StandaloneReverbFrame extends JFrame {
 		c.anchor = GridBagConstraints.WEST;
 		JPanel buttons = new JPanel();
 		buttons.add(run);
+		buttons.add(preview);
+		buttons.add(pausePreview);
+		buttons.add(stopPreview);
 		buttons.add(cancel);
 		panel.add(buttons, c);
 		cancel.setEnabled(false);
+		pausePreview.setEnabled(false);
+		stopPreview.setEnabled(false);
 		return panel;
 	}
 
@@ -217,11 +235,24 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void configureActions() {
+		irPreviewChangeTimer.setRepeats(false);
 		run.addActionListener(event -> submit());
+		preview.addActionListener(event -> startPreview());
+		pausePreview.addActionListener(event -> previewPlayer
+				.togglePause(state -> SwingUtilities.invokeLater(() -> updatePreviewState(state))));
+		stopPreview.addActionListener(event -> stopPreview());
 		generateIr.addActionListener(event -> generateImpulseResponse());
 		cancel.addActionListener(event -> engine.cancel());
 		playOutput.addActionListener(event -> openLatestOutput(false));
 		showOutput.addActionListener(event -> openLatestOutput(true));
+		for (JTextField field : List.of(wet, dry, preDelay, headroom))
+			field.getDocument().addDocumentListener(listener(this::updatePreviewParameters));
+		normalizeIr.addActionListener(event -> updatePreviewParameters());
+		peakProtection.addActionListener(event -> updatePreviewParameters());
+		irPath.getDocument().addDocumentListener(listener(() -> {
+			if (previewPlayer.isActive())
+				irPreviewChangeTimer.restart();
+		}));
 		reveal.addActionListener(event -> {
 			ReverbJob selected = selectedJob();
 			if (selected != null)
@@ -234,7 +265,66 @@ final class StandaloneReverbFrame extends JFrame {
 		artifactRoot.getDocument().addDocumentListener(listener(this::reloadHistory));
 	}
 
+	private void configureLiveControls() {
+		configureLiveControl(wetSlider, wet, 100);
+		configureLiveControl(drySlider, dry, 100);
+		configureLiveControl(preDelaySlider, preDelay, 1);
+	}
+
+	private void configureLiveControl(JSlider slider, JTextField override, int scale) {
+		override.setColumns(7);
+		slider.addChangeListener(event -> {
+			if (synchronizingLiveControls)
+				return;
+			synchronizingLiveControls = true;
+			try {
+				override.setText(sliderText(slider.getValue(), scale));
+			} finally {
+				synchronizingLiveControls = false;
+			}
+		});
+		override.getDocument().addDocumentListener(listener(() -> {
+			if (synchronizingLiveControls)
+				return;
+			try {
+				int value = (int) Math.round(Double.parseDouble(override.getText().strip()) * scale);
+				int boundedValue = Math.max(slider.getMinimum(), Math.min(slider.getMaximum(), value));
+				if (boundedValue != slider.getValue()) {
+					synchronizingLiveControls = true;
+					try {
+						slider.setValue(boundedValue);
+					} finally {
+						synchronizingLiveControls = false;
+					}
+				}
+			} catch (NumberFormatException ignored) {
+				// Keep the last slider value while the override is partially edited.
+			}
+		}));
+	}
+
+	private static JPanel sliderWithOverride(JSlider slider, JTextField override) {
+		JPanel panel = new JPanel(new BorderLayout(8, 0));
+		panel.add(slider, BorderLayout.CENTER);
+		panel.add(override, BorderLayout.EAST);
+		return panel;
+	}
+
+	private static int sliderValue(JTextField field, int scale, int fallback) {
+		try {
+			int value = (int) Math.round(Double.parseDouble(field.getText().strip()) * scale);
+			return Math.max(0, Math.min(scale == 1 ? 10_000 : 200, value));
+		} catch (NumberFormatException invalid) {
+			return fallback;
+		}
+	}
+
+	static String sliderText(int value, int scale) {
+		return scale == 1 ? Integer.toString(value) : BigDecimal.valueOf(value, 2).stripTrailingZeros().toPlainString();
+	}
+
 	private void generateImpulseResponse() {
+		stopPreview();
 		Path sweep = path(sweepPath);
 		Path recorded = path(recordedSweepPath);
 		Path output = path(generatedIrPath);
@@ -301,6 +391,7 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void submit() {
+		stopPreview();
 		try {
 			ReverbRequest request = new ReverbRequest(path(dryPath), path(irPath), path(artifactRoot),
 					outputName.getText().strip(), decimal(wet, "Wet level"), decimal(dry, "Dry level"),
@@ -312,6 +403,92 @@ final class StandaloneReverbFrame extends JFrame {
 		} catch (IOException | RuntimeException failure) {
 			showError(failure.getMessage());
 		}
+	}
+
+	private void startPreview() {
+		try {
+			Path selectedDry = path(dryPath);
+			Path selectedIr = path(irPath);
+			if (selectedDry == null || !Files.isRegularFile(selectedDry))
+				throw new IllegalArgumentException("Choose a readable dry audio file.");
+			if (selectedIr == null || !Files.isRegularFile(selectedIr))
+				throw new IllegalArgumentException("Choose a readable impulse-response WAV.");
+			var settings = new ReverbPreviewPlayer.Settings(selectedDry, selectedIr, decimal(wet, "Wet level"),
+					decimal(dry, "Dry level"), decimal(preDelay, "Pre-delay"), normalizeIr.isSelected(),
+					peakProtection.isSelected(), decimal(headroom, "Safe headroom"));
+			previewPlayer.play(settings, state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)),
+					message -> SwingUtilities.invokeLater(() -> {
+						showError(message);
+						status.setText("Preview failed");
+						previewFinished();
+					}));
+		} catch (RuntimeException failure) {
+			showError(failure.getMessage());
+		}
+	}
+
+	private void updatePreviewParameters() {
+		if (!previewPlayer.isActive())
+			return;
+		try {
+			previewPlayer.update(decimal(wet, "Wet level"), decimal(dry, "Dry level"), decimal(preDelay, "Pre-delay"),
+					normalizeIr.isSelected(), peakProtection.isSelected(), decimal(headroom, "Safe headroom"));
+		} catch (IllegalArgumentException ignored) {
+			// A partially edited numeric field takes effect as soon as it becomes valid.
+		}
+	}
+
+	private void updatePreviewImpulseResponse() {
+		Path selectedIr = path(irPath);
+		if (!previewPlayer.isActive() || selectedIr == null || !Files.isRegularFile(selectedIr))
+			return;
+		status.setText("Preparing new impulse response…");
+		previewPlayer.changeImpulseResponse(selectedIr,
+				loaded -> SwingUtilities.invokeLater(() -> status.setText("Playing with " + loaded.getFileName())),
+				message -> SwingUtilities.invokeLater(() -> {
+					showError(message);
+					status.setText("Could not change impulse response");
+				}));
+	}
+
+	private void stopPreview() {
+		if (previewPlayer.isActive()) {
+			previewPlayer.stop();
+			status.setText("Preview stopped");
+		}
+		previewFinished();
+	}
+
+	private void updatePreviewState(ReverbPreviewPlayer.State state) {
+		switch (state) {
+			case PREPARING -> status.setText("Preparing real-time preview…");
+			case PLAYING -> {
+				status.setText("Playing reverb preview through the default audio output");
+				pausePreview.setText("Pause");
+			}
+			case PAUSED -> {
+				status.setText("Reverb preview paused");
+				pausePreview.setText("Resume");
+			}
+			case STOPPED -> status.setText("Preview stopped");
+			case FINISHED -> {
+				status.setText("Preview finished — full reverb tail played");
+				previewFinished();
+			}
+		}
+		if (state == ReverbPreviewPlayer.State.PREPARING || state == ReverbPreviewPlayer.State.PLAYING
+				|| state == ReverbPreviewPlayer.State.PAUSED) {
+			preview.setEnabled(false);
+			pausePreview.setEnabled(state != ReverbPreviewPlayer.State.PREPARING);
+			stopPreview.setEnabled(true);
+		}
+	}
+
+	private void previewFinished() {
+		preview.setEnabled(true);
+		pausePreview.setEnabled(false);
+		pausePreview.setText("Pause");
+		stopPreview.setEnabled(false);
 	}
 
 	private void update(ReverbJob job) {

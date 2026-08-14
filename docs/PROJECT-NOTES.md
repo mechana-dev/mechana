@@ -1646,3 +1646,42 @@ cloud providers remain future direction; see `brain/current-state.md` and
   output-tail length remain unchanged.
 - Added numerical coverage for the dry boundary envelope and for an unmodified,
   full-length wet tail.
+
+## 2026-08-13 17:08 EDT — Add streaming reverb preview
+
+- Added Play Preview, Pause/Resume, and Stop Preview controls to the standalone
+  Reverb app. Preview streams the chosen recording through the existing
+  partitioned convolution primitives to the default system output and creates no
+  job or output artifact.
+- Preview uses the existing dry-audio decoder and sample-rate converter, preserves
+  mono/stereo IR routing, pre-delay, wet/dry mix, direct-signal end smoothing, and
+  the complete reverb tail.
+- Streaming peak protection uses an instantaneous ceiling at the configured
+  headroom. Offline jobs retain their deterministic two-pass global gain.
+
+## 2026-08-13 17:20 EDT — Make preview controls live
+
+- Wet level, dry level, pre-delay, IR normalization, peak protection, and safe
+  headroom now update an active standalone-app preview without restarting it.
+- Added 20 ms parameter smoothing and an interpolated variable pre-delay line to
+  prevent control changes from producing clicks. Increasing pre-delay also
+  extends preview playback so the delayed tail remains complete.
+- Live normalization applies the exact attenuation-only IR normalization factor
+  to the ongoing wet result, which is mathematically equivalent to rebuilding
+  the convolver with the scaled IR but avoids interrupting playback.
+- Added synchronized sliders plus numeric override fields for wet level, dry
+  level, and pre-delay so preview parameters can be explored continuously or
+  entered precisely.
+
+## 2026-08-13 17:46 EDT — Switch reverb profiles during preview
+
+- Limited the pre-delay slider to the practical 0–200 ms range while preserving
+  the numeric field for larger explicit values.
+- Changing the IR path or choosing a bundled profile during playback now prepares
+  the replacement partitioned convolver away from the playback thread and
+  crossfades to it over 50 ms without restarting the recording.
+- Preview uses a stable stereo output so mono and stereo IRs can be interchanged.
+  A replacement IR must match the active preview sample rate; restarting preview
+  prepares the dry recording for an IR with a different rate.
+- Added numerical coverage proving that the old response is heard before the
+  switch and the new response after the crossfade.
