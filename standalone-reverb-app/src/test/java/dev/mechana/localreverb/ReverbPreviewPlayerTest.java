@@ -43,6 +43,20 @@ class ReverbPreviewPlayerTest {
 	}
 
 	@Test
+	void preservesDrySampleRateByResamplingTheImpulseResponse() throws Exception {
+		double[] source = new double[100];
+		java.util.Arrays.fill(source, 0.25);
+		Path dry = wav("dry-44100.wav", 44_100, new double[][]{source});
+		Path ir = wav("ir-48000.wav", 48_000, new double[][]{{1}});
+
+		byte[] pcm = ReverbPreviewPlayer
+				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, false, false, 1));
+
+		assertEquals(100 * 2 * 2, pcm.length);
+		assertEquals(0.25, sample(pcm, 50 * 2), 2.0 / 32768);
+	}
+
+	@Test
 	void streamsStereoIrAndCompletePredelayedTail() throws Exception {
 		Path dry = wav("dry.wav", 1_000, new double[][]{{1, 0}});
 		Path ir = wav("ir.wav", 1_000, new double[][]{{1, 0.5}, {0.25, 0.125}});
