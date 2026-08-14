@@ -1685,3 +1685,28 @@ cloud providers remain future direction; see `brain/current-state.md` and
   prepares the dry recording for an IR with a different rate.
 - Added numerical coverage proving that the old response is heard before the
   switch and the new response after the crossfade.
+
+## 2026-08-14 15:15 EDT — Match preview IRs to native dry sample rates
+
+- Diagnosed long startup for a 44.1 kHz/16-bit WAV against the bundled 48 kHz IRs:
+  preview was resampling the entire four-minute dry recording before playback,
+  while a larger 48 kHz WAV bypassed conversion.
+- Preview now preserves the dry input's native sample rate and resamples the much
+  shorter IR instead. Decodable compressed dry inputs are converted to PCM at
+  their native rate without an additional sample-rate conversion.
+- Added a persistent content-addressed IR cache under the user's macOS cache
+  directory. Entries include the source IR digest, target rate, and resampler
+  version, so repeated previews reuse the conversion and changed IR content
+  invalidates it automatically.
+- Switching back and forth among previously prepared IRs at the same playback
+  rate selects their existing cached variants; only each profile's first use at
+  that rate incurs resampling.
+- Kept IR generation and profile selection centered on one user-visible master
+  file. Every rate variant is created lazily, and the status bar displays
+  **Regenerating IR to match sample rate…** only on the first use of an IR/rate
+  pair; later selections silently reuse the cached variant.
+- Live IR changes can now crossfade profiles of different source sample rates;
+  the replacement is matched to the already-running preview rate in the
+  background.
+- Added tests for 44.1 kHz dry/48 kHz IR playback, cache reuse, source-content
+  invalidation, and cached WAV sample-rate correctness.

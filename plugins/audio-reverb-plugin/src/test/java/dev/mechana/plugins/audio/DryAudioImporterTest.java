@@ -41,6 +41,14 @@ class DryAudioImporterTest {
 	}
 
 	@Test
+	void nativePreparationNeverResamplesWav() throws IOException {
+		Path input = wav("voice-44100.wav", 44_100, 441);
+		Path output = temporary.resolve("converted-native.wav");
+		assertEquals(input, DryAudioImporter.prepareNative(input, output));
+		assertFalse(java.nio.file.Files.exists(output));
+	}
+
+	@Test
 	void resamplesDryWavToIrRate() throws IOException {
 		Path input = wav("voice-44k.wav", 44_100, 441);
 		Path output = temporary.resolve("voice-48k.wav");

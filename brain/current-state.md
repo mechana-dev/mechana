@@ -95,8 +95,12 @@ This file reports repository evidence, not desired future status.
   retains the complete reverb tail. Wet/dry, pre-delay, IR normalization, peak
   protection, and headroom edits take effect during playback with short smoothed
   transitions. The pre-delay slider is limited to 0–200 ms (with a numeric
-  override), and selecting a same-sample-rate mono or stereo IR during playback
-  prepares it in the background and crossfades it into the active preview.
+  override). Preview preserves the dry recording's native sample rate and keeps
+  content-addressed, sample-rate-matched IR variants in the user's cache;
+  selecting a mono or stereo IR during playback prepares the needed variant in
+  the background and crossfades it into the active preview. Variants are generated
+  only on demand, and the status bar identifies that one-time work; IR generation
+  and the user-facing profile library continue to expose one master file.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,

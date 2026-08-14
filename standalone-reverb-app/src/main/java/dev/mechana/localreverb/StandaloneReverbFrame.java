@@ -61,7 +61,8 @@ final class StandaloneReverbFrame extends JFrame {
 	private static final long serialVersionUID = 1L;
 	private final transient Preferences settings = Preferences.userNodeForPackage(StandaloneReverbFrame.class);
 	private final transient LocalReverbEngine engine = new LocalReverbEngine();
-	private final transient ReverbPreviewPlayer previewPlayer = new ReverbPreviewPlayer();
+	private final transient ImpulseResponseCache impulseResponseCache = new ImpulseResponseCache();
+	private final transient ReverbPreviewPlayer previewPlayer = new ReverbPreviewPlayer(impulseResponseCache);
 	private final JTextField dryPath = field("dryPath", "");
 	private final JTextField irPath = field("irPath", "");
 	private final JTextField artifactRoot = field("artifactRoot",
@@ -444,6 +445,7 @@ final class StandaloneReverbFrame extends JFrame {
 			return;
 		status.setText("Preparing new impulse response…");
 		previewPlayer.changeImpulseResponse(selectedIr,
+				() -> SwingUtilities.invokeLater(() -> status.setText("Regenerating IR to match sample rate…")),
 				loaded -> SwingUtilities.invokeLater(() -> status.setText("Playing with " + loaded.getFileName())),
 				message -> SwingUtilities.invokeLater(() -> {
 					showError(message);
@@ -462,6 +464,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private void updatePreviewState(ReverbPreviewPlayer.State state) {
 		switch (state) {
 			case PREPARING -> status.setText("Preparing real-time preview…");
+			case REGENERATING_IR -> status.setText("Regenerating IR to match sample rate…");
 			case PLAYING -> {
 				status.setText("Playing reverb preview through the default audio output");
 				pausePreview.setText("Pause");
@@ -476,10 +479,11 @@ final class StandaloneReverbFrame extends JFrame {
 				previewFinished();
 			}
 		}
-		if (state == ReverbPreviewPlayer.State.PREPARING || state == ReverbPreviewPlayer.State.PLAYING
-				|| state == ReverbPreviewPlayer.State.PAUSED) {
+		if (state == ReverbPreviewPlayer.State.PREPARING || state == ReverbPreviewPlayer.State.REGENERATING_IR
+				|| state == ReverbPreviewPlayer.State.PLAYING || state == ReverbPreviewPlayer.State.PAUSED) {
 			preview.setEnabled(false);
-			pausePreview.setEnabled(state != ReverbPreviewPlayer.State.PREPARING);
+			pausePreview.setEnabled(
+					state == ReverbPreviewPlayer.State.PLAYING || state == ReverbPreviewPlayer.State.PAUSED);
 			stopPreview.setEnabled(true);
 		}
 	}
