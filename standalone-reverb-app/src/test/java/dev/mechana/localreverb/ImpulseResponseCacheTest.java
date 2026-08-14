@@ -16,7 +16,9 @@
 package dev.mechana.localreverb;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mechana.plugins.audio.WavFile;
 import java.nio.file.Path;
@@ -45,6 +47,23 @@ class ImpulseResponseCacheTest {
 		write(source, new double[]{1, -0.5, 0.25, 0});
 		Path changed = cache.prepare(source, 44_100);
 		assertNotEquals(first, changed);
+	}
+
+	@Test
+	void clearsOnlyRegularCacheEntriesWhenApplicationBuildChanges() throws Exception {
+		Path cacheDirectory = temporary.resolve("versioned-cache");
+		ImpulseResponseCache cache = new ImpulseResponseCache(cacheDirectory);
+		cache.resetForBuild("build-one");
+		Path cached = java.nio.file.Files.writeString(cacheDirectory.resolve("old.wav"), "cached");
+		Path retainedDirectory = java.nio.file.Files.createDirectory(cacheDirectory.resolve("unexpected-directory"));
+
+		cache.resetForBuild("build-one");
+		assertTrue(java.nio.file.Files.exists(cached));
+		cache.resetForBuild("build-two");
+
+		assertFalse(java.nio.file.Files.exists(cached));
+		assertTrue(java.nio.file.Files.isDirectory(retainedDirectory));
+		assertEquals("build-two", java.nio.file.Files.readString(cacheDirectory.resolve(".application-build")).strip());
 	}
 
 	private static void write(Path path, double[] samples) throws Exception {

@@ -1710,3 +1710,13 @@ cloud providers remain future direction; see `brain/current-state.md` and
   background.
 - Added tests for 44.1 kHz dry/48 kHz IR playback, cache reuse, source-content
   invalidation, and cached WAV sample-rate correctness.
+
+## 2026-08-14 15:29 EDT — Reset preview IR cache after app updates
+
+- Added a packaged-build fingerprint marker to the standalone Reverb app's owned
+  IR cache directory. The first launch after installing a changed app bundle
+  deletes regular cache entries and records the new fingerprint; ordinary launches
+  of the same build keep cached rate variants.
+- Cleanup remains tightly scoped to regular files immediately inside
+  `~/Library/Caches/Mechana Reverb/ir`; it does not recursively remove directories
+  or touch user-visible master IR profiles.
