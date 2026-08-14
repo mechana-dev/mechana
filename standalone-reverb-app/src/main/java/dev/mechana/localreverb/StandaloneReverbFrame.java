@@ -143,7 +143,8 @@ final class StandaloneReverbFrame extends JFrame {
 
 	private JPanel buildForm() {
 		JPanel panel = new JPanel(new GridBagLayout());
-		panel.setBorder(BorderFactory.createTitledBorder("New reverb job"));
+		panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createTitledBorder("New reverb job"),
+				BorderFactory.createEmptyBorder(10, 8, 8, 8)));
 		GridBagConstraints c = new GridBagConstraints();
 		c.insets = new Insets(5, 8, 5, 8);
 		c.gridy = 0;
@@ -186,7 +187,9 @@ final class StandaloneReverbFrame extends JFrame {
 
 	private JPanel buildIrCreator() {
 		JPanel panel = new JPanel(new GridBagLayout());
-		panel.setBorder(BorderFactory.createTitledBorder("Create an impulse response from a hardware sweep recording"));
+		panel.setBorder(BorderFactory.createCompoundBorder(
+				BorderFactory.createTitledBorder("Create an impulse response from a hardware sweep recording"),
+				BorderFactory.createEmptyBorder(10, 8, 8, 8)));
 		GridBagConstraints c = new GridBagConstraints();
 		c.insets = new Insets(7, 8, 7, 8);
 		c.gridy = 0;
@@ -549,6 +552,7 @@ final class StandaloneReverbFrame extends JFrame {
 		addRow(panel, c, label, field);
 		JButton choose = new JButton("Choose…");
 		choose.addActionListener(event -> choose(field, directory));
+		c.gridy--;
 		c.gridx = 2;
 		c.weightx = 0;
 		c.fill = GridBagConstraints.NONE;
@@ -560,6 +564,7 @@ final class StandaloneReverbFrame extends JFrame {
 		addRow(panel, c, label, field);
 		JButton choose = new JButton("Choose…");
 		choose.addActionListener(event -> chooseOutput(field));
+		c.gridy--;
 		c.gridx = 2;
 		c.weightx = 0;
 		c.fill = GridBagConstraints.NONE;
