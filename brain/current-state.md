@@ -100,7 +100,9 @@ This file reports repository evidence, not desired future status.
   selecting a mono or stereo IR during playback prepares the needed variant in
   the background and crossfades it into the active preview. Variants are generated
   only on demand, and the status bar identifies that one-time work; IR generation
-  and the user-facing profile library continue to expose one master file.
+  and the user-facing profile library continue to expose one master file. A new
+  packaged application build clears regular entries from its owned IR cache on
+  first launch; subsequent launches of that build retain them.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,

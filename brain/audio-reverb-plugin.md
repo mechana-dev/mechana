@@ -105,6 +105,10 @@ wet convolution result, so it does not restart or approximate the IR. Because
 streaming cannot know the future global peak, preview peak
 protection is an instantaneous ceiling at the selected headroom; offline export
 retains its deterministic two-pass global gain.
+On the first launch of a newly packaged application build, the app compares the
+bundle JAR fingerprint with a marker inside its owned cache directory and removes
+regular cached entries when that fingerprint changes. Repeated launches of the
+same build preserve the cache.
 Changing the selected IR during playback prepares a cached sample-rate-matched
 variant and its FFT partitions away from the audio thread, then crossfades to it
 over 50 ms. Mono and stereo profiles with any supported WAV sample rate may be

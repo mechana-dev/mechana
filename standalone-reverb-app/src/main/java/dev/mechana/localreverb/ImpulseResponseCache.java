@@ -33,10 +33,16 @@ import java.util.Objects;
  */
 final class ImpulseResponseCache {
 	private static final String RESAMPLER_VERSION = "v1";
+	private static final String BUILD_MARKER = ".application-build";
 	private final Path directory;
 
 	ImpulseResponseCache() {
 		this(Path.of(System.getProperty("user.home"), "Library", "Caches", "Mechana Reverb", "ir"));
+		try {
+			resetForBuild(applicationBuildFingerprint());
+		} catch (IOException ignored) {
+			// Cache creation still works normally if lifecycle cleanup is unavailable.
+		}
 	}
 
 	ImpulseResponseCache(Path directory) {
@@ -78,6 +84,19 @@ final class ImpulseResponseCache {
 		}
 	}
 
+	void resetForBuild(String buildFingerprint) throws IOException {
+		Objects.requireNonNull(buildFingerprint, "buildFingerprint");
+		Files.createDirectories(directory);
+		Path marker = directory.resolve(BUILD_MARKER);
+		if (Files.isRegularFile(marker) && buildFingerprint.equals(Files.readString(marker).strip()))
+			return;
+		try (var entries = Files.list(directory)) {
+			for (Path entry : entries.filter(Files::isRegularFile).toList())
+				Files.deleteIfExists(entry);
+		}
+		Files.writeString(marker, buildFingerprint + System.lineSeparator());
+	}
+
 	private static boolean valid(Path path, int sampleRate) {
 		if (!Files.isRegularFile(path))
 			return false;
@@ -101,6 +120,16 @@ final class ImpulseResponseCache {
 			return HexFormat.of().formatHex(digest.digest());
 		} catch (NoSuchAlgorithmException impossible) {
 			throw new IllegalStateException("SHA-256 is unavailable", impossible);
+		}
+	}
+
+	private static String applicationBuildFingerprint() throws IOException {
+		try {
+			Path location = Path
+					.of(ImpulseResponseCache.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+			return Files.isRegularFile(location) ? digest(location) : "development";
+		} catch (java.net.URISyntaxException invalidLocation) {
+			throw new IOException("Could not identify the application build", invalidLocation);
 		}
 	}
 
