@@ -45,7 +45,8 @@ public final class AudioConvolutionReverbPlugin implements TaskPlugin {
 			scratch = Files.createTempDirectory("mechana-audio-reverb-");
 			Path output = scratch.resolve("reverberated.wav");
 			var options = new AudioConvolutionProcessor.Options(decimal(parameters, "wet"), decimal(parameters, "dry"),
-					decimal(parameters, "preDelayMilliseconds"), bool(parameters, "normalizeIr"),
+					decimal(parameters, "preDelayMilliseconds"), decimal(parameters, "lowCutHertz", 0),
+					decimal(parameters, "highCutHertz", 0), bool(parameters, "normalizeIr"),
 					bool(parameters, "peakProtection"), decimal(parameters, "headroomDecibels"),
 					AudioConvolutionProcessor.DEFAULT_BLOCK_SIZE);
 			AudioConvolutionProcessor.Result result = new AudioConvolutionProcessor().process(
@@ -78,6 +79,11 @@ public final class AudioConvolutionReverbPlugin implements TaskPlugin {
 
 	private static double decimal(Map<String, String> parameters, String name) {
 		return Double.parseDouble(required(parameters, name));
+	}
+
+	private static double decimal(Map<String, String> parameters, String name, double fallback) {
+		String value = parameters.get(name);
+		return value == null || value.isBlank() ? fallback : Double.parseDouble(value);
 	}
 
 	private static boolean bool(Map<String, String> parameters, String name) {

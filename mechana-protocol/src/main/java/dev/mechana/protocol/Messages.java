@@ -222,8 +222,9 @@ public final class Messages {
 	}
 
 	public record AudioReverbJobSubmitRequest(String dryPath, String irPath, String outputName, int taskCount,
-			double wet, double dry, double preDelayMilliseconds, boolean normalizeIr, boolean peakProtection,
-			double headroomDecibels, String storageProvider, String artifactRoot) {
+			double wet, double dry, double preDelayMilliseconds, double lowCutHertz, double highCutHertz,
+			boolean normalizeIr, boolean peakProtection, double headroomDecibels, String storageProvider,
+			String artifactRoot) {
 		public AudioReverbJobSubmitRequest {
 			Objects.requireNonNull(dryPath, "dryPath");
 			Objects.requireNonNull(irPath, "irPath");
@@ -236,9 +237,14 @@ public final class Messages {
 				throw new IllegalArgumentException("Audio output name must be a safe .wav file name");
 			if (!Double.isFinite(wet) || !Double.isFinite(dry) || wet < 0 || wet > 2 || dry < 0 || dry > 2
 					|| !Double.isFinite(preDelayMilliseconds) || preDelayMilliseconds < 0
-					|| preDelayMilliseconds > 10_000 || !Double.isFinite(headroomDecibels) || headroomDecibels < 0
-					|| headroomDecibels > 24)
+					|| preDelayMilliseconds > 10_000 || !validFrequency(lowCutHertz) || !validFrequency(highCutHertz)
+					|| lowCutHertz > 0 && highCutHertz > 0 && lowCutHertz >= highCutHertz
+					|| !Double.isFinite(headroomDecibels) || headroomDecibels < 0 || headroomDecibels > 24)
 				throw new IllegalArgumentException("Invalid audio reverb controls");
+		}
+
+		private static boolean validFrequency(double value) {
+			return Double.isFinite(value) && value >= 0 && value <= 20_000;
 		}
 	}
 

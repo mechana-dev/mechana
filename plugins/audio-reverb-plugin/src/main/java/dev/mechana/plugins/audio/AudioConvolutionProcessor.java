@@ -31,12 +31,13 @@ public final class AudioConvolutionProcessor {
 	private static final int DRY_END_FADE_MILLISECONDS = 10;
 	public static final int DEFAULT_BLOCK_SIZE = 2048;
 
-	public record Options(double wet, double dry, double preDelayMilliseconds, boolean normalizeIr,
-			boolean peakProtection, double headroomDecibels, int blockSize) {
+	public record Options(double wet, double dry, double preDelayMilliseconds, double lowCutHertz, double highCutHertz,
+			boolean normalizeIr, boolean peakProtection, double headroomDecibels, int blockSize) {
 		public Options {
 			if (!Double.isFinite(wet) || !Double.isFinite(dry) || wet < 0 || dry < 0
 					|| !Double.isFinite(preDelayMilliseconds) || preDelayMilliseconds < 0
-					|| !Double.isFinite(headroomDecibels) || headroomDecibels < 0 || blockSize < 1
+					|| !Double.isFinite(lowCutHertz) || lowCutHertz < 0 || !Double.isFinite(highCutHertz)
+					|| highCutHertz < 0 || !Double.isFinite(headroomDecibels) || headroomDecibels < 0 || blockSize < 1
 					|| Integer.bitCount(blockSize) != 1)
 				throw new IllegalArgumentException("Invalid convolution options");
 		}
@@ -53,6 +54,7 @@ public final class AudioConvolutionProcessor {
 		Path spool = Files.createTempFile(workDirectory, "audio-reverb-", ".f64");
 		try (WavFile.Reader dry = WavFile.open(dryPath)) {
 			WavFile.Format format = dry.format();
+			WetEqualizer.validate(format.sampleRate(), options.lowCutHertz(), options.highCutHertz());
 			if (format.sampleRate() != ir.sampleRate())
 				throw new IOException(
 						"Dry and IR sample rates must match (" + format.sampleRate() + " vs " + ir.sampleRate() + ")");
@@ -87,8 +89,11 @@ public final class AudioConvolutionProcessor {
 		long outputPosition = 0;
 		double peak = 0;
 		DelayLine[] delays = new DelayLine[outputChannels];
-		for (int channel = 0; channel < outputChannels; channel++)
+		WetEqualizer[] equalizers = new WetEqualizer[outputChannels];
+		for (int channel = 0; channel < outputChannels; channel++) {
 			delays[channel] = new DelayLine(preDelay);
+			equalizers[channel] = new WetEqualizer(format.sampleRate(), options.lowCutHertz(), options.highCutHertz());
+		}
 		try (DataOutputStream temporary = new DataOutputStream(
 				new BufferedOutputStream(Files.newOutputStream(spool)))) {
 			while (outputPosition < outputFrames) {
@@ -109,7 +114,7 @@ public final class AudioConvolutionProcessor {
 								? input[Math.min(channel, input.length - 1)][frame]
 										* dryEndEnvelope(absolute, format.frames(), format.sampleRate())
 								: 0;
-						double wetSample = delays[channel].push(wet[channel][frame]);
+						double wetSample = equalizers[channel].process(delays[channel].push(wet[channel][frame]));
 						double sample = drySample * options.dry() + wetSample * options.wet();
 						temporary.writeDouble(sample);
 						peak = Math.max(peak, Math.abs(sample));

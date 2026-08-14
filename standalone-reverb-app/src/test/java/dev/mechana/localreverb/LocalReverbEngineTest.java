@@ -38,7 +38,7 @@ class LocalReverbEngineTest {
 		Path dry = wav("Scott Voice.wav", new double[]{0.25, -0.5, 0.125});
 		Path ir = wav("Small Room.wav", new double[]{1});
 		Path jobs = temporary.resolve("jobs");
-		var request = new ReverbRequest(dry, ir, jobs, "Scott-result.wav", 1, 0, 0, false, true, 1);
+		var request = new ReverbRequest(dry, ir, jobs, "Scott-result.wav", 1, 0, 0, 0, 0, false, true, 1);
 		CountDownLatch finished = new CountDownLatch(1);
 		AtomicReference<ReverbJob> result = new AtomicReference<>();
 

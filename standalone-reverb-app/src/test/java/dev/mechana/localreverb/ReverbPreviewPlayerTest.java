@@ -33,7 +33,7 @@ class ReverbPreviewPlayerTest {
 		Path ir = wav("ir.wav", 48_000, new double[][]{{1}});
 
 		byte[] pcm = ReverbPreviewPlayer
-				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, false, false, 1));
+				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, 0, 0, false, false, 1));
 
 		assertEquals(3 * 2 * 2, pcm.length);
 		assertEquals(0.25, sample(pcm, 0), 1.0 / 32768);
@@ -50,7 +50,7 @@ class ReverbPreviewPlayerTest {
 		Path ir = wav("ir-48000.wav", 48_000, new double[][]{{1}});
 
 		byte[] pcm = ReverbPreviewPlayer
-				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, false, false, 1));
+				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, 0, 0, false, false, 1));
 
 		assertEquals(100 * 2 * 2, pcm.length);
 		assertEquals(0.25, sample(pcm, 50 * 2), 2.0 / 32768);
@@ -62,7 +62,7 @@ class ReverbPreviewPlayerTest {
 		Path ir = wav("ir.wav", 1_000, new double[][]{{1, 0.5}, {0.25, 0.125}});
 
 		byte[] pcm = ReverbPreviewPlayer
-				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 2, false, false, 1));
+				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 2, 0, 0, false, false, 1));
 
 		assertEquals(5 * 2 * 2, pcm.length);
 		assertEquals(1, sample(pcm, 2 * 2), 2.0 / 32768);
@@ -78,7 +78,7 @@ class ReverbPreviewPlayerTest {
 		Path ir = wav("ir.wav", 48_000, new double[][]{{1}});
 
 		byte[] pcm = ReverbPreviewPlayer
-				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 1, 0, false, true, 6));
+				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 1, 0, 0, 0, false, true, 6));
 
 		assertEquals(Math.pow(10, -6.0 / 20), sample(pcm, 0), 1.0 / 32768);
 	}
@@ -89,9 +89,10 @@ class ReverbPreviewPlayerTest {
 		java.util.Arrays.fill(source, 0.5);
 		Path dry = wav("dry.wav", 48_000, new double[][]{source});
 		Path ir = wav("ir.wav", 48_000, new double[][]{{1}});
-		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 0, 1, 0, false, false, 1);
+		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 0, 1, 0, 0, 0, false, false, 1);
 
-		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings, player -> player.update(1, 0, 0, true, false, 1));
+		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings,
+				player -> player.update(1, 0, 0, 0, 0, true, false, 1));
 
 		assertEquals(0.5, sample(pcm, 500 * 2), 1.0 / 32768);
 		assertEquals(0.5 * Math.pow(10, -1.0 / 20), sample(pcm, 2_500 * 2), 2.0 / 32768);
@@ -103,9 +104,10 @@ class ReverbPreviewPlayerTest {
 		source[2_000] = 0.75;
 		Path dry = wav("dry.wav", 48_000, new double[][]{source});
 		Path ir = wav("ir.wav", 48_000, new double[][]{{1}});
-		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, false, false, 1);
+		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, 0, 0, false, false, 1);
 
-		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings, player -> player.update(1, 0, 10, false, false, 1));
+		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings,
+				player -> player.update(1, 0, 10, 0, 0, false, false, 1));
 
 		assertEquals((3_000 + 480) * 2 * 2, pcm.length);
 		assertTrue(Math.abs(sample(pcm, 2_000 * 2)) < 1.0 / 32768);
@@ -119,7 +121,7 @@ class ReverbPreviewPlayerTest {
 		Path dry = wav("dry.wav", 48_000, new double[][]{source});
 		Path firstIr = wav("first-ir.wav", 48_000, new double[][]{{1}});
 		Path secondIr = wav("second-ir.wav", 48_000, new double[][]{{-1}});
-		var settings = new ReverbPreviewPlayer.Settings(dry, firstIr, 1, 0, 0, false, false, 1);
+		var settings = new ReverbPreviewPlayer.Settings(dry, firstIr, 1, 0, 0, 0, 0, false, false, 1);
 
 		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings, player -> {
 			try {

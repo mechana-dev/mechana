@@ -1,6 +1,6 @@
 # Audio convolution reverb plugin
 
-Last verified: 2026-08-12
+Last verified: 2026-08-14
 
 ## Implemented proof of concept
 
@@ -49,8 +49,13 @@ tail and optional pre-delay are retained. The direct dry component receives a
 10 ms end fade so a source cut off while still active transitions cleanly into
 the wet-only tail; the samples sent through convolution are unchanged.
 
-Controls are wet level, dry level, pre-delay, safe IR peak normalization, output
-peak protection, and safe headroom. IR normalization is attenuation-only: peaks
+Controls are wet level, dry level, pre-delay, wet-path low-cut and high-cut EQ,
+safe IR peak normalization, output peak protection, and safe headroom. The EQ uses
+pure-Java second-order Butterworth filters after convolution and pre-delay. A zero
+cutoff disables that filter; both defaults are zero, preserving prior jobs and IR
+profiles. When both cuts are enabled, the low-cut frequency must be below the
+high-cut frequency and both must be below the audio sample rate's Nyquist limit.
+IR normalization is attenuation-only: peaks
 above -1 dBFS are reduced to -1 dBFS, while quieter measured responses retain
 their captured gain. This prevents hardware IRs from being unintentionally
 amplified before convolution. No external executable, native DSP library, or
@@ -113,6 +118,10 @@ Changing the selected IR during playback prepares a cached sample-rate-matched
 variant and its FFT partitions away from the audio thread, then crossfades to it
 over 50 ms. Mono and stereo profiles with any supported WAV sample rate may be
 interchanged without restarting playback.
+Wet low-cut and high-cut fields are also available in the standalone app and take
+effect on the live wet signal without restarting playback. The captured IR still
+defines decay, room size, diffusion, and modulation; those algorithmic-reverb
+controls are intentionally not synthesized in this convolution POC.
 The application bundle carries the five synthetic development IRs previously used
 for listening tests and exposes them through a dedicated chooser. It also bundles
 the standardized 48 kHz/24-bit stereo Mechana sweep and provides a **Create IR

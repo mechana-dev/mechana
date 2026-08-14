@@ -115,6 +115,24 @@ class AudioConvolutionProcessorTest {
 	}
 
 	@Test
+	void highCutFiltersWetSignalWithoutColoringDrySignal() throws IOException {
+		double[] source = new double[4_800];
+		for (int frame = 0; frame < source.length; frame++)
+			source[frame] = 0.25 * Math.sin(2 * Math.PI * 10_000 * frame / 48_000);
+		Path dry = wav("eq-dry.wav", 48_000, new double[][]{source});
+		Path ir = wav("eq-ir.wav", 48_000, new double[][]{{1}});
+		Path wetOutput = temporary.resolve("eq-wet.wav");
+		Path dryOutput = temporary.resolve("eq-direct.wav");
+		processor(dry, ir, wetOutput, new AudioConvolutionProcessor.Options(1, 0, 0, 0, 1_000, false, false, 1, 2048));
+		processor(dry, ir, dryOutput, new AudioConvolutionProcessor.Options(0, 1, 0, 0, 1_000, false, false, 1, 2048));
+
+		double[] wet = read(wetOutput)[0];
+		double[] direct = read(dryOutput)[0];
+		assertTrue(rms(wet, 2_400, 4_000) < 0.01);
+		assertArrayEquals(java.util.Arrays.copyOf(source, 2_000), java.util.Arrays.copyOf(direct, 2_000), 2e-7);
+	}
+
+	@Test
 	void rejectsMismatchedSampleRates() throws IOException {
 		Path dry = wav("dry.wav", 48_000, new double[][]{{1}});
 		Path ir = wav("ir.wav", 44_100, new double[][]{{1}});
@@ -172,7 +190,14 @@ class AudioConvolutionProcessorTest {
 
 	private static AudioConvolutionProcessor.Options options(double wet, double dry, double preDelay,
 			boolean protection) {
-		return new AudioConvolutionProcessor.Options(wet, dry, preDelay, false, protection, 1, 2048);
+		return new AudioConvolutionProcessor.Options(wet, dry, preDelay, 0, 0, false, protection, 1, 2048);
+	}
+
+	private static double rms(double[] samples, int start, int end) {
+		double energy = 0;
+		for (int index = start; index < end; index++)
+			energy += samples[index] * samples[index];
+		return Math.sqrt(energy / (end - start));
 	}
 
 	private Path wav(String name, double[][] samples) throws IOException {

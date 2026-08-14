@@ -1720,3 +1720,18 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Cleanup remains tightly scoped to regular files immediately inside
   `~/Library/Caches/Mechana Reverb/ir`; it does not recursively remove directories
   or touch user-visible master IR profiles.
+
+## 2026-08-14 16:55 EDT — Add wet-path EQ controls to convolution reverb
+
+- Confirmed that pre-delay was already supported by distributed jobs, offline
+  standalone rendering, and live preview; retained its current behavior.
+- Added optional pure-Java second-order Butterworth low-cut and high-cut filters
+  to the wet signal after convolution and pre-delay. Zero disables each filter,
+  and both default to zero for backward-compatible sound.
+- Exposed both controls through the generic server descriptor and standalone app,
+  included them in job JSON and human-readable reports, and allowed changes to
+  take effect during live preview without restarting playback.
+- Kept decay, room size, diffusion, and modulation under control of the captured
+  IR rather than adding algorithmic-reverb approximations to the convolution POC.
+- Added numerical frequency-response, descriptor, validation, and reporting
+  coverage for the new controls.

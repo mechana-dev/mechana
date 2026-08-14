@@ -28,7 +28,8 @@ class ReverbJobReportTest {
 	@Test
 	void rendersInputsParametersTimingWorkersAndArtifacts() {
 		var request = new AudioReverbJobSubmitRequest("/audio/Scott Voice.wav", "/irs/Small Plate.wav",
-				"Scott-Voice-reverb.wav", 1, 0.35, 1.0, 20.0, true, true, 1.0, "server-local", "/audio/results");
+				"Scott-Voice-reverb.wav", 1, 0.35, 1.0, 20.0, 80.0, 12_000.0, true, true, 1.0, "server-local",
+				"/audio/results");
 		var work = new InMemoryJobMonitor.WorkUnitSnapshot("job-1-1", "Convolution", "SUCCEEDED", 100, "1.250s",
 				"mba-worker", Map.of("samples", "96000"));
 		var snapshot = new InMemoryJobMonitor.Snapshot("job-1", "audio-convolution-reverb", "SUCCEEDED", 100, "1.500s",
@@ -43,6 +44,8 @@ class ReverbJobReportTest {
 		assertTrue(report.contains("Wall-clock duration: 2.000 seconds"));
 		assertTrue(report.contains("Workers: mba-worker"));
 		assertTrue(report.contains("Dry audio: Scott Voice.wav"));
+		assertTrue(report.contains("Wet low-cut: 80.0 Hz"));
+		assertTrue(report.contains("Wet high-cut: 12000.0 Hz"));
 		assertTrue(report.contains("Impulse-response WAV: Small Plate.wav"));
 		assertTrue(report.contains("Wet level: 0.35"));
 		assertTrue(report.contains("Normalize IR: Yes"));
