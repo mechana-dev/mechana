@@ -1808,3 +1808,8 @@ cloud providers remain future direction; see `brain/current-state.md` and
   into flat-topped crackling.
 - Added regression coverage proving protected preview retains relative waveform
   amplitude rather than independently clamping successive samples.
+- Follow-up analysis of a lossless Audio Hijack preview capture found no recurring
+  buffer gaps or flat-topped clipping, but did show that zero-look-ahead gain
+  changes remained audible under heavy reduction. Added 10 ms stereo-linked
+  look-ahead so attenuation begins smoothly before each over-range peak, plus a
+  regression test for the pre-peak gain ramp.

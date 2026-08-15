@@ -44,6 +44,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private static final int DRY_END_FADE_MILLISECONDS = 10;
 	private static final int PARAMETER_RAMP_MILLISECONDS = 20;
 	private static final int IR_CROSSFADE_MILLISECONDS = 50;
+	private static final int LIMITER_LOOKAHEAD_MILLISECONDS = 10;
 	private static final int LIMITER_RELEASE_MILLISECONDS = 250;
 	private static final int MAX_PRE_DELAY_MILLISECONDS = 10_000;
 	private static final double NORMALIZED_IR_PEAK = Math.pow(10, -1.0 / 20);
@@ -323,12 +324,14 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		SmoothedValue dryLevel = new SmoothedValue(liveParameters.dry());
 		SmoothedValue headroom = new SmoothedValue(headroomTarget(liveParameters));
 		SmoothedValue bypass = new SmoothedValue(bypassed ? 1 : 0);
-		PreviewLimiter limiter = new PreviewLimiter(format.sampleRate());
+		PreviewLimiter limiter = new PreviewLimiter(format.sampleRate(), outputChannels);
 		int rampFrames = Math.max(1, format.sampleRate() * PARAMETER_RAMP_MILLISECONDS / 1000);
 		double[][] input = new double[format.channels()][BLOCK_SIZE];
 		byte[] pcm = new byte[BLOCK_SIZE * outputChannels * 2];
 		double[] processedFrame = new double[outputChannels];
 		double[] originalFrame = new double[outputChannels];
+		double[] limitedFrame = new double[outputChannels];
+		double[] delayedOriginalFrame = new double[outputChannels];
 		long sourcePosition = 0;
 		long outputPosition = 0;
 		long requiredOutputFrames = outputFrames;
@@ -337,7 +340,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		ConvolutionBank transitionBank = null;
 		int crossfadeFrame = 0;
 		int crossfadeFrames = Math.max(1, format.sampleRate() * IR_CROSSFADE_MILLISECONDS / 1000);
-		while (outputPosition < requiredOutputFrames && !stopped.get()) {
+		while (outputPosition < requiredOutputFrames + limiter.latencyFrames() && !stopped.get()) {
 			awaitResume();
 			if (stopped.get())
 				break;
@@ -358,7 +361,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			long requestedDelay = Math.round(blockParameters.preDelayMilliseconds() * format.sampleRate() / 1000.0);
 			requiredOutputFrames = Math.max(requiredOutputFrames,
 					format.frames() + maximumIrLength - 1L + requestedDelay);
-			int frames = (int) Math.min(BLOCK_SIZE, requiredOutputFrames - outputPosition);
+			int frames = (int) Math.min(BLOCK_SIZE, requiredOutputFrames + limiter.latencyFrames() - outputPosition);
 			int byteIndex = 0;
 			for (int frame = 0; frame < frames; frame++) {
 				LiveParameters parameters = liveParameters;
@@ -388,10 +391,12 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					delayed = equalizers[channel].process(delayed);
 					processedFrame[channel] = direct * currentDry + delayed * currentWet;
 				}
-				limiter.apply(processedFrame, currentHeadroom, parameters.peakProtection());
+				if (!limiter.push(processedFrame, originalFrame, currentHeadroom, parameters.peakProtection(),
+						limitedFrame, delayedOriginalFrame))
+					continue;
 				for (int channel = 0; channel < outputChannels; channel++) {
-					double sample = processedFrame[channel] * (1 - currentBypass)
-							+ originalFrame[channel] * currentBypass;
+					double sample = limitedFrame[channel] * (1 - currentBypass)
+							+ delayedOriginalFrame[channel] * currentBypass;
 					int value = (int) Math.max(Short.MIN_VALUE,
 							Math.min(Short.MAX_VALUE, Math.round(sample * 32768.0)));
 					pcm[byteIndex++] = (byte) value;
@@ -640,29 +645,74 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	}
 
 	private static final class PreviewLimiter {
+		private final double[][] processedFrames;
+		private final double[][] originalFrames;
+		private final double[] targets;
+		private final boolean[] protectionEnabled;
+		private final int latencyFrames;
 		private final double releaseCoefficient;
 		private double gain = 1;
+		private double attackTarget = 1;
+		private double attackStep;
+		private int attackRemaining;
+		private int position;
+		private int buffered;
 
-		private PreviewLimiter(int sampleRate) {
+		private PreviewLimiter(int sampleRate, int channels) {
+			latencyFrames = Math.max(1, sampleRate * LIMITER_LOOKAHEAD_MILLISECONDS / 1000);
+			processedFrames = new double[latencyFrames][channels];
+			originalFrames = new double[latencyFrames][channels];
+			targets = new double[latencyFrames];
+			protectionEnabled = new boolean[latencyFrames];
 			double releaseFrames = Math.max(1, sampleRate * LIMITER_RELEASE_MILLISECONDS / 1000.0);
 			releaseCoefficient = 1 - Math.exp(-1 / releaseFrames);
 		}
 
-		private void apply(double[] frame, double target, boolean enabled) {
-			if (!enabled) {
-				gain = 1;
-				return;
-			}
+		private int latencyFrames() {
+			return latencyFrames;
+		}
+
+		private boolean push(double[] processed, double[] original, double target, boolean enabled,
+				double[] outputProcessed, double[] outputOriginal) {
 			double peak = 0;
-			for (double sample : frame)
+			for (double sample : processed)
 				peak = Math.max(peak, Math.abs(sample));
-			double requiredGain = peak > target ? target / peak : 1;
-			if (requiredGain < gain)
-				gain = requiredGain;
-			else
-				gain += (requiredGain - gain) * releaseCoefficient;
-			for (int channel = 0; channel < frame.length; channel++)
-				frame[channel] *= gain;
+			double requiredGain = enabled && peak > target ? target / peak : 1;
+			if (requiredGain < attackTarget) {
+				attackTarget = requiredGain;
+				attackRemaining = latencyFrames;
+				attackStep = (gain - attackTarget) / latencyFrames;
+			}
+			if (attackRemaining > 0) {
+				gain = Math.max(attackTarget, gain - attackStep);
+				if (--attackRemaining == 0)
+					attackTarget = 1;
+			} else {
+				gain += (1 - gain) * releaseCoefficient;
+			}
+
+			double outputTarget = targets[position];
+			boolean outputProtected = protectionEnabled[position];
+			boolean ready = buffered >= latencyFrames;
+			if (ready) {
+				System.arraycopy(processedFrames[position], 0, outputProcessed, 0, outputProcessed.length);
+				System.arraycopy(originalFrames[position], 0, outputOriginal, 0, outputOriginal.length);
+				double outputPeak = 0;
+				for (double sample : outputProcessed)
+					outputPeak = Math.max(outputPeak, Math.abs(sample));
+				double outputGain = outputProtected && outputPeak * gain > outputTarget
+						? outputTarget / outputPeak
+						: gain;
+				for (int channel = 0; channel < outputProcessed.length; channel++)
+					outputProcessed[channel] *= outputGain;
+			}
+			System.arraycopy(processed, 0, processedFrames[position], 0, processed.length);
+			System.arraycopy(original, 0, originalFrames[position], 0, original.length);
+			targets[position] = target;
+			protectionEnabled[position] = enabled;
+			position = (position + 1) % latencyFrames;
+			buffered++;
+			return ready;
 		}
 	}
 
