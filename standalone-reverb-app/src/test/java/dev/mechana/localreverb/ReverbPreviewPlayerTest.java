@@ -109,8 +109,8 @@ class ReverbPreviewPlayerTest {
 
 		double target = Math.pow(10, -6.0 / 20);
 		assertEquals(0.2, sample(pcm, 400 * 2), 2.0 / 32768);
-		assertTrue(sample(pcm, 750 * 2) < 0.18);
-		assertTrue(sample(pcm, 750 * 2) > 0.1);
+		assertTrue(sample(pcm, 550 * 2) < 0.18);
+		assertTrue(sample(pcm, 550 * 2) > 0.1);
 		assertEquals(target, sample(pcm, 1_000 * 2), 2.0 / 32768);
 	}
 

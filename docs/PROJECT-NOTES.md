@@ -1813,3 +1813,8 @@ cloud providers remain future direction; see `brain/current-state.md` and
   changes remained audible under heavy reduction. Added 10 ms stereo-linked
   look-ahead so attenuation begins smoothly before each over-range peak, plus a
   regression test for the pre-peak gain ramp.
+- A second lossless capture exposed a defect in the first look-ahead envelope:
+  progressively rising peaks could restart and postpone its attack until abrupt
+  emergency limiting was required. Replaced that scheduling with a rolling-window
+  minimum-gain detector, a 1 ms smoothed attack within the 10 ms look-ahead, and
+  the existing 250 ms release.

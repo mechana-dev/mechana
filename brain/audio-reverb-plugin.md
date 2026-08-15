@@ -118,6 +118,8 @@ stereo-linked gain limiter with 10 ms look-ahead and a smooth 250 ms release. Th
 begins gain reduction before an over-range peak reaches the audio output and
 preserves waveform shape instead of hard-clipping preview samples; offline export
 retains its deterministic two-pass global gain.
+The limiter tracks the most restrictive gain across the complete rolling
+look-ahead window, so a rising peak cannot repeatedly postpone the attack ramp.
 On the first launch of a newly packaged application build, the app compares the
 bundle JAR fingerprint with a marker inside its owned cache directory and removes
 regular cached entries when that fingerprint changes. Repeated launches of the

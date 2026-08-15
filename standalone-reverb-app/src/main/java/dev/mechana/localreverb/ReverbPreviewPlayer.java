@@ -45,6 +45,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private static final int PARAMETER_RAMP_MILLISECONDS = 20;
 	private static final int IR_CROSSFADE_MILLISECONDS = 50;
 	private static final int LIMITER_LOOKAHEAD_MILLISECONDS = 10;
+	private static final int LIMITER_ATTACK_MILLISECONDS = 1;
 	private static final int LIMITER_RELEASE_MILLISECONDS = 250;
 	private static final int MAX_PRE_DELAY_MILLISECONDS = 10_000;
 	private static final double NORMALIZED_IR_PEAK = Math.pow(10, -1.0 / 20);
@@ -649,14 +650,17 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		private final double[][] originalFrames;
 		private final double[] targets;
 		private final boolean[] protectionEnabled;
+		private final long[] minimumIndexes;
+		private final double[] minimumValues;
 		private final int latencyFrames;
+		private final double attackCoefficient;
 		private final double releaseCoefficient;
 		private double gain = 1;
-		private double attackTarget = 1;
-		private double attackStep;
-		private int attackRemaining;
 		private int position;
 		private int buffered;
+		private int minimumHead;
+		private int minimumSize;
+		private long inputIndex;
 
 		private PreviewLimiter(int sampleRate, int channels) {
 			latencyFrames = Math.max(1, sampleRate * LIMITER_LOOKAHEAD_MILLISECONDS / 1000);
@@ -664,6 +668,10 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			originalFrames = new double[latencyFrames][channels];
 			targets = new double[latencyFrames];
 			protectionEnabled = new boolean[latencyFrames];
+			minimumIndexes = new long[latencyFrames + 1];
+			minimumValues = new double[latencyFrames + 1];
+			double attackFrames = Math.max(1, sampleRate * LIMITER_ATTACK_MILLISECONDS / 1000.0);
+			attackCoefficient = 1 - Math.exp(-1 / attackFrames);
 			double releaseFrames = Math.max(1, sampleRate * LIMITER_RELEASE_MILLISECONDS / 1000.0);
 			releaseCoefficient = 1 - Math.exp(-1 / releaseFrames);
 		}
@@ -678,18 +686,13 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			for (double sample : processed)
 				peak = Math.max(peak, Math.abs(sample));
 			double requiredGain = enabled && peak > target ? target / peak : 1;
-			if (requiredGain < attackTarget) {
-				attackTarget = requiredGain;
-				attackRemaining = latencyFrames;
-				attackStep = (gain - attackTarget) / latencyFrames;
-			}
-			if (attackRemaining > 0) {
-				gain = Math.max(attackTarget, gain - attackStep);
-				if (--attackRemaining == 0)
-					attackTarget = 1;
-			} else {
+			discardExpiredMinimum(inputIndex - latencyFrames);
+			addMinimum(requiredGain);
+			double windowRequired = minimumValues[minimumHead];
+			if (windowRequired < gain)
+				gain += (windowRequired - gain) * attackCoefficient;
+			else
 				gain += (1 - gain) * releaseCoefficient;
-			}
 
 			double outputTarget = targets[position];
 			boolean outputProtected = protectionEnabled[position];
@@ -712,7 +715,29 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			protectionEnabled[position] = enabled;
 			position = (position + 1) % latencyFrames;
 			buffered++;
+			inputIndex++;
 			return ready;
+		}
+
+		private void addMinimum(double value) {
+			int capacity = minimumValues.length;
+			while (minimumSize > 0) {
+				int last = (minimumHead + minimumSize - 1) % capacity;
+				if (minimumValues[last] < value)
+					break;
+				minimumSize--;
+			}
+			int insertion = (minimumHead + minimumSize) % capacity;
+			minimumIndexes[insertion] = inputIndex;
+			minimumValues[insertion] = value;
+			minimumSize++;
+		}
+
+		private void discardExpiredMinimum(long oldest) {
+			while (minimumSize > 0 && minimumIndexes[minimumHead] < oldest) {
+				minimumHead = (minimumHead + 1) % minimumValues.length;
+				minimumSize--;
+			}
 		}
 	}
 
