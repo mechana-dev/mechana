@@ -172,8 +172,7 @@ final class SshProvisioner {
 
 	static String windowsTaskInstallCommand(String scriptPath) {
 		String registration = windowsTaskRegistrationScript(scriptPath);
-		String encoded = java.util.Base64.getEncoder()
-				.encodeToString(registration.getBytes(StandardCharsets.UTF_16LE));
+		String encoded = java.util.Base64.getEncoder().encodeToString(registration.getBytes(StandardCharsets.UTF_16LE));
 		return "schtasks /End /TN MechanaWorkerHostAgent 2>NUL & "
 				+ "powershell.exe -NoProfile -NonInteractive -EncodedCommand " + encoded
 				+ " & schtasks /Run /TN MechanaWorkerHostAgent";
@@ -521,10 +520,6 @@ final class SshProvisioner {
 
 	private static String psQuote(String value) {
 		return "'" + psLiteral(value) + "'";
-	}
-
-	private static String cmdQuote(String value) {
-		return "\"" + value.replace("\"", "\\\"") + "\"";
 	}
 
 	private static String quote(String value) {
