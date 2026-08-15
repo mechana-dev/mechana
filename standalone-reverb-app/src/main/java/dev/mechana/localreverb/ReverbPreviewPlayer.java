@@ -17,8 +17,10 @@ package dev.mechana.localreverb;
 
 import dev.mechana.plugins.audio.DryAudioImporter;
 import dev.mechana.plugins.audio.ImpulseResponse;
+import dev.mechana.plugins.audio.ImpulseResponseCalibration;
 import dev.mechana.plugins.audio.ImpulseResponseShaper;
 import dev.mechana.plugins.audio.PartitionedConvolver;
+import dev.mechana.plugins.audio.StreamingPeakProtector;
 import dev.mechana.plugins.audio.WavFile;
 import dev.mechana.plugins.audio.WetEqualizer;
 import java.io.ByteArrayOutputStream;
@@ -40,13 +42,10 @@ import javax.sound.sampled.SourceDataLine;
  * Streams a selected recording through the production convolution primitives.
  */
 final class ReverbPreviewPlayer implements AutoCloseable {
-	private static final int BLOCK_SIZE = 1024;
+	private static final int BLOCK_SIZE = dev.mechana.plugins.audio.AudioConvolutionProcessor.DEFAULT_BLOCK_SIZE;
 	private static final int DRY_END_FADE_MILLISECONDS = 10;
 	private static final int PARAMETER_RAMP_MILLISECONDS = 20;
 	private static final int IR_CROSSFADE_MILLISECONDS = 50;
-	private static final int LIMITER_LOOKAHEAD_MILLISECONDS = 10;
-	private static final int LIMITER_ATTACK_MILLISECONDS = 1;
-	private static final int LIMITER_RELEASE_MILLISECONDS = 250;
 	private static final int MAX_PRE_DELAY_MILLISECONDS = 10_000;
 	private static final double NORMALIZED_IR_PEAK = Math.pow(10, -1.0 / 20);
 	private final AtomicBoolean stopped = new AtomicBoolean(true);
@@ -61,6 +60,9 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private volatile ConvolutionBank pendingBank;
 	private volatile int previewSampleRate;
 	private volatile Path selectedIrPath;
+	private volatile double selectedCalibrationGain = 1;
+	private volatile Consumer<Position> positionListener = ignored -> {
+	};
 	private volatile LiveParameters liveParameters = new LiveParameters(0, 0, 0, 0, 0, 1, 1, 0, 100, false, true, 1);
 
 	ReverbPreviewPlayer() {
@@ -77,7 +79,8 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 
 	record Settings(Path dryPath, Path irPath, double wet, double dry, double preDelayMilliseconds, double lowCutHertz,
 			double highCutHertz, double earlyLevel, double lateLevel, double attackMilliseconds,
-			double decayLengthPercent, boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
+			double decayLengthPercent, boolean normalizeIr, boolean peakProtection, double headroomDecibels,
+			double irCalibrationGain) {
 		Settings {
 			Objects.requireNonNull(dryPath, "dryPath");
 			Objects.requireNonNull(irPath, "irPath");
@@ -86,15 +89,26 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					|| !validFrequency(lowCutHertz) || !validFrequency(highCutHertz)
 					|| lowCutHertz > 0 && highCutHertz > 0 && lowCutHertz >= highCutHertz
 					|| !validShaping(earlyLevel, lateLevel, attackMilliseconds, decayLengthPercent)
-					|| !Double.isFinite(headroomDecibels) || headroomDecibels < 0)
+					|| !Double.isFinite(headroomDecibels) || headroomDecibels < 0 || !Double.isFinite(irCalibrationGain)
+					|| irCalibrationGain <= 0)
 				throw new IllegalArgumentException("Invalid preview settings");
 		}
 
 		Settings(Path dryPath, Path irPath, double wet, double dry, double preDelayMilliseconds, double lowCutHertz,
 				double highCutHertz, boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
 			this(dryPath, irPath, wet, dry, preDelayMilliseconds, lowCutHertz, highCutHertz, 1, 1, 0, 100, normalizeIr,
-					peakProtection, headroomDecibels);
+					peakProtection, headroomDecibels, 1);
 		}
+
+		Settings(Path dryPath, Path irPath, double wet, double dry, double preDelayMilliseconds, double lowCutHertz,
+				double highCutHertz, double earlyLevel, double lateLevel, double attackMilliseconds,
+				double decayLengthPercent, boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
+			this(dryPath, irPath, wet, dry, preDelayMilliseconds, lowCutHertz, highCutHertz, earlyLevel, lateLevel,
+					attackMilliseconds, decayLengthPercent, normalizeIr, peakProtection, headroomDecibels, 1);
+		}
+	}
+
+	record Position(long frame, long totalFrames, int sampleRate) {
 	}
 
 	private record LiveParameters(double wet, double dry, double preDelayMilliseconds, double lowCutHertz,
@@ -124,8 +138,14 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	}
 
 	void play(Settings settings, Consumer<State> state, Consumer<String> failure) {
+		play(settings, 0, state, failure);
+	}
+
+	void play(Settings settings, double startFraction, Consumer<State> state, Consumer<String> failure) {
 		Objects.requireNonNull(state, "state");
 		Objects.requireNonNull(failure, "failure");
+		if (!Double.isFinite(startFraction) || startFraction < 0 || startFraction > 1)
+			throw new IllegalArgumentException("Preview position must be between zero and one");
 		Thread previous = playbackThread;
 		stop();
 		if (previous != null)
@@ -139,6 +159,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		stopped.set(false);
 		paused = false;
 		selectedIrPath = settings.irPath();
+		selectedCalibrationGain = settings.irCalibrationGain();
 		update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.lowCutHertz(),
 				settings.highCutHertz(), settings.earlyLevel(), settings.lateLevel(), settings.attackMilliseconds(),
 				settings.decayLengthPercent(), settings.normalizeIr(), settings.peakProtection(),
@@ -146,7 +167,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		Thread thread = Thread.ofVirtual().name("mechana-reverb-preview").start(() -> {
 			state.accept(State.PREPARING);
 			try {
-				streamRepeated(settings, systemSink(), state, -1);
+				streamRepeated(settings, systemSink(), state, -1, startFraction);
 				if (!stopped.get())
 					state.accept(State.FINISHED);
 			} catch (IOException | RuntimeException playbackFailure) {
@@ -159,6 +180,10 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			}
 		});
 		playbackThread = thread;
+	}
+
+	void onPosition(Consumer<Position> listener) {
+		positionListener = Objects.requireNonNull(listener, "listener");
 	}
 
 	void update(double wet, double dry, double preDelayMilliseconds, double lowCutHertz, double highCutHertz,
@@ -231,7 +256,8 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		looping = value;
 	}
 
-	void changeImpulseResponse(Path path, Runnable resampling, Consumer<Path> success, Consumer<String> failure) {
+	void changeImpulseResponse(Path path, double calibrationGain, Runnable resampling, Consumer<Path> success,
+			Consumer<String> failure) {
 		Objects.requireNonNull(path, "path");
 		Objects.requireNonNull(resampling, "resampling");
 		Objects.requireNonNull(success, "success");
@@ -244,11 +270,12 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		}
 		Thread.ofVirtual().name("mechana-reverb-ir-loader").start(() -> {
 			try {
-				ConvolutionBank bank = prepareBank(path, sampleRate, resampling);
+				ConvolutionBank bank = prepareBank(path, sampleRate, calibrationGain, resampling);
 				if (!isActive() || previewSampleRate != sampleRate || irLoadSequence.get() != request)
 					return;
 				pendingBank = bank;
 				selectedIrPath = path;
+				selectedCalibrationGain = calibrationGain;
 				success.accept(path);
 			} catch (IOException | RuntimeException loadFailure) {
 				failure.accept(rootMessage(loadFailure));
@@ -260,32 +287,35 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		int sampleRate = previewSampleRate;
 		if (!isActive() || sampleRate < 1)
 			throw new IOException("Start the preview before changing its impulse response.");
-		pendingBank = prepareBank(path, sampleRate, () -> {
+		pendingBank = prepareBank(path, sampleRate, 1, () -> {
 		});
 		selectedIrPath = path;
 	}
 
 	private void streamRepeated(Settings settings, AudioSinkFactory sinkFactory, Consumer<State> state,
-			int maximumIterations) throws IOException {
+			int maximumIterations, double firstStartFraction) throws IOException {
 		int iteration = 0;
 		do {
-			stream(settings, sinkFactory, state);
+			stream(settings, sinkFactory, state, iteration == 0 ? firstStartFraction : 0);
 			iteration++;
 		} while (!stopped.get() && looping && (maximumIterations < 0 || iteration < maximumIterations));
 	}
 
-	private void stream(Settings settings, AudioSinkFactory sinkFactory, Consumer<State> state) throws IOException {
+	private void stream(Settings settings, AudioSinkFactory sinkFactory, Consumer<State> state, double startFraction)
+			throws IOException {
 		Path temporaryDirectory = Files.createTempDirectory("mechana-reverb-preview-");
 		Path converted = temporaryDirectory.resolve("dry.wav");
 		try {
 			Path prepared = DryAudioImporter.prepareNative(settings.dryPath(), converted);
 			try (WavFile.Reader source = WavFile.open(prepared)) {
 				WavFile.Format format = source.format();
+				long startFrame = Math.min(format.frames(), Math.round(format.frames() * startFraction));
 				LiveParameters parameters = liveParameters;
 				Path irPath = selectedIrPath == null ? settings.irPath() : selectedIrPath;
 				ImpulseResponse ir = shape(
-						ImpulseResponse.read(impulseResponseCache.prepare(irPath, format.sampleRate(),
-								() -> state.accept(State.REGENERATING_IR)), false),
+						ImpulseResponseCalibration.apply(ImpulseResponse.read(impulseResponseCache.prepare(irPath,
+								format.sampleRate(), () -> state.accept(State.REGENERATING_IR)), false),
+								selectedCalibrationGain),
 						parameters.earlyLevel(), parameters.lateLevel(), parameters.attackMilliseconds(),
 						parameters.decayLengthPercent());
 				previewSampleRate = format.sampleRate();
@@ -294,12 +324,14 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 				int outputChannels = 2;
 				long preDelay = Math.round(settings.preDelayMilliseconds() * format.sampleRate() / 1000.0);
 				long outputFrames = Math.max(format.frames(), format.frames() + ir.length() - 1L + preDelay);
+				long preRollFrame = Math.max(0, startFrame - ir.length() - preDelay - format.sampleRate());
+				source.seekFrame(preRollFrame);
 				try (AudioSink sink = sinkFactory.open(format.sampleRate(), outputChannels)) {
 					activeSink = sink;
 					sink.start();
 					state.accept(State.PLAYING);
 					process(source, format, new ConvolutionBank(ir, outputChannels), outputChannels, outputFrames,
-							sink);
+							preRollFrame, startFrame, sink);
 					if (!stopped.get())
 						sink.drain();
 				}
@@ -313,7 +345,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	}
 
 	private void process(WavFile.Reader source, WavFile.Format format, ConvolutionBank initialBank, int outputChannels,
-			long outputFrames, AudioSink sink) throws IOException {
+			long outputFrames, long preRollFrame, long audibleStartFrame, AudioSink sink) throws IOException {
 		VariableDelayLine[] delays = new VariableDelayLine[outputChannels];
 		WetEqualizer[] equalizers = new WetEqualizer[outputChannels];
 		for (int channel = 0; channel < outputChannels; channel++)
@@ -325,7 +357,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		SmoothedValue dryLevel = new SmoothedValue(liveParameters.dry());
 		SmoothedValue headroom = new SmoothedValue(headroomTarget(liveParameters));
 		SmoothedValue bypass = new SmoothedValue(bypassed ? 1 : 0);
-		PreviewLimiter limiter = new PreviewLimiter(format.sampleRate(), outputChannels);
+		StreamingPeakProtector limiter = new StreamingPeakProtector(format.sampleRate(), outputChannels);
 		int rampFrames = Math.max(1, format.sampleRate() * PARAMETER_RAMP_MILLISECONDS / 1000);
 		double[][] input = new double[format.channels()][BLOCK_SIZE];
 		byte[] pcm = new byte[BLOCK_SIZE * outputChannels * 2];
@@ -333,8 +365,8 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		double[] originalFrame = new double[outputChannels];
 		double[] limitedFrame = new double[outputChannels];
 		double[] delayedOriginalFrame = new double[outputChannels];
-		long sourcePosition = 0;
-		long outputPosition = 0;
+		long sourcePosition = preRollFrame;
+		long outputPosition = preRollFrame;
 		long requiredOutputFrames = outputFrames;
 		int maximumIrLength = initialBank.length();
 		ConvolutionBank activeBank = initialBank;
@@ -364,6 +396,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					format.frames() + maximumIrLength - 1L + requestedDelay);
 			int frames = (int) Math.min(BLOCK_SIZE, requiredOutputFrames + limiter.latencyFrames() - outputPosition);
 			int byteIndex = 0;
+			long lastAudibleFrame = -1;
 			for (int frame = 0; frame < frames; frame++) {
 				LiveParameters parameters = liveParameters;
 				wetLevel.target(parameters.wet(), rampFrames);
@@ -395,6 +428,9 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 				if (!limiter.push(processedFrame, originalFrame, currentHeadroom, parameters.peakProtection(),
 						limitedFrame, delayedOriginalFrame))
 					continue;
+				long audibleFrame = outputPosition + frame - limiter.latencyFrames();
+				if (audibleFrame < audibleStartFrame)
+					continue;
 				for (int channel = 0; channel < outputChannels; channel++) {
 					double sample = limitedFrame[channel] * (1 - currentBypass)
 							+ delayedOriginalFrame[channel] * currentBypass;
@@ -405,12 +441,16 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 				}
 				if (transitionBank != null && crossfadeFrame < crossfadeFrames)
 					crossfadeFrame++;
+				lastAudibleFrame = audibleFrame;
 			}
 			if (transitionBank != null && crossfadeFrame >= crossfadeFrames) {
 				activeBank = transitionBank;
 				transitionBank = null;
 			}
 			sink.write(pcm, byteIndex);
+			if (lastAudibleFrame >= 0)
+				positionListener.accept(new Position(Math.min(lastAudibleFrame, format.frames()), format.frames(),
+						format.sampleRate()));
 			sourcePosition += sourceFrames;
 			outputPosition += frames;
 		}
@@ -424,10 +464,13 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		return peak > NORMALIZED_IR_PEAK ? NORMALIZED_IR_PEAK / peak : 1;
 	}
 
-	private ConvolutionBank prepareBank(Path path, int sampleRate, Runnable resampling) throws IOException {
+	private ConvolutionBank prepareBank(Path path, int sampleRate, double calibrationGain, Runnable resampling)
+			throws IOException {
 		LiveParameters parameters = liveParameters;
 		ImpulseResponse ir = shape(
-				ImpulseResponse.read(impulseResponseCache.prepare(path, sampleRate, resampling), false),
+				ImpulseResponseCalibration.apply(
+						ImpulseResponse.read(impulseResponseCache.prepare(path, sampleRate, resampling), false),
+						calibrationGain),
 				parameters.earlyLevel(), parameters.lateLevel(), parameters.attackMilliseconds(),
 				parameters.decayLengthPercent());
 		if (ir.channelCount() > 2)
@@ -530,6 +573,8 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		Path cache = parent.resolve("preview-ir-cache");
 		ReverbPreviewPlayer player = new ReverbPreviewPlayer(new ImpulseResponseCache(cache));
 		player.stopped.set(false);
+		player.selectedIrPath = settings.irPath();
+		player.selectedCalibrationGain = settings.irCalibrationGain();
 		player.update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.lowCutHertz(),
 				settings.highCutHertz(), settings.earlyLevel(), settings.lateLevel(), settings.attackMilliseconds(),
 				settings.decayLengthPercent(), settings.normalizeIr(), settings.peakProtection(),
@@ -537,7 +582,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		player.stream(settings,
 				(sampleRate, channels) -> new MemoryAudioSink(output, () -> afterFirstBlock.accept(player)),
 				ignored -> {
-				});
+				}, 0);
 		return output.toByteArray();
 	}
 
@@ -549,13 +594,32 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		player.stopped.set(false);
 		player.looping = true;
 		player.selectedIrPath = settings.irPath();
+		player.selectedCalibrationGain = settings.irCalibrationGain();
 		player.update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.lowCutHertz(),
 				settings.highCutHertz(), settings.earlyLevel(), settings.lateLevel(), settings.attackMilliseconds(),
 				settings.decayLengthPercent(), settings.normalizeIr(), settings.peakProtection(),
 				settings.headroomDecibels());
 		player.streamRepeated(settings, (sampleRate, channels) -> new MemoryAudioSink(output, () -> {
 		}), ignored -> {
-		}, iterations);
+		}, iterations, 0);
+		return output.toByteArray();
+	}
+
+	static byte[] renderFromForTest(Settings settings, double startFraction) throws IOException {
+		ByteArrayOutputStream output = new ByteArrayOutputStream();
+		Path parent = Objects.requireNonNull(settings.dryPath().toAbsolutePath().getParent(), "dry audio parent");
+		ReverbPreviewPlayer player = new ReverbPreviewPlayer(
+				new ImpulseResponseCache(parent.resolve("preview-seek-ir-cache")));
+		player.stopped.set(false);
+		player.selectedIrPath = settings.irPath();
+		player.selectedCalibrationGain = settings.irCalibrationGain();
+		player.update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.lowCutHertz(),
+				settings.highCutHertz(), settings.earlyLevel(), settings.lateLevel(), settings.attackMilliseconds(),
+				settings.decayLengthPercent(), settings.normalizeIr(), settings.peakProtection(),
+				settings.headroomDecibels());
+		player.stream(settings, (sampleRate, channels) -> new MemoryAudioSink(output, () -> {
+		}), ignored -> {
+		}, startFraction);
 		return output.toByteArray();
 	}
 
@@ -642,102 +706,6 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					current = target;
 			}
 			return current;
-		}
-	}
-
-	private static final class PreviewLimiter {
-		private final double[][] processedFrames;
-		private final double[][] originalFrames;
-		private final double[] targets;
-		private final boolean[] protectionEnabled;
-		private final long[] minimumIndexes;
-		private final double[] minimumValues;
-		private final int latencyFrames;
-		private final double attackCoefficient;
-		private final double releaseCoefficient;
-		private double gain = 1;
-		private int position;
-		private int buffered;
-		private int minimumHead;
-		private int minimumSize;
-		private long inputIndex;
-
-		private PreviewLimiter(int sampleRate, int channels) {
-			latencyFrames = Math.max(1, sampleRate * LIMITER_LOOKAHEAD_MILLISECONDS / 1000);
-			processedFrames = new double[latencyFrames][channels];
-			originalFrames = new double[latencyFrames][channels];
-			targets = new double[latencyFrames];
-			protectionEnabled = new boolean[latencyFrames];
-			minimumIndexes = new long[latencyFrames + 1];
-			minimumValues = new double[latencyFrames + 1];
-			double attackFrames = Math.max(1, sampleRate * LIMITER_ATTACK_MILLISECONDS / 1000.0);
-			attackCoefficient = 1 - Math.exp(-1 / attackFrames);
-			double releaseFrames = Math.max(1, sampleRate * LIMITER_RELEASE_MILLISECONDS / 1000.0);
-			releaseCoefficient = 1 - Math.exp(-1 / releaseFrames);
-		}
-
-		private int latencyFrames() {
-			return latencyFrames;
-		}
-
-		private boolean push(double[] processed, double[] original, double target, boolean enabled,
-				double[] outputProcessed, double[] outputOriginal) {
-			double peak = 0;
-			for (double sample : processed)
-				peak = Math.max(peak, Math.abs(sample));
-			double requiredGain = enabled && peak > target ? target / peak : 1;
-			discardExpiredMinimum(inputIndex - latencyFrames);
-			addMinimum(requiredGain);
-			double windowRequired = minimumValues[minimumHead];
-			if (windowRequired < gain)
-				gain += (windowRequired - gain) * attackCoefficient;
-			else
-				gain += (1 - gain) * releaseCoefficient;
-
-			double outputTarget = targets[position];
-			boolean outputProtected = protectionEnabled[position];
-			boolean ready = buffered >= latencyFrames;
-			if (ready) {
-				System.arraycopy(processedFrames[position], 0, outputProcessed, 0, outputProcessed.length);
-				System.arraycopy(originalFrames[position], 0, outputOriginal, 0, outputOriginal.length);
-				double outputPeak = 0;
-				for (double sample : outputProcessed)
-					outputPeak = Math.max(outputPeak, Math.abs(sample));
-				double outputGain = outputProtected && outputPeak * gain > outputTarget
-						? outputTarget / outputPeak
-						: gain;
-				for (int channel = 0; channel < outputProcessed.length; channel++)
-					outputProcessed[channel] *= outputGain;
-			}
-			System.arraycopy(processed, 0, processedFrames[position], 0, processed.length);
-			System.arraycopy(original, 0, originalFrames[position], 0, original.length);
-			targets[position] = target;
-			protectionEnabled[position] = enabled;
-			position = (position + 1) % latencyFrames;
-			buffered++;
-			inputIndex++;
-			return ready;
-		}
-
-		private void addMinimum(double value) {
-			int capacity = minimumValues.length;
-			while (minimumSize > 0) {
-				int last = (minimumHead + minimumSize - 1) % capacity;
-				if (minimumValues[last] < value)
-					break;
-				minimumSize--;
-			}
-			int insertion = (minimumHead + minimumSize) % capacity;
-			minimumIndexes[insertion] = inputIndex;
-			minimumValues[insertion] = value;
-			minimumSize++;
-		}
-
-		private void discardExpiredMinimum(long oldest) {
-			while (minimumSize > 0 && minimumIndexes[minimumHead] < oldest) {
-				minimumHead = (minimumHead + 1) % minimumValues.length;
-				minimumSize--;
-			}
 		}
 	}
 

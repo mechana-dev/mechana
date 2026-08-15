@@ -47,6 +47,9 @@ class IrProfileLibraryTest {
 		IrProfileLibrary.Profile namedAgain = library.addGenerated(imported, "Scott's Plate Take 1");
 
 		assertTrue(java.nio.file.Files.isRegularFile(first.path()));
+		assertTrue(java.nio.file.Files
+				.isRegularFile(first.path().resolveSibling(first.path().getFileName() + ".calibration.properties")));
+		assertTrue(first.calibrationGain() > 0);
 		assertFalse(first.path().equals(imported));
 		assertFalse(first.path().equals(second.path()));
 		assertEquals("Scott's Plate Take 1.wav", named.path().getFileName().toString());
@@ -58,6 +61,8 @@ class IrProfileLibraryTest {
 		assertThrows(IOException.class, () -> library.addGenerated(imported, "small-room", true));
 		library.remove(first);
 		assertFalse(java.nio.file.Files.exists(first.path()));
+		assertFalse(java.nio.file.Files
+				.exists(first.path().resolveSibling(first.path().getFileName() + ".calibration.properties")));
 		assertThrows(IOException.class, () -> library.remove(new IrProfileLibrary.Profile("Factory", factoryIr, true)));
 	}
 
@@ -71,15 +76,20 @@ class IrProfileLibraryTest {
 		IrProfileLibrary library = new IrProfileLibrary(libraryPath, factory);
 		IrProfileLibrary.Profile added = library.addGenerated(source, "First Capture");
 		Path originalReport = added.path().resolveSibling(added.path().getFileName() + ".txt");
+		Path originalCalibration = added.path().resolveSibling(added.path().getFileName() + ".calibration.properties");
 		java.nio.file.Files.writeString(originalReport, "capture details");
 
 		IrProfileLibrary.Profile renamed = library.rename(added, "Scott Plate");
 		Path renamedReport = renamed.path().resolveSibling(renamed.path().getFileName() + ".txt");
+		Path renamedCalibration = renamed.path()
+				.resolveSibling(renamed.path().getFileName() + ".calibration.properties");
 		assertEquals("Scott Plate.wav", renamed.path().getFileName().toString());
 		assertFalse(java.nio.file.Files.exists(added.path()));
 		assertFalse(java.nio.file.Files.exists(originalReport));
 		assertTrue(java.nio.file.Files.isRegularFile(renamed.path()));
 		assertEquals("capture details", java.nio.file.Files.readString(renamedReport));
+		assertFalse(java.nio.file.Files.exists(originalCalibration));
+		assertTrue(java.nio.file.Files.isRegularFile(renamedCalibration));
 
 		IrProfileLibrary.Profile conflicting = library.addGenerated(source, "Existing");
 		assertThrows(IOException.class, () -> library.rename(renamed, "Existing"));
@@ -90,6 +100,7 @@ class IrProfileLibraryTest {
 		library.remove(renamed);
 		assertFalse(java.nio.file.Files.exists(renamed.path()));
 		assertFalse(java.nio.file.Files.exists(renamedReport));
+		assertFalse(java.nio.file.Files.exists(renamedCalibration));
 	}
 
 	private static Path wav(Path path) throws IOException {

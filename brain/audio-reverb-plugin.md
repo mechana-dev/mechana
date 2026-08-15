@@ -13,7 +13,7 @@ The launcher also offers an optional shared artifacts root. The server preserves
 its normal durable job artifacts and mirrors each successful reverb job into a
 separate `<root>/<job-id>/` directory for convenient collection and Finder access.
 The launcher suggests an output filename based on the dry source and IR stems plus
-the wet, dry, pre-delay, and IR-normalization controls. The suggestion remains live
+the wet, dry, and pre-delay controls. The suggestion remains live
 until the user types an explicit override; peak protection and headroom are
 intentionally omitted from the filename.
 
@@ -61,7 +61,13 @@ defaults to 100%, producing an exact shaping bypass. Active shaping operates onl
 on samples in the captured IR before FFT partition preparation. Decay shortening
 fades and truncates the prepared IR, reducing partition count where possible;
 the implementation does not synthesize a longer tail or new reflections.
-IR normalization is attenuation-only: peaks
+Every standalone-library IR also receives a non-destructive, stereo-linked energy
+calibration. The original WAV is never rewritten; a checksum-bound properties
+sidecar stores one gain scalar used by both Preview and Apply. Energy measurement
+is sample-rate-aware, upward correction is capped at +12 dB, and calibrated peaks
+are held below -1 dBFS. Factory profiles are recalibrated when installed or updated,
+while imported and sweep-generated profiles are calibrated as they enter the
+library. IR normalization remains attenuation-only: peaks
 above -1 dBFS are reduced to -1 dBFS, while quieter measured responses retain
 their captured gain. This prevents hardware IRs from being unintentionally
 amplified before convolution. No external executable, native DSP library, or
@@ -109,15 +115,17 @@ content selects a new cache entry automatically. Variants are created lazily so
 the user manages only the selected master IR; the status bar reports a sample-rate
 regeneration only on the first use of each IR/rate pair. Paired sliders and numeric override fields control wet level, dry level,
 and pre-delay; the pre-delay slider spans 0–200 ms while its numeric override
-continues to accept larger precise values. Those controls plus IR normalization, peak protection, and
-headroom take effect during playback with a 20 ms transition that avoids
+continues to accept larger precise values. Creative controls take effect during
+playback with a 20 ms transition that avoids
 control-change clicks. Normalization is an exact linear gain change on the live
 wet convolution result, so it does not restart or approximate the IR. Because
-streaming cannot know the future global peak, preview peak protection uses a
-stereo-linked gain limiter with 10 ms look-ahead and a smooth 250 ms release. This
+Preview and Apply now share the same stereo-linked streaming peak protector with
+10 ms look-ahead and a smooth 250 ms release. This
 begins gain reduction before an over-range peak reaches the audio output and
-preserves waveform shape instead of hard-clipping preview samples; offline export
-retains its deterministic two-pass global gain.
+preserves waveform shape instead of hard-clipping samples. Whole-file peak
+normalization is no longer silently substituted during Apply, so a preview capture
+and rendered WAV follow the same gain envelope; their remaining differences are
+limited to output encoding and insignificant floating-point rounding.
 The limiter tracks the most restrictive gain across the complete rolling
 look-ahead window, so a rising peak cannot repeatedly postpone the attack ramp.
 On the first launch of a newly packaged application build, the app compares the
@@ -133,7 +141,9 @@ effect on the live wet signal without restarting playback. The captured IR still
 defines decay, room size, diffusion, and modulation; those algorithmic-reverb
 controls are intentionally not synthesized in this convolution POC.
 The Apply Reverb tab groups functional slider/numeric controls into mix/timing,
-captured-response shaping, wet EQ, and output sections. A Reset to Captured
+captured-response shaping, and wet EQ sections. IR peak safety, streaming peak
+protection, and 1 dB safe headroom are automatic and intentionally absent from the
+consumer UI. A Reset to Captured
 Response action restores neutral early, late, attack, and decay values. Separate
 resets restore mix/timing to wet 0, dry 1, and pre-delay 0, or disable both wet EQ
 filters. Conventional preview transport buttons and the single offline Apply action
@@ -146,16 +156,21 @@ deletion after row selection. Preview uses one stateful Play/Pause button plus a
 larger Stop control. Preview controls sit to the left while the larger Apply action
 sits separately at the right. An optional Loop setting repeats the selected clip
 and its full reverb tail until Stop, and may be toggled during playback.
+A timeline beneath the preview controls reports elapsed and total source time and
+supports click/drag seeking. A seek restarts the streaming engine at the requested
+source position after silently processing an IR-length, pre-delay, and filter-state
+pre-roll, so the first audible scrubbed sample retains its established reverb.
 
 The standalone app owns one durable IR library at
 `~/Library/Application Support/Mechana Reverb/IR Profiles`. Missing factory IRs
-are copied from the bundle into this library, imported WAVs are validated and
+are copied or refreshed from the bundle in this library, imported WAVs are validated and
 copied there under unique names, and newly generated profiles are added and
 selected automatically. The UI selects profiles by readable name and provides
 Add and Manage actions; factory profiles cannot be removed through the app.
 Manage opens a dedicated profile window with the complete library in a scrolling list.
 User-added profiles can be renamed or deleted, including their generation report
-sidecars; any profile can be exported. Factory profiles remain read-only.
+and calibration sidecars; any original profile WAV can be exported. Factory
+profiles remain read-only.
 Factory selection also disables Finder reveal, while Export remains available.
 The application bundle carries the five synthetic development IRs previously used
 for listening tests and exposes them through a dedicated chooser. It also bundles

@@ -29,19 +29,32 @@ import java.util.function.IntConsumer;
 /** Streams a dry WAV through channel-aware partitioned convolution. */
 public final class AudioConvolutionProcessor {
 	private static final int DRY_END_FADE_MILLISECONDS = 10;
-	public static final int DEFAULT_BLOCK_SIZE = 2048;
+	/**
+	 * Shared preview/render block size; keeping this identical avoids
+	 * path-dependent FFT rounding.
+	 */
+	public static final int DEFAULT_BLOCK_SIZE = 1024;
 
 	public record Options(double wet, double dry, double preDelayMilliseconds, double lowCutHertz, double highCutHertz,
 			double earlyLevel, double lateLevel, double attackMilliseconds, double decayLengthPercent,
-			boolean normalizeIr, boolean peakProtection, double headroomDecibels, int blockSize) {
+			boolean normalizeIr, boolean peakProtection, double headroomDecibels, int blockSize,
+			double irCalibrationGain) {
 		public Options {
 			if (!Double.isFinite(wet) || !Double.isFinite(dry) || wet < 0 || dry < 0
 					|| !Double.isFinite(preDelayMilliseconds) || preDelayMilliseconds < 0
 					|| !Double.isFinite(lowCutHertz) || lowCutHertz < 0 || !Double.isFinite(highCutHertz)
 					|| highCutHertz < 0 || !Double.isFinite(headroomDecibels) || headroomDecibels < 0 || blockSize < 1
-					|| Integer.bitCount(blockSize) != 1)
+					|| Integer.bitCount(blockSize) != 1 || !Double.isFinite(irCalibrationGain)
+					|| irCalibrationGain <= 0)
 				throw new IllegalArgumentException("Invalid convolution options");
 			new ImpulseResponseShaper.Options(earlyLevel, lateLevel, attackMilliseconds, decayLengthPercent);
+		}
+
+		public Options(double wet, double dry, double preDelayMilliseconds, double lowCutHertz, double highCutHertz,
+				double earlyLevel, double lateLevel, double attackMilliseconds, double decayLengthPercent,
+				boolean normalizeIr, boolean peakProtection, double headroomDecibels, int blockSize) {
+			this(wet, dry, preDelayMilliseconds, lowCutHertz, highCutHertz, earlyLevel, lateLevel, attackMilliseconds,
+					decayLengthPercent, normalizeIr, peakProtection, headroomDecibels, blockSize, 1);
 		}
 	}
 
@@ -51,9 +64,12 @@ public final class AudioConvolutionProcessor {
 	public Result process(Path dryPath, Path irPath, Path outputPath, Path workDirectory, Options options,
 			IntConsumer progress) throws IOException {
 		Objects.requireNonNull(progress, "progress");
-		ImpulseResponse ir = ImpulseResponseShaper.shape(ImpulseResponse.read(irPath, options.normalizeIr()),
+		ImpulseResponse ir = ImpulseResponseShaper.shape(
+				ImpulseResponseCalibration.apply(ImpulseResponse.read(irPath, false), options.irCalibrationGain()),
 				new ImpulseResponseShaper.Options(options.earlyLevel(), options.lateLevel(),
 						options.attackMilliseconds(), options.decayLengthPercent()));
+		if (options.normalizeIr())
+			ir = ir.attenuatePeak();
 		Files.createDirectories(workDirectory);
 		Path spool = Files.createTempFile(workDirectory, "audio-reverb-", ".f64");
 		try (WavFile.Reader dry = WavFile.open(dryPath)) {
@@ -72,11 +88,9 @@ public final class AudioConvolutionProcessor {
 			for (int channel = 0; channel < outputChannels; channel++)
 				convolvers[channel] = new PartitionedConvolver(ir.channel(Math.min(channel, ir.channelCount() - 1)),
 						options.blockSize());
-			double peak = convolve(dry, spool, format, outputChannels, outputFrames, preDelay, options, convolvers,
+			double gain = convolve(dry, spool, format, outputChannels, outputFrames, preDelay, options, convolvers,
 					progress);
-			double target = Math.pow(10, -options.headroomDecibels() / 20);
-			double gain = options.peakProtection() && peak > target ? target / peak : 1;
-			write(spool, outputPath, format.sampleRate(), outputChannels, outputFrames, gain);
+			write(spool, outputPath, format.sampleRate(), outputChannels, outputFrames);
 			progress.accept(100);
 			return new Result(outputFrames, outputChannels, format.sampleRate(), gain);
 		} finally {
@@ -91,7 +105,11 @@ public final class AudioConvolutionProcessor {
 		double[][] input = new double[format.channels()][blockSize];
 		long sourcePosition = 0;
 		long outputPosition = 0;
-		double peak = 0;
+		StreamingPeakProtector protector = new StreamingPeakProtector(format.sampleRate(), outputChannels);
+		double target = Math.pow(10, -options.headroomDecibels() / 20);
+		double[] mixedFrame = new double[outputChannels];
+		double[] protectedFrame = new double[outputChannels];
+		double[] ignoredPassthrough = new double[outputChannels];
 		DelayLine[] delays = new DelayLine[outputChannels];
 		WetEqualizer[] equalizers = new WetEqualizer[outputChannels];
 		for (int channel = 0; channel < outputChannels; channel++) {
@@ -100,7 +118,7 @@ public final class AudioConvolutionProcessor {
 		}
 		try (DataOutputStream temporary = new DataOutputStream(
 				new BufferedOutputStream(Files.newOutputStream(spool)))) {
-			while (outputPosition < outputFrames) {
+			while (outputPosition < outputFrames + protector.latencyFrames()) {
 				for (double[] channel : input)
 					java.util.Arrays.fill(channel, 0);
 				int sourceFrames = sourcePosition < format.frames()
@@ -110,8 +128,8 @@ public final class AudioConvolutionProcessor {
 				for (int channel = 0; channel < outputChannels; channel++)
 					wet[channel] = convolvers[channel].process(input[Math.min(channel, input.length - 1)],
 							sourceFrames);
-				int count = (int) Math.min(blockSize, outputFrames - outputPosition);
-				for (int frame = 0; frame < count; frame++)
+				int count = (int) Math.min(blockSize, outputFrames + protector.latencyFrames() - outputPosition);
+				for (int frame = 0; frame < count; frame++) {
 					for (int channel = 0; channel < outputChannels; channel++) {
 						long absolute = outputPosition + frame;
 						double drySample = absolute < format.frames()
@@ -119,16 +137,21 @@ public final class AudioConvolutionProcessor {
 										* dryEndEnvelope(absolute, format.frames(), format.sampleRate())
 								: 0;
 						double wetSample = equalizers[channel].process(delays[channel].push(wet[channel][frame]));
-						double sample = drySample * options.dry() + wetSample * options.wet();
-						temporary.writeDouble(sample);
-						peak = Math.max(peak, Math.abs(sample));
+						mixedFrame[channel] = absolute < outputFrames
+								? drySample * options.dry() + wetSample * options.wet()
+								: 0;
 					}
+					if (protector.push(mixedFrame, mixedFrame, target, options.peakProtection(), protectedFrame,
+							ignoredPassthrough))
+						for (double sample : protectedFrame)
+							temporary.writeDouble(sample);
+				}
 				sourcePosition += sourceFrames;
 				outputPosition += count;
-				progress.accept(Math.min(95, (int) (outputPosition * 95 / outputFrames)));
+				progress.accept(Math.min(95, (int) (Math.min(outputPosition, outputFrames) * 95 / outputFrames)));
 			}
 		}
-		return peak;
+		return protector.minimumGain();
 	}
 
 	private static double dryEndEnvelope(long frame, long totalFrames, int sampleRate) {
@@ -138,14 +161,13 @@ public final class AudioConvolutionProcessor {
 		return (double) (totalFrames - frame - 1) / (fadeFrames - 1);
 	}
 
-	private static void write(Path spool, Path output, int sampleRate, int channels, long frames, double gain)
-			throws IOException {
+	private static void write(Path spool, Path output, int sampleRate, int channels, long frames) throws IOException {
 		try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(spool)));
 				WavFile.Writer writer = WavFile.create24Bit(output, sampleRate, channels, frames)) {
 			double[] frame = new double[channels];
 			for (long index = 0; index < frames; index++) {
 				for (int channel = 0; channel < channels; channel++)
-					frame[channel] = input.readDouble() * gain;
+					frame[channel] = input.readDouble();
 				writer.writeFrame(frame);
 			}
 			if (input.read() != -1)

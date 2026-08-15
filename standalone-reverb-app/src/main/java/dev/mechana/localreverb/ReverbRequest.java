@@ -25,7 +25,7 @@ import java.nio.file.Path;
 public record ReverbRequest(Path dryPath, Path irPath, Path artifactRoot, String outputName, double wet, double dry,
 		double preDelayMilliseconds, double lowCutHertz, double highCutHertz, double earlyLevel, double lateLevel,
 		double attackMilliseconds, double decayLengthPercent, boolean normalizeIr, boolean peakProtection,
-		double headroomDecibels) {
+		double headroomDecibels, double irCalibrationGain) {
 	public ReverbRequest {
 		dryPath = requiredDryFile(dryPath);
 		irPath = requiredWav(irPath, "Impulse-response WAV");
@@ -39,7 +39,8 @@ public record ReverbRequest(Path dryPath, Path irPath, Path artifactRoot, String
 				|| !finiteRange(lowCutHertz, 0, 20_000) || !finiteRange(highCutHertz, 0, 20_000)
 				|| lowCutHertz > 0 && highCutHertz > 0 && lowCutHertz >= highCutHertz || !finiteRange(earlyLevel, 0, 2)
 				|| !finiteRange(lateLevel, 0, 2) || !finiteRange(attackMilliseconds, 0, 5_000)
-				|| !finiteRange(decayLengthPercent, 1, 100) || !finiteRange(headroomDecibels, 0, 24))
+				|| !finiteRange(decayLengthPercent, 1, 100) || !finiteRange(headroomDecibels, 0, 24)
+				|| !finiteRange(irCalibrationGain, 0.000001, 1000))
 			throw new IllegalArgumentException("One or more reverb controls are outside the allowed range");
 	}
 
@@ -47,7 +48,7 @@ public record ReverbRequest(Path dryPath, Path irPath, Path artifactRoot, String
 			double preDelayMilliseconds, double lowCutHertz, double highCutHertz, boolean normalizeIr,
 			boolean peakProtection, double headroomDecibels) {
 		this(dryPath, irPath, artifactRoot, outputName, wet, dry, preDelayMilliseconds, lowCutHertz, highCutHertz, 1, 1,
-				0, 100, normalizeIr, peakProtection, headroomDecibels);
+				0, 100, normalizeIr, peakProtection, headroomDecibels, 1);
 	}
 
 	private static Path requiredDryFile(Path path) {

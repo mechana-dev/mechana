@@ -78,7 +78,11 @@ This file reports repository evidence, not desired future status.
   low-cut/high-cut EQ, neutral-bypass early/late levels, attack, decay shortening,
   IR normalization, peak protection, and headroom. Both EQ
   filters default off, so existing jobs and IR profiles retain their sound. IR normalization safely attenuates
-  peaks above -1 dBFS without boosting quieter measured responses. A reusable
+  peaks above -1 dBFS without boosting quieter measured responses. Standalone
+  library profiles have checksum-bound, non-destructive, stereo-linked energy
+  calibration metadata. Preview and Apply consume the same calibration scalar and
+  streaming look-ahead peak protector; factory, imported, and generated profiles
+  are calibrated automatically without rewriting their WAVs. A reusable
   pure-Java helper and standalone-app workflow deconvolve recorded wet sweep
   returns into aligned, tail-trimmed IRs. Multi-worker contribution assembly
   remains future work.
@@ -94,8 +98,7 @@ This file reports repository evidence, not desired future status.
   as a macOS app with a bundled Java runtime. The app can stream an existing dry
   recording through the selected IR to the default system audio output with
   play, pause/resume, and stop controls; this preview creates no job artifact and
-  retains the complete reverb tail. Wet/dry, pre-delay, IR normalization, peak
-  protection, and headroom edits take effect during playback with short smoothed
+  retains the complete reverb tail. Wet/dry and pre-delay edits take effect during playback with short smoothed
   transitions; wet low/high cuts also update during active playback. The pre-delay slider is limited to 0–200 ms (with a numeric
   override). Preview preserves the dry recording's native sample rate and keeps
   content-addressed, sample-rate-matched IR variants in the user's cache;
@@ -124,14 +127,21 @@ This file reports repository evidence, not desired future status.
   deletion when a row is selected. The dedicated Reverb icon also appears in the
   window header. UI language calls the artifact root the Output folder and avoids
   worker/runtime terminology.
+- The standalone consumer UI does not expose IR normalization, peak protection, or
+  headroom. IR peak safety and streaming peak protection are always enabled with
+  fixed 1 dB headroom; compatibility parameters remain in persisted jobs and the
+  general worker plugin contract.
 - Preview controls are left-aligned beneath the inputs and the offline Apply action
   is isolated on the right. The Loop checkbox repeats the complete selected clip
   plus its reverb tail until Stop; current live settings and selected IR carry into
-  subsequent iterations.
-- Preview peak protection uses a stereo-linked gain limiter with 10 ms look-ahead
-  and a smooth release instead of hard-clipping individual samples or changing
-  gain at the peak itself. Offline Apply retains its deterministic two-pass global
-  gain.
+  subsequent iterations. A preview timeline shows elapsed/total source time and
+  supports drag or click seeking with hidden DSP pre-roll to rebuild convolution,
+  pre-delay, EQ, and limiter state before audible playback resumes.
+- Preview and Apply peak protection use the same stereo-linked streaming gain
+  limiter with 10 ms look-ahead and a smooth release. The normal Apply path no
+  longer substitutes a whole-file gain, allowing preview captures and 24-bit
+  renders to remain sonically equivalent apart from encoding and negligible
+  floating-point differences.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,

@@ -177,7 +177,8 @@ public final class LocalReverbEngine implements AutoCloseable {
 					Map.entry("decayLengthPercent", Double.toString(request.decayLengthPercent())),
 					Map.entry("normalizeIr", Boolean.toString(request.normalizeIr())),
 					Map.entry("peakProtection", Boolean.toString(request.peakProtection())),
-					Map.entry("headroomDecibels", Double.toString(request.headroomDecibels())));
+					Map.entry("headroomDecibels", Double.toString(request.headroomDecibels())),
+					Map.entry("irCalibrationGain", Double.toString(request.irCalibrationGain())));
 		}
 
 		@Override
@@ -234,6 +235,7 @@ public final class LocalReverbEngine implements AutoCloseable {
 		values.put("normalizeIr", request.normalizeIr());
 		values.put("peakProtection", request.peakProtection());
 		values.put("headroomDecibels", request.headroomDecibels());
+		values.put("irCalibrationGain", request.irCalibrationGain());
 		values.put("error", job.error());
 		Path temporary = job.artifactDirectory().resolve("job.json.tmp");
 		json.writerWithDefaultPrettyPrinter().writeValue(temporary.toFile(), values);
@@ -242,21 +244,18 @@ public final class LocalReverbEngine implements AutoCloseable {
 	}
 
 	private static String parameterSummary(ReverbRequest request) {
-		return "Wet %s · Dry %s · Pre %s ms · Early %s · Late %s · Attack %s ms · Decay %s%% · EQ %s/%s Hz · Norm %s"
-				.formatted(compact(request.wet()), compact(request.dry()), compact(request.preDelayMilliseconds()),
-						compact(request.earlyLevel()), compact(request.lateLevel()),
-						compact(request.attackMilliseconds()), compact(request.decayLengthPercent()),
-						compact(request.lowCutHertz()), compact(request.highCutHertz()),
-						request.normalizeIr() ? "on" : "off");
+		return "Wet %s · Dry %s · Pre %s ms · Early %s · Late %s · Attack %s ms · Decay %s%% · EQ %s/%s Hz".formatted(
+				compact(request.wet()), compact(request.dry()), compact(request.preDelayMilliseconds()),
+				compact(request.earlyLevel()), compact(request.lateLevel()), compact(request.attackMilliseconds()),
+				compact(request.decayLengthPercent()), compact(request.lowCutHertz()), compact(request.highCutHertz()));
 	}
 
 	private static String parameterSummary(Map<String, Object> values) {
-		return "Wet %s · Dry %s · Pre %s ms · Early %s · Late %s · Attack %s ms · Decay %s%% · EQ %s/%s Hz · Norm %s"
-				.formatted(value(values, "wet", "?"), value(values, "dry", "?"),
-						value(values, "preDelayMilliseconds", "?"), value(values, "earlyLevel", "1"),
-						value(values, "lateLevel", "1"), value(values, "attackMilliseconds", "0"),
-						value(values, "decayLengthPercent", "100"), value(values, "lowCutHertz", "0"),
-						value(values, "highCutHertz", "0"), value(values, "normalizeIr", "?"));
+		return "Wet %s · Dry %s · Pre %s ms · Early %s · Late %s · Attack %s ms · Decay %s%% · EQ %s/%s Hz".formatted(
+				value(values, "wet", "?"), value(values, "dry", "?"), value(values, "preDelayMilliseconds", "?"),
+				value(values, "earlyLevel", "1"), value(values, "lateLevel", "1"),
+				value(values, "attackMilliseconds", "0"), value(values, "decayLengthPercent", "100"),
+				value(values, "lowCutHertz", "0"), value(values, "highCutHertz", "0"));
 	}
 
 	private static String value(Map<String, Object> values, String key, String fallback) {
@@ -304,8 +303,9 @@ public final class LocalReverbEngine implements AutoCloseable {
 				Late tail level: %s
 				Attack: %s ms
 				Decay length: %s%%
-				Normalize IR: %s
-				Peak protection: %s
+				IR calibration gain: %s (%s dB)
+				IR peak safety: Automatic
+				Peak protection: Automatic
 				Safe headroom: %s dB
 				Applied output gain: %s
 
@@ -321,9 +321,9 @@ public final class LocalReverbEngine implements AutoCloseable {
 				request.irPath().getFileName(), request.irPath(), Files.size(request.irPath()), request.wet(),
 				request.dry(), request.preDelayMilliseconds(), frequency(request.lowCutHertz()),
 				frequency(request.highCutHertz()), request.earlyLevel(), request.lateLevel(),
-				request.attackMilliseconds(), request.decayLengthPercent(), yesNo(request.normalizeIr()),
-				yesNo(request.peakProtection()), request.headroomDecibels(), gain == null ? "Not available" : gain,
-				request.outputName(), Files.size(output), sha256(output));
+				request.attackMilliseconds(), request.decayLengthPercent(), request.irCalibrationGain(),
+				compact(20 * Math.log10(request.irCalibrationGain())), request.headroomDecibels(),
+				gain == null ? "Not available" : gain, request.outputName(), Files.size(output), sha256(output));
 	}
 
 	private static String frequency(double hertz) {
@@ -371,10 +371,6 @@ public final class LocalReverbEngine implements AutoCloseable {
 
 	private static Instant instant(Object value) {
 		return value == null || String.valueOf(value).isBlank() ? null : Instant.parse(String.valueOf(value));
-	}
-
-	private static String yesNo(boolean value) {
-		return value ? "Yes" : "No";
 	}
 
 	@Override
