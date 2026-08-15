@@ -1784,10 +1784,14 @@ cloud providers remain future direction; see `brain/current-state.md` and
   Delete actions. Matching generation reports move or delete with their WAV, name
   conflicts are rejected, and factory profiles remain read-only.
 - Replaced the per-profile Manage prompt with a dedicated library window whose
-  pull-down lists every IR. Added context-sensitive Rename/Delete, WAV Export, and
+  scrolling list shows every IR. Added context-sensitive Rename/Delete, WAV Export, and
   factory-profile protection.
 - Combined preview Play and Pause into one stateful control, enlarged Stop and
   Apply, and visually separated offline Apply from preview transport.
 - Renamed the lower panel to History and the artifact root to Output folder,
   simplified the product subtitle, and added confirmed deletion of a selected
   history job and all files in its validated job folder.
+- Reversed the action-row emphasis so Preview is on the left and Apply is isolated
+  on the right, enlarged the Stop-square glyph, and added optional full-clip preview
+  looping. Each iteration includes the complete reverb tail and continues until
+  Stop; disabling Loop allows the current iteration to finish normally.

@@ -139,7 +139,9 @@ audio file while preview is active restarts playback with that source automatica
 History is reduced to timestamp, output filename, and a compact parameter summary;
 its visible toolbar enables output playback, Finder reveal, and confirmed job-folder
 deletion after row selection. Preview uses one stateful Play/Pause button plus a
-larger Stop control, while the larger Apply action remains visually separate.
+larger Stop control. Preview controls sit to the left while the larger Apply action
+sits separately at the right. An optional Loop setting repeats the selected clip
+and its full reverb tail until Stop, and may be toggled during playback.
 
 The standalone app owns one durable IR library at
 `~/Library/Application Support/Mechana Reverb/IR Profiles`. Missing factory IRs
@@ -147,7 +149,7 @@ are copied from the bundle into this library, imported WAVs are validated and
 copied there under unique names, and newly generated profiles are added and
 selected automatically. The UI selects profiles by readable name and provides
 Add and Manage actions; factory profiles cannot be removed through the app.
-Manage opens a dedicated profile window with the complete library in a pull-down.
+Manage opens a dedicated profile window with the complete library in a scrolling list.
 User-added profiles can be renamed or deleted, including their generation report
 sidecars; any profile can be exported. Factory profiles remain read-only.
 The application bundle carries the five synthetic development IRs previously used

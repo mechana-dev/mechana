@@ -38,15 +38,16 @@ import java.util.Objects;
 import java.util.prefs.Preferences;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import javax.swing.BorderFactory;
-import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JDialog;
+import javax.swing.DefaultListModel;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
@@ -106,8 +107,9 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField recordedSweepPath = field("recordedSweepPath", "");
 	private final JButton run = new JButton("Apply");
 	private final JButton preview = transportButton("▶", "Play preview", 64, 50, 26);
-	private final JButton stopPreview = transportButton("■", "Stop preview", 72, 54, 32);
+	private final JButton stopPreview = transportButton("■", "Stop preview", 78, 58, 40);
 	private final JCheckBox bypassPreview = new JCheckBox("Bypass (original audio)");
+	private final JCheckBox loopPreview = check("loopPreview", false);
 	private final JButton generateIr = new JButton("Generate IR Profile");
 	private final JButton addProfile = new JButton("Add…");
 	private final JButton manageProfiles = new JButton("Manage…");
@@ -224,16 +226,21 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void addActionBar(JPanel panel, GridBagConstraints c) {
-		JPanel actions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 10, 5));
+		JPanel actions = new JPanel(new BorderLayout(24, 0));
+		JPanel previewActions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 10, 5));
+		previewActions.add(new JLabel("Preview:"));
+		previewActions.add(preview);
+		previewActions.add(stopPreview);
+		loopPreview.setText("Loop");
+		previewActions.add(loopPreview);
+		previewActions.add(bypassPreview);
+		actions.add(previewActions, BorderLayout.WEST);
 		run.setToolTipText("Create a new processed WAV with the current settings");
 		run.setFont(run.getFont().deriveFont(Font.BOLD, 17f));
 		run.setPreferredSize(new Dimension(118, 50));
-		actions.add(run);
-		actions.add(Box.createHorizontalStrut(20));
-		actions.add(new JLabel("Preview:"));
-		actions.add(preview);
-		actions.add(stopPreview);
-		actions.add(bypassPreview);
+		JPanel applyAction = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 0, 7));
+		applyAction.add(run);
+		actions.add(applyAction, BorderLayout.EAST);
 		addRow(panel, c, "", actions);
 	}
 
@@ -314,6 +321,11 @@ final class StandaloneReverbFrame extends JFrame {
 				status.setText(bypassPreview.isSelected()
 						? "Preview bypassed — playing original audio"
 						: "Reverb preview active");
+		});
+		loopPreview.addActionListener(event -> {
+			previewPlayer.setLooping(loopPreview.isSelected());
+			if (previewPlayer.isActive())
+				status.setText(loopPreview.isSelected() ? "Preview will loop until stopped" : "Preview loop disabled");
 		});
 		generateIr.addActionListener(event -> generateImpulseResponse());
 		addProfile.addActionListener(event -> addProfile());
@@ -641,13 +653,16 @@ final class StandaloneReverbFrame extends JFrame {
 		JDialog dialog = new JDialog(this, "Manage Impulse Responses", true);
 		dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 		dialog.setLayout(new BorderLayout(10, 10));
-		JComboBox<IrProfileLibrary.Profile> profiles = new JComboBox<>();
+		DefaultListModel<IrProfileLibrary.Profile> profileModel = new DefaultListModel<>();
+		JList<IrProfileLibrary.Profile> profiles = new JList<>(profileModel);
+		profiles.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		profiles.setVisibleRowCount(9);
 		IrProfileLibrary.Profile current = (IrProfileLibrary.Profile) profileSelector.getSelectedItem();
-		reloadManagedProfiles(profiles, current == null ? null : current.path());
+		reloadManagedProfiles(profileModel, profiles, current == null ? null : current.path());
 		JPanel selection = new JPanel(new BorderLayout(8, 8));
 		selection.setBorder(BorderFactory.createEmptyBorder(16, 16, 4, 16));
-		selection.add(new JLabel("Impulse-response profile:"), BorderLayout.NORTH);
-		selection.add(profiles, BorderLayout.CENTER);
+		selection.add(new JLabel("Impulse-response profiles:"), BorderLayout.NORTH);
+		selection.add(new JScrollPane(profiles), BorderLayout.CENTER);
 		JLabel kind = new JLabel();
 		selection.add(kind, BorderLayout.SOUTH);
 		dialog.add(selection, BorderLayout.CENTER);
@@ -658,7 +673,7 @@ final class StandaloneReverbFrame extends JFrame {
 		JButton reveal = new JButton("Show in Finder");
 		JButton close = new JButton("Done");
 		Runnable updateActions = () -> {
-			IrProfileLibrary.Profile selected = (IrProfileLibrary.Profile) profiles.getSelectedItem();
+			IrProfileLibrary.Profile selected = profiles.getSelectedValue();
 			boolean editable = selected != null && !selected.factory();
 			rename.setEnabled(editable);
 			delete.setEnabled(editable);
@@ -668,33 +683,36 @@ final class StandaloneReverbFrame extends JFrame {
 					? " "
 					: selected.factory() ? "Factory profile — protected" : "Added profile — editable");
 		};
-		profiles.addActionListener(event -> updateActions.run());
+		profiles.addListSelectionListener(event -> {
+			if (!event.getValueIsAdjusting())
+				updateActions.run();
+		});
 		rename.addActionListener(event -> {
-			IrProfileLibrary.Profile selected = (IrProfileLibrary.Profile) profiles.getSelectedItem();
+			IrProfileLibrary.Profile selected = profiles.getSelectedValue();
 			if (selected == null || selected.factory())
 				return;
 			try {
 				IrProfileLibrary.Profile renamed = renameProfile(selected);
 				if (renamed != null)
-					reloadManagedProfiles(profiles, renamed.path());
+					reloadManagedProfiles(profileModel, profiles, renamed.path());
 			} catch (IOException failure) {
 				showError(failure.getMessage());
 			}
 		});
 		delete.addActionListener(event -> {
-			IrProfileLibrary.Profile selected = (IrProfileLibrary.Profile) profiles.getSelectedItem();
+			IrProfileLibrary.Profile selected = profiles.getSelectedValue();
 			if (selected == null || selected.factory())
 				return;
 			try {
 				if (deleteProfile(selected))
-					reloadManagedProfiles(profiles, path(irPath));
+					reloadManagedProfiles(profileModel, profiles, path(irPath));
 			} catch (IOException failure) {
 				showError(failure.getMessage());
 			}
 		});
-		export.addActionListener(event -> exportProfile((IrProfileLibrary.Profile) profiles.getSelectedItem()));
+		export.addActionListener(event -> exportProfile(profiles.getSelectedValue()));
 		reveal.addActionListener(event -> {
-			IrProfileLibrary.Profile selected = (IrProfileLibrary.Profile) profiles.getSelectedItem();
+			IrProfileLibrary.Profile selected = profiles.getSelectedValue();
 			if (selected != null)
 				showInFinder(selected.path());
 		});
@@ -709,24 +727,27 @@ final class StandaloneReverbFrame extends JFrame {
 		updateActions.run();
 		dialog.getRootPane().setDefaultButton(close);
 		dialog.pack();
-		dialog.setMinimumSize(new Dimension(680, 170));
+		dialog.setMinimumSize(new Dimension(680, 380));
 		dialog.setLocationRelativeTo(this);
 		dialog.setVisible(true);
 	}
 
-	private void reloadManagedProfiles(JComboBox<IrProfileLibrary.Profile> profiles, Path selection) {
+	private void reloadManagedProfiles(DefaultListModel<IrProfileLibrary.Profile> model,
+			JList<IrProfileLibrary.Profile> profiles, Path selection) {
 		try {
-			profiles.removeAllItems();
-			IrProfileLibrary.Profile selected = null;
+			model.clear();
+			int selectedIndex = -1;
 			for (IrProfileLibrary.Profile profile : profileLibrary.profiles()) {
-				profiles.addItem(profile);
+				model.addElement(profile);
 				if (selection != null && profile.path().equals(selection.toAbsolutePath().normalize()))
-					selected = profile;
+					selectedIndex = model.size() - 1;
 			}
-			if (selected != null)
-				profiles.setSelectedItem(selected);
-			else if (profiles.getItemCount() > 0)
+			if (selectedIndex >= 0)
+				profiles.setSelectedIndex(selectedIndex);
+			else if (!model.isEmpty())
 				profiles.setSelectedIndex(0);
+			if (profiles.getSelectedIndex() >= 0)
+				profiles.ensureIndexIsVisible(profiles.getSelectedIndex());
 		} catch (IOException failure) {
 			showError("Could not load the IR profile library: " + failure.getMessage());
 		}
@@ -900,6 +921,7 @@ final class StandaloneReverbFrame extends JFrame {
 					decimal(decayLength, "Decay length"), normalizeIr.isSelected(), peakProtection.isSelected(),
 					decimal(headroom, "Safe headroom"));
 			previewPlayer.setBypassed(bypassPreview.isSelected());
+			previewPlayer.setLooping(loopPreview.isSelected());
 			previewPlayer.play(settings, state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)),
 					message -> SwingUtilities.invokeLater(() -> {
 						showError(message);

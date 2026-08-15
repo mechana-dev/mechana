@@ -108,7 +108,7 @@ This file reports repository evidence, not desired future status.
 - The standalone app maintains a canonical IR profile library under the user's
   Application Support directory. Factory profiles, validated user imports, and
   generated profiles appear in one selector with Add and Manage actions. Manage
-  opens the full library in a pull-down, supports rename/delete for added profiles,
+  opens the full library in a scrolling list, supports rename/delete for added profiles,
   exports any profile, and keeps factory profiles read-only. Sweep
   generation uses temporary storage, then offers library addition with an editable
   derived name, explicit Save to File, or discard. Manage can rename or delete
@@ -123,6 +123,10 @@ This file reports repository evidence, not desired future status.
   deletion when a row is selected. The dedicated Reverb icon also appears in the
   window header. UI language calls the artifact root the Output folder and avoids
   worker/runtime terminology.
+- Preview controls are left-aligned beneath the inputs and the offline Apply action
+  is isolated on the right. The Loop checkbox repeats the complete selected clip
+  plus its reverb tail until Stop; current live settings and selected IR carry into
+  subsequent iterations.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,

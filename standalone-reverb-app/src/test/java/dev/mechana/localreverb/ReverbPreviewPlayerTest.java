@@ -163,6 +163,21 @@ class ReverbPreviewPlayerTest {
 		assertEquals(0, sample(pcm, 99 * 2), 1.0 / 32768);
 	}
 
+	@Test
+	void loopPlaybackRepeatsTheCompleteClipAndTail() throws Exception {
+		Path dry = wav("loop-dry.wav", 1_000, new double[][]{{1, 0}});
+		Path ir = wav("loop-ir.wav", 1_000, new double[][]{{1, 0.5}});
+		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, 0, 0, false, false, 1);
+
+		byte[] pcm = ReverbPreviewPlayer.renderLoopsForTest(settings, 2);
+
+		assertEquals(3 * 2 * 2 * 2, pcm.length);
+		assertEquals(1, sample(pcm, 0), 1.0 / 32768);
+		assertEquals(0.5, sample(pcm, 1 * 2), 1.0 / 32768);
+		assertEquals(1, sample(pcm, 3 * 2), 1.0 / 32768);
+		assertEquals(0.5, sample(pcm, 4 * 2), 1.0 / 32768);
+	}
+
 	private Path wav(String name, int sampleRate, double[][] channels) throws Exception {
 		Path path = temporary.resolve(name);
 		try (WavFile.Writer writer = WavFile.create24Bit(path, sampleRate, channels.length, channels[0].length)) {

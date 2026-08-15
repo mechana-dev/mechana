@@ -52,10 +52,12 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private final Object pauseLock = new Object();
 	private volatile boolean paused;
 	private volatile boolean bypassed;
+	private volatile boolean looping;
 	private volatile Thread playbackThread;
 	private volatile AudioSink activeSink;
 	private volatile ConvolutionBank pendingBank;
 	private volatile int previewSampleRate;
+	private volatile Path selectedIrPath;
 	private volatile LiveParameters liveParameters = new LiveParameters(0, 0, 0, 0, 0, 1, 1, 0, 100, false, true, 1);
 
 	ReverbPreviewPlayer() {
@@ -133,6 +135,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			}
 		stopped.set(false);
 		paused = false;
+		selectedIrPath = settings.irPath();
 		update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.lowCutHertz(),
 				settings.highCutHertz(), settings.earlyLevel(), settings.lateLevel(), settings.attackMilliseconds(),
 				settings.decayLengthPercent(), settings.normalizeIr(), settings.peakProtection(),
@@ -140,7 +143,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		Thread thread = Thread.ofVirtual().name("mechana-reverb-preview").start(() -> {
 			state.accept(State.PREPARING);
 			try {
-				stream(settings, systemSink(), state);
+				streamRepeated(settings, systemSink(), state, -1);
 				if (!stopped.get())
 					state.accept(State.FINISHED);
 			} catch (IOException | RuntimeException playbackFailure) {
@@ -221,6 +224,10 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		bypassed = value;
 	}
 
+	void setLooping(boolean value) {
+		looping = value;
+	}
+
 	void changeImpulseResponse(Path path, Runnable resampling, Consumer<Path> success, Consumer<String> failure) {
 		Objects.requireNonNull(path, "path");
 		Objects.requireNonNull(resampling, "resampling");
@@ -238,6 +245,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 				if (!isActive() || previewSampleRate != sampleRate || irLoadSequence.get() != request)
 					return;
 				pendingBank = bank;
+				selectedIrPath = path;
 				success.accept(path);
 			} catch (IOException | RuntimeException loadFailure) {
 				failure.accept(rootMessage(loadFailure));
@@ -251,6 +259,16 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			throw new IOException("Start the preview before changing its impulse response.");
 		pendingBank = prepareBank(path, sampleRate, () -> {
 		});
+		selectedIrPath = path;
+	}
+
+	private void streamRepeated(Settings settings, AudioSinkFactory sinkFactory, Consumer<State> state,
+			int maximumIterations) throws IOException {
+		int iteration = 0;
+		do {
+			stream(settings, sinkFactory, state);
+			iteration++;
+		} while (!stopped.get() && looping && (maximumIterations < 0 || iteration < maximumIterations));
 	}
 
 	private void stream(Settings settings, AudioSinkFactory sinkFactory, Consumer<State> state) throws IOException {
@@ -260,11 +278,13 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			Path prepared = DryAudioImporter.prepareNative(settings.dryPath(), converted);
 			try (WavFile.Reader source = WavFile.open(prepared)) {
 				WavFile.Format format = source.format();
+				LiveParameters parameters = liveParameters;
+				Path irPath = selectedIrPath == null ? settings.irPath() : selectedIrPath;
 				ImpulseResponse ir = shape(
-						ImpulseResponse.read(impulseResponseCache.prepare(settings.irPath(), format.sampleRate(),
+						ImpulseResponse.read(impulseResponseCache.prepare(irPath, format.sampleRate(),
 								() -> state.accept(State.REGENERATING_IR)), false),
-						settings.earlyLevel(), settings.lateLevel(), settings.attackMilliseconds(),
-						settings.decayLengthPercent());
+						parameters.earlyLevel(), parameters.lateLevel(), parameters.attackMilliseconds(),
+						parameters.decayLengthPercent());
 				previewSampleRate = format.sampleRate();
 				if (format.channels() > 2 || ir.channelCount() > 2)
 					throw new IOException("Preview supports mono or stereo audio");
@@ -505,6 +525,24 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 				(sampleRate, channels) -> new MemoryAudioSink(output, () -> afterFirstBlock.accept(player)),
 				ignored -> {
 				});
+		return output.toByteArray();
+	}
+
+	static byte[] renderLoopsForTest(Settings settings, int iterations) throws IOException {
+		ByteArrayOutputStream output = new ByteArrayOutputStream();
+		Path parent = Objects.requireNonNull(settings.dryPath().toAbsolutePath().getParent(), "dry audio parent");
+		ReverbPreviewPlayer player = new ReverbPreviewPlayer(
+				new ImpulseResponseCache(parent.resolve("preview-loop-ir-cache")));
+		player.stopped.set(false);
+		player.looping = true;
+		player.selectedIrPath = settings.irPath();
+		player.update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.lowCutHertz(),
+				settings.highCutHertz(), settings.earlyLevel(), settings.lateLevel(), settings.attackMilliseconds(),
+				settings.decayLengthPercent(), settings.normalizeIr(), settings.peakProtection(),
+				settings.headroomDecibels());
+		player.streamRepeated(settings, (sampleRate, channels) -> new MemoryAudioSink(output, () -> {
+		}), ignored -> {
+		}, iterations);
 		return output.toByteArray();
 	}
 
