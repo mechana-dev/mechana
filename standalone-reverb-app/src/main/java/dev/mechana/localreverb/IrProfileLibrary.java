@@ -56,24 +56,68 @@ final class IrProfileLibrary {
 	}
 
 	Profile add(Path source) throws IOException {
-		validate(source);
-		Files.createDirectories(directory);
-		Path destination = uniqueDestination(Objects.requireNonNull(source.getFileName(), "IR filename").toString());
-		Files.copy(source, destination, StandardCopyOption.COPY_ATTRIBUTES);
-		return new Profile(displayName(destination), destination.toAbsolutePath().normalize(), false);
+		return copy(source, Objects.requireNonNull(source.getFileName(), "IR filename").toString());
 	}
 
 	Profile addGenerated(Path source) throws IOException {
 		return add(source);
 	}
 
+	Profile addGenerated(Path source, String requestedName) throws IOException {
+		return addGenerated(source, requestedName, false);
+	}
+
+	Profile addGenerated(Path source, String requestedName, boolean replace) throws IOException {
+		validate(source);
+		Files.createDirectories(directory);
+		Path destination = requestedDestination(requestedName);
+		if (replace) {
+			if (isFactory(destination))
+				throw new IOException("Factory IR profiles cannot be replaced");
+			Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+		} else {
+			destination = uniqueDestination(requestedName);
+			Files.copy(source, destination, StandardCopyOption.COPY_ATTRIBUTES);
+		}
+		return new Profile(displayName(destination), destination.toAbsolutePath().normalize(), false);
+	}
+
+	boolean containsName(String requestedName) throws IOException {
+		installFactoryProfiles();
+		return Files.isRegularFile(requestedDestination(requestedName));
+	}
+
+	boolean isFactoryName(String requestedName) throws IOException {
+		installFactoryProfiles();
+		return isFactory(requestedDestination(requestedName));
+	}
+
+	private Profile copy(Path source, String requestedName) throws IOException {
+		validate(source);
+		Files.createDirectories(directory);
+		Path destination = uniqueDestination(requestedName);
+		Files.copy(source, destination, StandardCopyOption.COPY_ATTRIBUTES);
+		return new Profile(displayName(destination), destination.toAbsolutePath().normalize(), false);
+	}
+
 	void remove(Profile profile) throws IOException {
-		if (profile.factory())
-			throw new IOException("Factory IR profiles cannot be removed");
-		Path normalized = profile.path().toAbsolutePath().normalize();
-		if (!directory.toAbsolutePath().normalize().equals(normalized.getParent()))
-			throw new IOException("IR profile is outside the application library");
+		Path normalized = editableProfile(profile);
 		Files.deleteIfExists(normalized);
+		Files.deleteIfExists(reportPath(normalized));
+	}
+
+	Profile rename(Profile profile, String requestedName) throws IOException {
+		Path source = editableProfile(profile);
+		Path destination = requestedDestination(requestedName).toAbsolutePath().normalize();
+		if (source.equals(destination))
+			return profile;
+		if (Files.exists(destination))
+			throw new IOException("An IR profile with that name already exists");
+		Files.move(source, destination);
+		Path sourceReport = reportPath(source);
+		if (Files.exists(sourceReport))
+			Files.move(sourceReport, reportPath(destination));
+		return new Profile(displayName(destination), destination, false);
 	}
 
 	Path directory() throws IOException {
@@ -96,18 +140,40 @@ final class IrProfileLibrary {
 	}
 
 	private boolean isFactory(Path profile) {
-		return factoryDirectory != null && Files.isRegularFile(factoryDirectory.resolve(profile.getFileName()));
+		return factoryDirectory != null && Files
+				.isRegularFile(factoryDirectory.resolve(Objects.requireNonNull(profile.getFileName(), "IR filename")));
 	}
 
 	private Path uniqueDestination(String requestedName) {
-		String safeName = requestedName.toLowerCase(Locale.ROOT).endsWith(".wav")
-				? requestedName
-				: requestedName + ".wav";
-		Path candidate = directory.resolve(safeName);
+		Path candidate = requestedDestination(requestedName);
+		String safeName = Objects.requireNonNull(candidate.getFileName(), "IR destination filename").toString();
 		String stem = safeName.replaceFirst("(?i)\\.wav$", "");
 		for (int suffix = 2; Files.exists(candidate); suffix++)
 			candidate = directory.resolve(stem + "-" + suffix + ".wav");
 		return candidate;
+	}
+
+	private Path requestedDestination(String requestedName) {
+		String cleaned = Objects.requireNonNull(requestedName, "requestedName").strip()
+				.replaceAll("[\\\\/:*?\"<>|]+", "-").replaceAll("^\\.+", "");
+		if (cleaned.isBlank())
+			cleaned = "captured-reverb";
+		String safeName = cleaned.toLowerCase(Locale.ROOT).endsWith(".wav") ? cleaned : cleaned + ".wav";
+		return directory.resolve(safeName);
+	}
+
+	private Path editableProfile(Profile profile) throws IOException {
+		Objects.requireNonNull(profile, "profile");
+		if (profile.factory())
+			throw new IOException("Factory IR profiles cannot be changed");
+		Path normalized = profile.path().toAbsolutePath().normalize();
+		if (!directory.toAbsolutePath().normalize().equals(normalized.getParent()))
+			throw new IOException("IR profile is outside the application library");
+		return normalized;
+	}
+
+	private static Path reportPath(Path profile) {
+		return profile.resolveSibling(Objects.requireNonNull(profile.getFileName(), "IR filename") + ".txt");
 	}
 
 	private static void validate(Path source) throws IOException {

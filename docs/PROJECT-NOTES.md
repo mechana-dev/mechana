@@ -1770,3 +1770,16 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Replaced the reused Job Launcher artwork with a dedicated Mechana Reverb icon:
   the Mechana hexagon now contains an impulse waveform followed by diminishing
   reflection arcs, reflecting the app's captured-IR convolution workflow.
+- Moved history output actions above the table so split-pane sizing cannot hide
+  them, enlarged the preview transport buttons and glyphs, and made an active
+  preview automatically restart with a newly selected dry-audio file.
+- Added a lightweight copy of the dedicated Reverb icon to the application header
+  so the window and Dock share the same visual identity.
+- Simplified Create IR from Sweep by removing its permanent output-path field.
+  Generation now finishes in temporary storage and offers Add to Library, Save to
+  File, or Cancel. Library addition proposes a return-derived name, allows a rename,
+  and offers Replace Existing or Keep Both for duplicate names while protecting
+  factory profiles from replacement.
+- Expanded Manage for imported and generated profiles with Rename and confirmed
+  Delete actions. Matching generation reports move or delete with their WAV, name
+  conflicts are rejected, and factory profiles remain read-only.

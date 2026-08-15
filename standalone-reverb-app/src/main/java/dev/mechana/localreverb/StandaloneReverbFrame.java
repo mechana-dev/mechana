@@ -18,8 +18,10 @@ package dev.mechana.localreverb;
 import java.awt.BorderLayout;
 import java.awt.Desktop;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Image;
 import java.awt.Insets;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -32,6 +34,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.prefs.Preferences;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import javax.swing.BorderFactory;
@@ -40,6 +43,7 @@ import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
+import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -92,13 +96,12 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JSlider decaySlider = new JSlider(1, 100, sliderValue(decayLength, 1, 100));
 	private final JComboBox<IrProfileLibrary.Profile> profileSelector = new JComboBox<>();
 	private final Timer irPreviewChangeTimer = new Timer(350, event -> updatePreviewImpulseResponse());
+	private final Timer dryPreviewChangeTimer = new Timer(350, event -> restartPreviewWithSelectedSource());
 	private final JCheckBox normalizeIr = check("normalizeIr", true);
 	private final JCheckBox peakProtection = check("peakProtection", true);
 	private final JTextField headroom = field("headroomDecibels", "1.0");
 	private final JTextField sweepPath = field("sweepPath", bundledSweepDefault());
 	private final JTextField recordedSweepPath = field("recordedSweepPath", "");
-	private final JTextField generatedIrPath = field("generatedIrPath",
-			Path.of(System.getProperty("user.home"), "Documents", "RVB_Plug-IR.wav").toString());
 	private final JButton run = new JButton("Apply");
 	private final JButton preview = transportButton("▶", "Play preview");
 	private final JButton pausePreview = transportButton("⏸", "Pause preview");
@@ -157,11 +160,23 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private JPanel buildHeader() {
-		JPanel panel = new JPanel(new BorderLayout());
+		JPanel panel = new JPanel(new BorderLayout(12, 0));
 		panel.setBorder(BorderFactory.createEmptyBorder(14, 16, 8, 16));
+		panel.add(headerIcon(), BorderLayout.WEST);
 		panel.add(new JLabel("<html><h2 style='margin:0'>Mechana Reverb</h2>"
-				+ "<div>Apply an impulse response locally with the same pure-Java plugin used by Mechana workers.</div></html>"));
+				+ "<div>Apply an impulse response locally with the same pure-Java plugin used by Mechana workers.</div></html>"),
+				BorderLayout.CENTER);
 		return panel;
+	}
+
+	private static JLabel headerIcon() {
+		java.net.URL resource = StandaloneReverbFrame.class.getResource("mechana-reverb-header.png");
+		if (resource == null)
+			return new JLabel();
+		Image image = new ImageIcon(resource).getImage().getScaledInstance(56, 56, Image.SCALE_SMOOTH);
+		JLabel label = new JLabel(new ImageIcon(image));
+		label.getAccessibleContext().setAccessibleName("Mechana Reverb icon");
+		return label;
 	}
 
 	private JPanel buildForm() {
@@ -228,7 +243,6 @@ final class StandaloneReverbFrame extends JFrame {
 		c.gridy = 0;
 		addPath(panel, c, "Mechana source sweep", sweepPath, false);
 		addPath(panel, c, "Recorded wet sweep return", recordedSweepPath, false);
-		addSavePath(panel, c, "Output IR WAV", generatedIrPath);
 		c.gridx = 1;
 		c.weightx = 1;
 		c.fill = GridBagConstraints.NONE;
@@ -239,8 +253,8 @@ final class StandaloneReverbFrame extends JFrame {
 		c.gridwidth = 3;
 		c.fill = GridBagConstraints.HORIZONTAL;
 		panel.add(new JLabel("<html>Record the supplied sweep through the reverb at 100% wet. Keep the leading and "
-				+ "trailing silence, then select that recording here. The generated WAV can be selected directly in "
-				+ "the Apply Reverb tab.</html>"), c);
+				+ "trailing silence, then select that recording here. After generation, choose whether to add the IR "
+				+ "to the profile library or save it as a WAV file.</html>"), c);
 		return panel;
 	}
 
@@ -257,10 +271,10 @@ final class StandaloneReverbFrame extends JFrame {
 		JPanel panel = new JPanel(new BorderLayout(8, 8));
 		panel.setBorder(BorderFactory.createTitledBorder("Local job history"));
 		panel.add(new JScrollPane(jobTable), BorderLayout.CENTER);
-		JPanel actions = new JPanel();
+		JPanel actions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 6, 2));
 		actions.add(playOutput);
 		actions.add(showOutput);
-		panel.add(actions, BorderLayout.SOUTH);
+		panel.add(actions, BorderLayout.NORTH);
 		playOutput.setEnabled(false);
 		showOutput.setEnabled(false);
 		JScrollPane wrapper = new JScrollPane(panel);
@@ -279,6 +293,7 @@ final class StandaloneReverbFrame extends JFrame {
 
 	private void configureActions() {
 		irPreviewChangeTimer.setRepeats(false);
+		dryPreviewChangeTimer.setRepeats(false);
 		run.addActionListener(event -> submit());
 		preview.addActionListener(event -> startPreview());
 		pausePreview.addActionListener(event -> previewPlayer
@@ -313,6 +328,10 @@ final class StandaloneReverbFrame extends JFrame {
 		irPath.getDocument().addDocumentListener(listener(() -> {
 			if (previewPlayer.isActive())
 				irPreviewChangeTimer.restart();
+		}));
+		dryPath.getDocument().addDocumentListener(listener(() -> {
+			if (previewPlayer.isActive())
+				dryPreviewChangeTimer.restart();
 		}));
 		artifactRoot.getDocument().addDocumentListener(listener(this::reloadHistory));
 	}
@@ -435,9 +454,8 @@ final class StandaloneReverbFrame extends JFrame {
 		stopPreview();
 		Path sweep = path(sweepPath);
 		Path recorded = path(recordedSweepPath);
-		Path output = path(generatedIrPath);
-		if (sweep == null || recorded == null || output == null) {
-			showError("Choose the source sweep, recorded wet return, and output IR WAV.");
+		if (sweep == null || recorded == null) {
+			showError("Choose the source sweep and recorded wet return.");
 			return;
 		}
 		generateIr.setEnabled(false);
@@ -445,24 +463,17 @@ final class StandaloneReverbFrame extends JFrame {
 		status.setText("Generating impulse response…");
 		progress.setValue(0);
 		Thread.ofVirtual().name("mechana-ir-deconvolution").start(() -> {
+			Path temporaryDirectory = null;
 			try {
+				temporaryDirectory = Files.createTempDirectory("mechana-generated-ir-");
+				Path output = temporaryDirectory.resolve(generatedIrName(recorded));
 				SweepDeconvolver.Result result = new SweepDeconvolver().deconvolve(sweep, recorded, output,
 						percent -> SwingUtilities.invokeLater(() -> progress.setValue(percent)));
-				Files.writeString(output.resolveSibling(output.getFileName() + ".txt"),
-						"Mechana impulse-response generation\n\nOriginal sweep: " + sweep + "\nRecorded wet return: "
-								+ recorded + "\nOutput IR: " + output + "\nSample rate: " + result.sampleRate()
-								+ " Hz\nChannels: " + result.channels() + "\nFrames: " + result.frames()
-								+ "\nCapture latency: " + result.latencyMilliseconds() + " ms\nRecovered peak: "
-								+ result.peak() + "\nAlgorithm: regularized FFT deconvolution\n");
-				IrProfileLibrary.Profile generated = profileLibrary.addGenerated(output);
-				SwingUtilities.invokeLater(() -> {
-					reloadProfiles(generated.path());
-					status.setText("IR ready — " + output.getFileName() + " — "
-							+ String.format("%.2f seconds, %.1f ms capture latency",
-									result.frames() / (double) result.sampleRate(), result.latencyMilliseconds()));
-					generationFinished();
-				});
+				Path generatedDirectory = temporaryDirectory;
+				SwingUtilities.invokeLater(
+						() -> finishGeneratedImpulseResponse(sweep, recorded, output, generatedDirectory, result));
 			} catch (IOException | RuntimeException failure) {
+				cleanupGeneratedIr(temporaryDirectory);
 				SwingUtilities.invokeLater(() -> {
 					showError(failure.getMessage());
 					status.setText("IR generation failed");
@@ -470,6 +481,135 @@ final class StandaloneReverbFrame extends JFrame {
 				});
 			}
 		});
+	}
+
+	private void finishGeneratedImpulseResponse(Path sweep, Path recorded, Path output, Path temporaryDirectory,
+			SweepDeconvolver.Result result) {
+		Object[] choices = {"Add to Library", "Save to File…", "Cancel"};
+		int choice = JOptionPane.showOptionDialog(this,
+				"The impulse response is ready. What would you like to do with it?", "Generated IR Profile",
+				JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, choices, choices[0]);
+		try {
+			if (choice == 0) {
+				String outputFileName = Objects.requireNonNull(output.getFileName(), "generated IR filename")
+						.toString();
+				String requestedName = promptForGeneratedProfileName(outputFileName);
+				if (requestedName == null)
+					status.setText("Generated IR was not added to the library");
+				else {
+					IrProfileLibrary.Profile generated = addGeneratedProfile(output, requestedName);
+					if (generated == null)
+						status.setText("Generated IR was not added to the library");
+					else {
+						writeGenerationReport(generated.path(), sweep, recorded, result);
+						reloadProfiles(generated.path());
+						status.setText("Added IR profile — " + generated.name());
+					}
+				}
+			} else if (choice == 1) {
+				Path saved = chooseGeneratedIrDestination(
+						Objects.requireNonNull(output.getFileName(), "generated IR filename").toString());
+				if (saved == null)
+					status.setText("Generated IR was not saved");
+				else {
+					Files.copy(output, saved, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+					writeGenerationReport(saved, sweep, recorded, result);
+					status.setText("Saved IR — " + saved.getFileName());
+				}
+			} else
+				status.setText("Generated IR discarded");
+		} catch (IOException failure) {
+			showError(failure.getMessage());
+			status.setText("Could not keep the generated IR");
+		} finally {
+			cleanupGeneratedIr(temporaryDirectory);
+			generationFinished();
+		}
+	}
+
+	private IrProfileLibrary.Profile addGeneratedProfile(Path output, String requestedName) throws IOException {
+		if (!profileLibrary.containsName(requestedName))
+			return profileLibrary.addGenerated(output, requestedName);
+		if (profileLibrary.isFactoryName(requestedName)) {
+			Object[] choices = {"Keep Both", "Cancel"};
+			int choice = JOptionPane.showOptionDialog(this,
+					"A factory profile already uses this name and cannot be replaced.", "Profile Already Exists",
+					JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE, null, choices, choices[0]);
+			return choice == 0 ? profileLibrary.addGenerated(output, requestedName) : null;
+		}
+		Object[] choices = {"Replace Existing", "Keep Both", "Cancel"};
+		int choice = JOptionPane.showOptionDialog(this, "An IR profile with this name already exists.",
+				"Profile Already Exists", JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE, null, choices,
+				choices[0]);
+		return switch (choice) {
+			case 0 -> profileLibrary.addGenerated(output, requestedName, true);
+			case 1 -> profileLibrary.addGenerated(output, requestedName);
+			default -> null;
+		};
+	}
+
+	private String promptForGeneratedProfileName(String suggestedName) {
+		String withoutExtension = suggestedName.replaceFirst("(?i)\\.wav$", "");
+		while (true) {
+			String value = (String) JOptionPane.showInputDialog(this,
+					"Name this impulse-response profile before adding it to the library:", "Add IR to Library",
+					JOptionPane.PLAIN_MESSAGE, null, null, withoutExtension);
+			if (value == null)
+				return null;
+			if (!value.isBlank())
+				return value.strip();
+			JOptionPane.showMessageDialog(this, "Enter a name for the IR profile.", "Add IR to Library",
+					JOptionPane.WARNING_MESSAGE);
+		}
+	}
+
+	private Path chooseGeneratedIrDestination(String suggestedName) {
+		JFileChooser chooser = new JFileChooser();
+		chooser.setDialogTitle("Save generated impulse response");
+		chooser.setFileFilter(new FileNameExtensionFilter("WAV impulse response (.wav)", "wav"));
+		chooser.setSelectedFile(new File(suggestedName));
+		if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
+			return null;
+		String selected = chooser.getSelectedFile().getAbsolutePath();
+		Path destination = Path
+				.of(selected.toLowerCase(java.util.Locale.ROOT).endsWith(".wav") ? selected : selected + ".wav");
+		if (Files.exists(destination)
+				&& JOptionPane.showConfirmDialog(this, "Replace the existing file?\n" + destination, "Replace File",
+						JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) != JOptionPane.YES_OPTION)
+			return null;
+		return destination;
+	}
+
+	private static String generatedIrName(Path recorded) {
+		String name = Objects.requireNonNull(recorded.getFileName(), "recorded sweep filename").toString()
+				.replaceFirst("(?i)\\.(?:wav|wave)$", "").replaceAll("[^A-Za-z0-9._-]+", "-").replaceAll("^-+|-+$", "");
+		return (name.isBlank() ? "captured-reverb" : name) + "-IR.wav";
+	}
+
+	private static void writeGenerationReport(Path output, Path sweep, Path recorded, SweepDeconvolver.Result result)
+			throws IOException {
+		Files.writeString(output.resolveSibling(output.getFileName() + ".txt"),
+				"Mechana impulse-response generation\n\nOriginal sweep: " + sweep + "\nRecorded wet return: " + recorded
+						+ "\nOutput IR: " + output + "\nSample rate: " + result.sampleRate() + " Hz\nChannels: "
+						+ result.channels() + "\nFrames: " + result.frames() + "\nCapture latency: "
+						+ result.latencyMilliseconds() + " ms\nRecovered peak: " + result.peak()
+						+ "\nAlgorithm: regularized FFT deconvolution\n");
+	}
+
+	private static void cleanupGeneratedIr(Path temporaryDirectory) {
+		if (temporaryDirectory == null)
+			return;
+		try (var files = Files.list(temporaryDirectory)) {
+			for (Path file : files.toList())
+				Files.deleteIfExists(file);
+		} catch (IOException ignored) {
+			// Temporary cleanup failure does not invalidate a saved or library IR.
+		}
+		try {
+			Files.deleteIfExists(temporaryDirectory);
+		} catch (IOException ignored) {
+			// Temporary cleanup failure does not invalidate a saved or library IR.
+		}
 	}
 
 	private void addProfile() {
@@ -493,23 +633,52 @@ final class StandaloneReverbFrame extends JFrame {
 			return;
 		Object[] actions = selected.factory()
 				? new Object[]{"Show in Finder", "Open Library", "Cancel"}
-				: new Object[]{"Show in Finder", "Remove", "Open Library", "Cancel"};
+				: new Object[]{"Rename…", "Delete…", "Show in Finder", "Open Library", "Cancel"};
 		int choice = JOptionPane.showOptionDialog(this,
 				selected.name() + "\n" + selected.path()
 						+ (selected.factory() ? "\nFactory profile" : "\nAdded profile"),
 				"Manage IR Profile", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, actions, actions[0]);
 		try {
-			if (choice == 0)
+			if (!selected.factory() && choice == 0)
+				renameProfile(selected);
+			else if (!selected.factory() && choice == 1)
+				deleteProfile(selected);
+			else if ((selected.factory() && choice == 0) || (!selected.factory() && choice == 2))
 				Desktop.getDesktop().open(
 						java.util.Objects.requireNonNull(selected.path().getParent(), "IR profile folder").toFile());
-			else if (!selected.factory() && choice == 1) {
-				profileLibrary.remove(selected);
-				reloadProfiles(null);
-			} else if ((selected.factory() && choice == 1) || (!selected.factory() && choice == 2))
+			else if ((selected.factory() && choice == 1) || (!selected.factory() && choice == 3))
 				Desktop.getDesktop().open(profileLibrary.directory().toFile());
 		} catch (IOException failure) {
 			showError(failure.getMessage());
 		}
+	}
+
+	private void renameProfile(IrProfileLibrary.Profile profile) throws IOException {
+		String filename = Objects.requireNonNull(profile.path().getFileName(), "IR profile filename").toString();
+		String suggestedName = filename.replaceFirst("(?i)\\.wav$", "");
+		String requestedName = (String) JOptionPane.showInputDialog(this, "Enter a new name for this IR profile:",
+				"Rename IR Profile", JOptionPane.PLAIN_MESSAGE, null, null, suggestedName);
+		if (requestedName == null)
+			return;
+		if (requestedName.isBlank()) {
+			JOptionPane.showMessageDialog(this, "Enter a name for the IR profile.", "Rename IR Profile",
+					JOptionPane.WARNING_MESSAGE);
+			return;
+		}
+		IrProfileLibrary.Profile renamed = profileLibrary.rename(profile, requestedName.strip());
+		reloadProfiles(renamed.path());
+		status.setText("Renamed IR profile — " + renamed.name());
+	}
+
+	private void deleteProfile(IrProfileLibrary.Profile profile) throws IOException {
+		int confirmed = JOptionPane.showConfirmDialog(this,
+				"Delete the added IR profile ‘" + profile.name() + "’?\nThis cannot be undone.", "Delete IR Profile",
+				JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+		if (confirmed != JOptionPane.YES_OPTION)
+			return;
+		profileLibrary.remove(profile);
+		reloadProfiles(null);
+		status.setText("Deleted IR profile — " + profile.name());
 	}
 
 	private void reloadProfiles(Path selection) {
@@ -654,6 +823,15 @@ final class StandaloneReverbFrame extends JFrame {
 				}));
 	}
 
+	private void restartPreviewWithSelectedSource() {
+		if (!previewPlayer.isActive())
+			return;
+		previewPlayer.stop();
+		previewFinished();
+		status.setText("Switching preview to the selected dry audio…");
+		startPreview();
+	}
+
 	private void stopPreview() {
 		if (previewPlayer.isActive()) {
 			previewPlayer.stop();
@@ -763,18 +941,6 @@ final class StandaloneReverbFrame extends JFrame {
 		c.gridy++;
 	}
 
-	private void addSavePath(JPanel panel, GridBagConstraints c, String label, JTextField field) {
-		addRow(panel, c, label, field);
-		JButton choose = new JButton("Choose…");
-		choose.addActionListener(event -> chooseOutput(field));
-		c.gridy--;
-		c.gridx = 2;
-		c.weightx = 0;
-		c.fill = GridBagConstraints.NONE;
-		panel.add(choose, c);
-		c.gridy++;
-	}
-
 	private static void addRow(JPanel panel, GridBagConstraints c, String label, java.awt.Component component) {
 		c.gridx = 0;
 		c.weightx = 0;
@@ -813,18 +979,6 @@ final class StandaloneReverbFrame extends JFrame {
 			chooser.setSelectedFile(new File(target.getText()));
 		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
 			target.setText(chooser.getSelectedFile().getAbsolutePath());
-	}
-
-	private void chooseOutput(JTextField target) {
-		JFileChooser chooser = new JFileChooser();
-		chooser.setDialogTitle("Save generated impulse response");
-		chooser.setFileFilter(new FileNameExtensionFilter("WAV impulse response (.wav)", "wav"));
-		if (!target.getText().isBlank())
-			chooser.setSelectedFile(new File(target.getText()));
-		if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-			String selected = chooser.getSelectedFile().getAbsolutePath();
-			target.setText(selected.toLowerCase(java.util.Locale.ROOT).endsWith(".wav") ? selected : selected + ".wav");
-		}
 	}
 
 	private JTextField field(String key, String fallback) {
@@ -908,7 +1062,9 @@ final class StandaloneReverbFrame extends JFrame {
 		JButton button = new JButton(symbol);
 		button.setToolTipText(description);
 		button.getAccessibleContext().setAccessibleName(description);
-		button.setPreferredSize(new Dimension(42, 30));
+		button.setFont(button.getFont().deriveFont(Font.BOLD, 22f));
+		button.setPreferredSize(new Dimension(58, 42));
+		button.setMargin(new Insets(2, 8, 2, 8));
 		return button;
 	}
 

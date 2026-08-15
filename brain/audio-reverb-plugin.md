@@ -134,9 +134,11 @@ Response action restores neutral early, late, attack, and decay values. Separate
 resets restore mix/timing to wet 0, dry 1, and pre-delay 0, or disable both wet EQ
 filters. Conventional preview transport buttons and the single offline Apply action
 sit near the selected inputs. Live bypass crossfades to the untouched source and
-back without discarding edits to the current reverb settings. Local job history is
-reduced to timestamp, output filename, and a compact parameter summary; row
-selection enables output playback and Finder reveal.
+back without discarding edits to the current reverb settings. Selecting a new dry
+audio file while preview is active restarts playback with that source automatically.
+Local job history is reduced to timestamp, output filename, and a compact parameter
+summary; its visible toolbar enables output playback and Finder reveal after row
+selection.
 
 The standalone app owns one durable IR library at
 `~/Library/Application Support/Mechana Reverb/IR Profiles`. Missing factory IRs
@@ -144,13 +146,19 @@ are copied from the bundle into this library, imported WAVs are validated and
 copied there under unique names, and newly generated profiles are added and
 selected automatically. The UI selects profiles by readable name and provides
 Add and Manage actions; factory profiles cannot be removed through the app.
+Manage permits user-added profiles to be renamed or deleted, including their
+generation report sidecars. Factory profiles remain read-only and expose only
+Finder/library navigation actions.
 The application bundle carries the five synthetic development IRs previously used
 for listening tests and exposes them through a dedicated chooser. It also bundles
 the standardized 48 kHz/24-bit stereo Mechana sweep and provides a **Create IR
-from Sweep** tab. A user selects a recorded wet return and output path; the app
-generates the aligned, trimmed IR locally and selects it for immediate use in the
-Apply Reverb tab. The unrestricted IR chooser continues to accept compatible WAVs
-created elsewhere.
+from Sweep** tab. A user selects a recorded wet return, and the app generates the
+aligned, trimmed IR into temporary storage before offering Add to Library, Save to
+File, or Cancel. Add to Library proposes a return-derived name, allows a rename,
+and selects the new profile for immediate use. If that name already exists, the
+user can replace it or keep both with an automatic suffix; factory profiles remain
+protected. Save to File opens the normal save dialog. The unrestricted IR chooser
+continues to accept compatible WAVs created elsewhere.
 
 The companion `audio-ir-deconvolution` capability uses the same module and DSP
 code as the standalone app. It accepts an original sweep WAV plus the hardware
