@@ -107,7 +107,9 @@ This file reports repository evidence, not desired future status.
   first launch; subsequent launches of that build retain them.
 - The standalone app maintains a canonical IR profile library under the user's
   Application Support directory. Factory profiles, validated user imports, and
-  generated profiles appear in one selector with Add and Manage actions. Sweep
+  generated profiles appear in one selector with Add and Manage actions. Manage
+  opens the full library in a pull-down, supports rename/delete for added profiles,
+  exports any profile, and keeps factory profiles read-only. Sweep
   generation uses temporary storage, then offers library addition with an editable
   derived name, explicit Save to File, or discard. Manage can rename or delete
   user-added profiles but never factory profiles. Its
@@ -117,8 +119,10 @@ This file reports repository evidence, not desired future status.
   the unprocessed source. Changing the selected dry-audio file during playback
   automatically restarts preview with that source after a short debounce. Local
   history presents only timestamp, output filename, and a compact settings summary;
-  its always-visible toolbar enables playback and Finder reveal when a completed
-  row is selected. The dedicated Reverb icon also appears in the window header.
+  its always-visible toolbar enables playback, Finder reveal, and confirmed job
+  deletion when a row is selected. The dedicated Reverb icon also appears in the
+  window header. UI language calls the artifact root the Output folder and avoids
+  worker/runtime terminology.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,

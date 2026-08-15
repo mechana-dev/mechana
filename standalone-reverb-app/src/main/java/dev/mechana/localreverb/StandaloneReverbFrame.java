@@ -38,11 +38,13 @@ import java.util.Objects;
 import java.util.prefs.Preferences;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
+import javax.swing.JDialog;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -103,9 +105,8 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField sweepPath = field("sweepPath", bundledSweepDefault());
 	private final JTextField recordedSweepPath = field("recordedSweepPath", "");
 	private final JButton run = new JButton("Apply");
-	private final JButton preview = transportButton("▶", "Play preview");
-	private final JButton pausePreview = transportButton("⏸", "Pause preview");
-	private final JButton stopPreview = transportButton("■", "Stop preview");
+	private final JButton preview = transportButton("▶", "Play preview", 64, 50, 26);
+	private final JButton stopPreview = transportButton("■", "Stop preview", 72, 54, 32);
 	private final JCheckBox bypassPreview = new JCheckBox("Bypass (original audio)");
 	private final JButton generateIr = new JButton("Generate IR Profile");
 	private final JButton addProfile = new JButton("Add…");
@@ -115,6 +116,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JButton resetEq = new JButton("Reset EQ");
 	private final JButton playOutput = new JButton("Play Output");
 	private final JButton showOutput = new JButton("Show in Finder");
+	private final JButton deleteJob = new JButton("Delete…");
 	private final JLabel status = new JLabel("Ready — processing stays on this Mac");
 	private final JProgressBar progress = new JProgressBar(0, 100);
 	private final JobTableModel jobs = new JobTableModel();
@@ -163,8 +165,9 @@ final class StandaloneReverbFrame extends JFrame {
 		JPanel panel = new JPanel(new BorderLayout(12, 0));
 		panel.setBorder(BorderFactory.createEmptyBorder(14, 16, 8, 16));
 		panel.add(headerIcon(), BorderLayout.WEST);
-		panel.add(new JLabel("<html><h2 style='margin:0'>Mechana Reverb</h2>"
-				+ "<div>Apply an impulse response locally with the same pure-Java plugin used by Mechana workers.</div></html>"),
+		panel.add(
+				new JLabel("<html><h2 style='margin:0'>Mechana Reverb</h2>"
+						+ "<div>Apply captured impulse-response reverbs to your audio.</div></html>"),
 				BorderLayout.CENTER);
 		return panel;
 	}
@@ -194,7 +197,7 @@ final class StandaloneReverbFrame extends JFrame {
 		profileActions.add(manageProfiles);
 		profileRow.add(profileActions, BorderLayout.EAST);
 		addRow(panel, c, "Impulse response", profileRow);
-		addPath(panel, c, "Artifacts folder", artifactRoot, true);
+		addPath(panel, c, "Output folder", artifactRoot, true);
 		addRow(panel, c, "Output WAV name", outputName);
 		addActionBar(panel, c);
 		addSection(panel, c, "Mix and timing");
@@ -216,18 +219,19 @@ final class StandaloneReverbFrame extends JFrame {
 		addRow(panel, c, "Normalize IR", normalizeIr);
 		addRow(panel, c, "Peak protection", peakProtection);
 		addRow(panel, c, "Safe headroom (dB)", headroom);
-		pausePreview.setEnabled(false);
 		stopPreview.setEnabled(false);
 		return panel;
 	}
 
 	private void addActionBar(JPanel panel, GridBagConstraints c) {
-		JPanel actions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 6, 2));
+		JPanel actions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 10, 5));
 		run.setToolTipText("Create a new processed WAV with the current settings");
+		run.setFont(run.getFont().deriveFont(Font.BOLD, 17f));
+		run.setPreferredSize(new Dimension(118, 50));
 		actions.add(run);
+		actions.add(Box.createHorizontalStrut(20));
 		actions.add(new JLabel("Preview:"));
 		actions.add(preview);
-		actions.add(pausePreview);
 		actions.add(stopPreview);
 		actions.add(bypassPreview);
 		addRow(panel, c, "", actions);
@@ -269,14 +273,16 @@ final class StandaloneReverbFrame extends JFrame {
 				selectHistoryOutput();
 		});
 		JPanel panel = new JPanel(new BorderLayout(8, 8));
-		panel.setBorder(BorderFactory.createTitledBorder("Local job history"));
+		panel.setBorder(BorderFactory.createTitledBorder("History"));
 		panel.add(new JScrollPane(jobTable), BorderLayout.CENTER);
 		JPanel actions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 6, 2));
 		actions.add(playOutput);
 		actions.add(showOutput);
+		actions.add(deleteJob);
 		panel.add(actions, BorderLayout.NORTH);
 		playOutput.setEnabled(false);
 		showOutput.setEnabled(false);
+		deleteJob.setEnabled(false);
 		JScrollPane wrapper = new JScrollPane(panel);
 		wrapper.setBorder(BorderFactory.createEmptyBorder());
 		return wrapper;
@@ -295,9 +301,12 @@ final class StandaloneReverbFrame extends JFrame {
 		irPreviewChangeTimer.setRepeats(false);
 		dryPreviewChangeTimer.setRepeats(false);
 		run.addActionListener(event -> submit());
-		preview.addActionListener(event -> startPreview());
-		pausePreview.addActionListener(event -> previewPlayer
-				.togglePause(state -> SwingUtilities.invokeLater(() -> updatePreviewState(state))));
+		preview.addActionListener(event -> {
+			if (previewPlayer.isActive())
+				previewPlayer.togglePause(state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)));
+			else
+				startPreview();
+		});
 		stopPreview.addActionListener(event -> stopPreview());
 		bypassPreview.addActionListener(event -> {
 			previewPlayer.setBypassed(bypassPreview.isSelected());
@@ -315,6 +324,7 @@ final class StandaloneReverbFrame extends JFrame {
 		resetEq.addActionListener(event -> resetEqualizer());
 		playOutput.addActionListener(event -> openLatestOutput(false));
 		showOutput.addActionListener(event -> openLatestOutput(true));
+		deleteJob.addActionListener(event -> deleteSelectedJob());
 		for (JTextField field : List.of(wet, dry, preDelay, lowCut, highCut, earlyLevel, lateLevel, attack, decayLength,
 				headroom))
 			field.getDocument().addDocumentListener(listener(this::updatePreviewParameters));
@@ -628,57 +638,163 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void manageProfiles() {
-		IrProfileLibrary.Profile selected = (IrProfileLibrary.Profile) profileSelector.getSelectedItem();
-		if (selected == null)
-			return;
-		Object[] actions = selected.factory()
-				? new Object[]{"Show in Finder", "Open Library", "Cancel"}
-				: new Object[]{"Rename…", "Delete…", "Show in Finder", "Open Library", "Cancel"};
-		int choice = JOptionPane.showOptionDialog(this,
-				selected.name() + "\n" + selected.path()
-						+ (selected.factory() ? "\nFactory profile" : "\nAdded profile"),
-				"Manage IR Profile", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, actions, actions[0]);
+		JDialog dialog = new JDialog(this, "Manage Impulse Responses", true);
+		dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+		dialog.setLayout(new BorderLayout(10, 10));
+		JComboBox<IrProfileLibrary.Profile> profiles = new JComboBox<>();
+		IrProfileLibrary.Profile current = (IrProfileLibrary.Profile) profileSelector.getSelectedItem();
+		reloadManagedProfiles(profiles, current == null ? null : current.path());
+		JPanel selection = new JPanel(new BorderLayout(8, 8));
+		selection.setBorder(BorderFactory.createEmptyBorder(16, 16, 4, 16));
+		selection.add(new JLabel("Impulse-response profile:"), BorderLayout.NORTH);
+		selection.add(profiles, BorderLayout.CENTER);
+		JLabel kind = new JLabel();
+		selection.add(kind, BorderLayout.SOUTH);
+		dialog.add(selection, BorderLayout.CENTER);
+
+		JButton rename = new JButton("Rename…");
+		JButton delete = new JButton("Delete…");
+		JButton export = new JButton("Export…");
+		JButton reveal = new JButton("Show in Finder");
+		JButton close = new JButton("Done");
+		Runnable updateActions = () -> {
+			IrProfileLibrary.Profile selected = (IrProfileLibrary.Profile) profiles.getSelectedItem();
+			boolean editable = selected != null && !selected.factory();
+			rename.setEnabled(editable);
+			delete.setEnabled(editable);
+			export.setEnabled(selected != null);
+			reveal.setEnabled(selected != null);
+			kind.setText(selected == null
+					? " "
+					: selected.factory() ? "Factory profile — protected" : "Added profile — editable");
+		};
+		profiles.addActionListener(event -> updateActions.run());
+		rename.addActionListener(event -> {
+			IrProfileLibrary.Profile selected = (IrProfileLibrary.Profile) profiles.getSelectedItem();
+			if (selected == null || selected.factory())
+				return;
+			try {
+				IrProfileLibrary.Profile renamed = renameProfile(selected);
+				if (renamed != null)
+					reloadManagedProfiles(profiles, renamed.path());
+			} catch (IOException failure) {
+				showError(failure.getMessage());
+			}
+		});
+		delete.addActionListener(event -> {
+			IrProfileLibrary.Profile selected = (IrProfileLibrary.Profile) profiles.getSelectedItem();
+			if (selected == null || selected.factory())
+				return;
+			try {
+				if (deleteProfile(selected))
+					reloadManagedProfiles(profiles, path(irPath));
+			} catch (IOException failure) {
+				showError(failure.getMessage());
+			}
+		});
+		export.addActionListener(event -> exportProfile((IrProfileLibrary.Profile) profiles.getSelectedItem()));
+		reveal.addActionListener(event -> {
+			IrProfileLibrary.Profile selected = (IrProfileLibrary.Profile) profiles.getSelectedItem();
+			if (selected != null)
+				showInFinder(selected.path());
+		});
+		close.addActionListener(event -> dialog.dispose());
+		JPanel actions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 8));
+		actions.add(rename);
+		actions.add(delete);
+		actions.add(export);
+		actions.add(reveal);
+		actions.add(close);
+		dialog.add(actions, BorderLayout.SOUTH);
+		updateActions.run();
+		dialog.getRootPane().setDefaultButton(close);
+		dialog.pack();
+		dialog.setMinimumSize(new Dimension(680, 170));
+		dialog.setLocationRelativeTo(this);
+		dialog.setVisible(true);
+	}
+
+	private void reloadManagedProfiles(JComboBox<IrProfileLibrary.Profile> profiles, Path selection) {
 		try {
-			if (!selected.factory() && choice == 0)
-				renameProfile(selected);
-			else if (!selected.factory() && choice == 1)
-				deleteProfile(selected);
-			else if ((selected.factory() && choice == 0) || (!selected.factory() && choice == 2))
-				Desktop.getDesktop().open(
-						java.util.Objects.requireNonNull(selected.path().getParent(), "IR profile folder").toFile());
-			else if ((selected.factory() && choice == 1) || (!selected.factory() && choice == 3))
-				Desktop.getDesktop().open(profileLibrary.directory().toFile());
+			profiles.removeAllItems();
+			IrProfileLibrary.Profile selected = null;
+			for (IrProfileLibrary.Profile profile : profileLibrary.profiles()) {
+				profiles.addItem(profile);
+				if (selection != null && profile.path().equals(selection.toAbsolutePath().normalize()))
+					selected = profile;
+			}
+			if (selected != null)
+				profiles.setSelectedItem(selected);
+			else if (profiles.getItemCount() > 0)
+				profiles.setSelectedIndex(0);
 		} catch (IOException failure) {
-			showError(failure.getMessage());
+			showError("Could not load the IR profile library: " + failure.getMessage());
 		}
 	}
 
-	private void renameProfile(IrProfileLibrary.Profile profile) throws IOException {
+	private IrProfileLibrary.Profile renameProfile(IrProfileLibrary.Profile profile) throws IOException {
 		String filename = Objects.requireNonNull(profile.path().getFileName(), "IR profile filename").toString();
 		String suggestedName = filename.replaceFirst("(?i)\\.wav$", "");
 		String requestedName = (String) JOptionPane.showInputDialog(this, "Enter a new name for this IR profile:",
 				"Rename IR Profile", JOptionPane.PLAIN_MESSAGE, null, null, suggestedName);
 		if (requestedName == null)
-			return;
+			return null;
 		if (requestedName.isBlank()) {
 			JOptionPane.showMessageDialog(this, "Enter a name for the IR profile.", "Rename IR Profile",
 					JOptionPane.WARNING_MESSAGE);
-			return;
+			return null;
 		}
 		IrProfileLibrary.Profile renamed = profileLibrary.rename(profile, requestedName.strip());
 		reloadProfiles(renamed.path());
 		status.setText("Renamed IR profile — " + renamed.name());
+		return renamed;
 	}
 
-	private void deleteProfile(IrProfileLibrary.Profile profile) throws IOException {
+	private boolean deleteProfile(IrProfileLibrary.Profile profile) throws IOException {
 		int confirmed = JOptionPane.showConfirmDialog(this,
 				"Delete the added IR profile ‘" + profile.name() + "’?\nThis cannot be undone.", "Delete IR Profile",
 				JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
 		if (confirmed != JOptionPane.YES_OPTION)
-			return;
+			return false;
 		profileLibrary.remove(profile);
 		reloadProfiles(null);
 		status.setText("Deleted IR profile — " + profile.name());
+		return true;
+	}
+
+	private void exportProfile(IrProfileLibrary.Profile profile) {
+		if (profile == null)
+			return;
+		JFileChooser chooser = new JFileChooser();
+		chooser.setDialogTitle("Export impulse-response profile");
+		chooser.setFileFilter(new FileNameExtensionFilter("WAV impulse response (.wav)", "wav"));
+		chooser.setSelectedFile(
+				new File(Objects.requireNonNull(profile.path().getFileName(), "IR filename").toString()));
+		if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
+			return;
+		Path destination = chooser.getSelectedFile().toPath();
+		if (!destination.toString().toLowerCase(java.util.Locale.ROOT).endsWith(".wav"))
+			destination = Path.of(destination + ".wav");
+		if (Files.exists(destination) && JOptionPane.showConfirmDialog(this, "Replace the existing file?",
+				"Export IR Profile", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) != JOptionPane.YES_OPTION)
+			return;
+		try {
+			Files.copy(profile.path(), destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+			status.setText("Exported IR profile — " + destination.getFileName());
+		} catch (IOException failure) {
+			showError(failure.getMessage());
+		}
+	}
+
+	private void showInFinder(Path file) {
+		try {
+			if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac"))
+				new ProcessBuilder("/usr/bin/open", "-R", file.toString()).start();
+			else
+				Desktop.getDesktop().open(Objects.requireNonNull(file.getParent(), "IR profile folder").toFile());
+		} catch (IOException | UnsupportedOperationException failure) {
+			showError(failure.getMessage());
+		}
 	}
 
 	private void reloadProfiles(Path selection) {
@@ -842,19 +958,23 @@ final class StandaloneReverbFrame extends JFrame {
 
 	private void updatePreviewState(ReverbPreviewPlayer.State state) {
 		switch (state) {
-			case PREPARING -> status.setText("Preparing real-time preview…");
-			case REGENERATING_IR -> status.setText("Regenerating IR to match sample rate…");
+			case PREPARING -> {
+				status.setText("Preparing real-time preview…");
+				preview.setEnabled(false);
+			}
+			case REGENERATING_IR -> {
+				status.setText("Regenerating IR to match sample rate…");
+				preview.setEnabled(false);
+			}
 			case PLAYING -> {
 				status.setText(bypassPreview.isSelected()
 						? "Preview bypassed — playing original audio"
 						: "Playing reverb preview through the default audio output");
-				pausePreview.setText("⏸");
-				pausePreview.setToolTipText("Pause preview");
+				setPreviewButton("⏸", "Pause preview", true);
 			}
 			case PAUSED -> {
 				status.setText("Reverb preview paused");
-				pausePreview.setText("▶");
-				pausePreview.setToolTipText("Resume preview");
+				setPreviewButton("▶", "Resume preview", true);
 			}
 			case STOPPED -> status.setText("Preview stopped");
 			case FINISHED -> {
@@ -863,20 +983,20 @@ final class StandaloneReverbFrame extends JFrame {
 			}
 		}
 		if (state == ReverbPreviewPlayer.State.PREPARING || state == ReverbPreviewPlayer.State.REGENERATING_IR
-				|| state == ReverbPreviewPlayer.State.PLAYING || state == ReverbPreviewPlayer.State.PAUSED) {
-			preview.setEnabled(false);
-			pausePreview.setEnabled(
-					state == ReverbPreviewPlayer.State.PLAYING || state == ReverbPreviewPlayer.State.PAUSED);
+				|| state == ReverbPreviewPlayer.State.PLAYING || state == ReverbPreviewPlayer.State.PAUSED)
 			stopPreview.setEnabled(true);
-		}
 	}
 
 	private void previewFinished() {
-		preview.setEnabled(true);
-		pausePreview.setEnabled(false);
-		pausePreview.setText("⏸");
-		pausePreview.setToolTipText("Pause preview");
+		setPreviewButton("▶", "Play preview", true);
 		stopPreview.setEnabled(false);
+	}
+
+	private void setPreviewButton(String symbol, String description, boolean enabled) {
+		preview.setText(symbol);
+		preview.setToolTipText(description);
+		preview.getAccessibleContext().setAccessibleName(description);
+		preview.setEnabled(enabled);
 	}
 
 	private void update(ReverbJob job) {
@@ -895,6 +1015,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private void selectHistoryOutput() {
 		ReverbJob selected = selectedJob();
 		setLatestOutput(selected == null ? null : selected.artifactDirectory().resolve(selected.outputName()));
+		deleteJob.setEnabled(selected != null && Files.isDirectory(selected.artifactDirectory()));
 	}
 
 	private void setLatestOutput(Path output) {
@@ -917,6 +1038,27 @@ final class StandaloneReverbFrame extends JFrame {
 			else
 				Desktop.getDesktop().open(output.toFile());
 		} catch (IOException | UnsupportedOperationException failure) {
+			showError(failure.getMessage());
+		}
+	}
+
+	private void deleteSelectedJob() {
+		ReverbJob selected = selectedJob();
+		if (selected == null)
+			return;
+		int confirmed = JOptionPane.showConfirmDialog(this,
+				"Delete this job and all of its output files?\n\n" + selected.outputName(), "Delete History Job",
+				JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+		if (confirmed != JOptionPane.YES_OPTION)
+			return;
+		try {
+			engine.deleteJob(path(artifactRoot), selected);
+			jobTable.clearSelection();
+			setLatestOutput(null);
+			deleteJob.setEnabled(false);
+			reloadHistory();
+			status.setText("Deleted job — " + selected.outputName());
+		} catch (IOException | RuntimeException failure) {
 			showError(failure.getMessage());
 		}
 	}
@@ -1058,12 +1200,12 @@ final class StandaloneReverbFrame extends JFrame {
 		};
 	}
 
-	private static JButton transportButton(String symbol, String description) {
+	private static JButton transportButton(String symbol, String description, int width, int height, float fontSize) {
 		JButton button = new JButton(symbol);
 		button.setToolTipText(description);
 		button.getAccessibleContext().setAccessibleName(description);
-		button.setFont(button.getFont().deriveFont(Font.BOLD, 22f));
-		button.setPreferredSize(new Dimension(58, 42));
+		button.setFont(button.getFont().deriveFont(Font.BOLD, fontSize));
+		button.setPreferredSize(new Dimension(width, height));
 		button.setMargin(new Insets(2, 8, 2, 8));
 		return button;
 	}

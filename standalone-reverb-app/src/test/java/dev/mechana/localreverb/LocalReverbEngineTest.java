@@ -16,6 +16,8 @@
 package dev.mechana.localreverb;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mechana.plugins.audio.WavFile;
@@ -112,6 +114,28 @@ class LocalReverbEngineTest {
 		try (WavFile.Reader input = WavFile.open(sweep)) {
 			assertEquals(48_000, input.format().sampleRate());
 			assertEquals(2, input.format().channels());
+		}
+	}
+
+	@Test
+	void deletesOnlyValidatedJobDirectories() throws Exception {
+		Path root = temporary.resolve("delete-jobs");
+		Path jobDirectory = root.resolve("job-1");
+		Files.createDirectories(jobDirectory.resolve("nested"));
+		Files.writeString(jobDirectory.resolve("job.json"), "{}");
+		Files.writeString(jobDirectory.resolve("nested/output.wav"), "audio");
+		ReverbJob job = new ReverbJob("job-1", "SUCCEEDED", 100, java.time.Instant.now(), java.time.Instant.now(),
+				jobDirectory, "output.wav", "settings", "");
+		try (var engine = new LocalReverbEngine()) {
+			engine.deleteJob(root, job);
+			assertFalse(Files.exists(jobDirectory));
+			Path outside = temporary.resolve("outside");
+			Files.createDirectories(outside);
+			Files.writeString(outside.resolve("job.json"), "{}");
+			ReverbJob invalid = new ReverbJob("outside", "SUCCEEDED", 100, java.time.Instant.now(),
+					java.time.Instant.now(), outside, "output.wav", "settings", "");
+			assertThrows(java.io.IOException.class, () -> engine.deleteJob(root, invalid));
+			assertTrue(Files.exists(outside));
 		}
 	}
 

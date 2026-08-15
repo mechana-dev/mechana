@@ -103,6 +103,21 @@ public final class LocalReverbEngine implements AutoCloseable {
 		return jobs.stream().sorted(Comparator.comparing(ReverbJob::submittedAt).reversed()).toList();
 	}
 
+	public synchronized void deleteJob(Path root, ReverbJob job) throws IOException {
+		if (root == null || job == null)
+			throw new IOException("Select a job to delete");
+		if (current != null && "RUNNING".equals(current.status()) && current.id().equals(job.id()))
+			throw new IOException("The running job cannot be deleted");
+		Path normalizedRoot = root.toAbsolutePath().normalize();
+		Path directory = job.artifactDirectory().toAbsolutePath().normalize();
+		if (!normalizedRoot.equals(directory.getParent()) || !Files.isRegularFile(directory.resolve("job.json")))
+			throw new IOException("The selected folder is not a Mechana Reverb job");
+		try (var contents = Files.walk(directory)) {
+			for (Path entry : contents.sorted(Comparator.reverseOrder()).toList())
+				Files.delete(entry);
+		}
+	}
+
 	private void execute(ReverbRequest request, Consumer<ReverbJob> listener) {
 		Path metadata = current.artifactDirectory().resolve("reverb-result.properties");
 		Path convertedDry = current.artifactDirectory().resolve(".prepared-dry.wav");
