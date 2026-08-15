@@ -71,6 +71,19 @@ This file reports repository evidence, not desired future status.
 
 ## Present in the repository
 
+- An initial native Audio Unit POC under `native/` separates a JUCE-free C++20
+  reverb core from a thin JUCE 9 adapter. The core owns FFT convolution, IR
+  sample-rate preparation, wet/dry mixing, and pre-delay and performs no allocation
+  after preparation. The adapter supplies AU host integration, ten automatable
+  parameters, project-state persistence, a functional editor, six bundled factory
+  IRs, and custom WAV import. Native preparation now covers sample-rate conversion,
+  early/late shaping, attack, decay shortening, wet EQ, and captured-response
+  calibration. Its Apple Silicon development build passes the core regression
+  test, local code-signature verification, and Apple's `auval`. It is not a release:
+  durable user-library management, smoothing, automatic peak-protection parity,
+  Universal packaging, signing, and notarization remain future work. JUCE is
+  fetched only into the ignored build directory and is not part of the core.
+
 - A pure-Java `audio-convolution-reverb` POC accepts staged dry and IR WAV
   artifacts, performs single-worker uniform partitioned FFT convolution, and
   publishes a 24-bit WAV through server-local storage. The generic launcher

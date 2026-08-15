@@ -1852,3 +1852,27 @@ cloud providers remain future direction; see `brain/current-state.md` and
   scrubbed playback resumes with established reverb state.
 - Throttled timeline updates to audio blocks to avoid flooding the Swing event
   queue, and added regression coverage for convolution continuity at a seek point.
+## 2026-08-15 — Native Audio Unit proof of concept started
+
+- Added a C++20 `native/reverb-core` with an internal radix-2 FFT, allocation-free
+  uniform partitioned convolution after preparation, IR sample-rate conversion,
+  wet/dry mixing, pre-delay, latency reporting, and a JUCE-independent regression
+  test.
+- Added a deliberately thin JUCE 9 adapter that builds an Audio Unit v2 effect,
+  embeds the Small Room factory response, exposes automatable Wet, Dry, and
+  Pre-delay controls, saves/restores Logic project state, and supplies a minimal
+  native editor. No JUCE type or DSP helper crosses into the product core.
+- Pinned JUCE 9.0.0 through CMake FetchContent in the ignored native build tree;
+  documented its AGPLv3/commercial distribution boundary. Installed CMake 4.4.2
+  locally for native development.
+- Verified the Apple Silicon development component with the native test, Mach-O
+  and local signature checks, and Apple's complete `auval` suite. Universal builds,
+  release signing/notarization, full Java behavior parity, user IR management, and
+  commercial distribution remain follow-up work.
+- Expanded the Audio Unit to version 0.2.0 with all six factory responses, custom
+  WAV import, Bypass, wet-path Low-cut/High-cut EQ, and the existing Early, Late,
+  Attack, and Decay captured-response controls. Added neutral Reset Mix, Reset
+  Captured, and Reset EQ actions. IR conversion, shaping, and calibration remain
+  outside the real-time callback. Rebuilt the Apple Silicon component, passed the
+  native regression suite, and passed Apple's `auval` with all ten host-visible
+  parameters and mono/stereo rendering at its exercised sample rates.

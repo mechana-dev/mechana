@@ -23,6 +23,7 @@ This is the concise decision index. Detailed implications live in the linked fil
 | Assembly placement | One storage-neutral assembly API supports coordinator, client, or worker placement; the plugin defines how and Mechana decides where. |
 | Storage security | Require authenticated TLS beyond explicit local development; distinguish optional provider encryption at rest from proposed end-to-end artifact encryption. Key management is deferred. |
 | Media | FFmpeg/FFprobe run as external processes in the media plugin. |
+| Native reverb boundary | Keep product-owned reverb DSP, parameters, IR preparation, and tests in a JUCE-free C++ core. Use JUCE only as a replaceable AU/VST3 host adapter during initial development; preserve a later native renderer boundary for Mechana workers and repository extraction. |
 | Video profile | All partitions in a video job initially share one runtime signature. |
 | Segmentation | Keyframe-aware and time-based; correctness at boundaries outranks equal byte sizes. |
 | Initial audio path | Transcode video in parallel segments; copy optional audio once as a whole stream before final mux. |
