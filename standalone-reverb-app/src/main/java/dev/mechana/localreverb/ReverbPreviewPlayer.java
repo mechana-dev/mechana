@@ -51,6 +51,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private final ImpulseResponseCache impulseResponseCache;
 	private final Object pauseLock = new Object();
 	private volatile boolean paused;
+	private volatile boolean bypassed;
 	private volatile Thread playbackThread;
 	private volatile AudioSink activeSink;
 	private volatile ConvolutionBank pendingBank;
@@ -216,6 +217,10 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		return !stopped.get();
 	}
 
+	void setBypassed(boolean value) {
+		bypassed = value;
+	}
+
 	void changeImpulseResponse(Path path, Runnable resampling, Consumer<Path> success, Consumer<String> failure) {
 		Objects.requireNonNull(path, "path");
 		Objects.requireNonNull(resampling, "resampling");
@@ -296,6 +301,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		SmoothedValue wetLevel = new SmoothedValue(liveParameters.wet());
 		SmoothedValue dryLevel = new SmoothedValue(liveParameters.dry());
 		SmoothedValue headroom = new SmoothedValue(headroomTarget(liveParameters));
+		SmoothedValue bypass = new SmoothedValue(bypassed ? 1 : 0);
 		int rampFrames = Math.max(1, format.sampleRate() * PARAMETER_RAMP_MILLISECONDS / 1000);
 		double[][] input = new double[format.channels()][BLOCK_SIZE];
 		byte[] pcm = new byte[BLOCK_SIZE * outputChannels * 2];
@@ -335,16 +341,18 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 				wetLevel.target(parameters.wet(), rampFrames);
 				dryLevel.target(parameters.dry(), rampFrames);
 				headroom.target(headroomTarget(parameters), rampFrames);
+				bypass.target(bypassed ? 1 : 0, rampFrames);
 				double currentWet = wetLevel.next();
 				double currentDry = dryLevel.next();
 				double currentHeadroom = headroom.next();
+				double currentBypass = bypass.next();
 				double blend = transitionBank == null ? 0 : Math.min(1, (double) crossfadeFrame / crossfadeFrames);
 				for (int channel = 0; channel < outputChannels; channel++) {
 					long absolute = outputPosition + frame;
-					double direct = absolute < format.frames()
+					double original = absolute < format.frames()
 							? input[Math.min(channel, input.length - 1)][frame]
-									* dryEndEnvelope(absolute, format.frames(), format.sampleRate())
 							: 0;
+					double direct = original * dryEndEnvelope(absolute, format.frames(), format.sampleRate());
 					double wetSample = wet[channel][frame]
 							* (parameters.normalizeIr() ? activeBank.normalizationGain() : 1);
 					if (transitionBank != null)
@@ -356,6 +364,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					double sample = direct * currentDry + delayed * currentWet;
 					if (parameters.peakProtection())
 						sample = Math.max(-currentHeadroom, Math.min(currentHeadroom, sample));
+					sample = sample * (1 - currentBypass) + original * currentBypass;
 					int value = (int) Math.max(Short.MIN_VALUE,
 							Math.min(Short.MAX_VALUE, Math.round(sample * 32768.0)));
 					pcm[byteIndex++] = (byte) value;

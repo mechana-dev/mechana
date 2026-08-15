@@ -56,6 +56,10 @@ is explicitly required. Rebuilding is deterministic from the shaded application 
 function-specific Mechana icon variants, the current Java 25 `jpackage`, macOS's
 Swift compiler and WebKit framework, and a bundled runtime image.
 
+Mechana Reverb uses its own impulse-and-decaying-reflections icon rather than the
+Job Launcher's paper-plane artwork, while retaining the shared Mechana hexagon and
+color family.
+
 ## Server lifecycle
 
 **Mechana Server.app** is a dedicated dashboard app, not the server process. It

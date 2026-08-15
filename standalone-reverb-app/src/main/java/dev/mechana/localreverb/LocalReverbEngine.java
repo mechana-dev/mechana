@@ -64,7 +64,8 @@ public final class LocalReverbEngine implements AutoCloseable {
 				+ UUID.randomUUID().toString().substring(0, 8);
 		Path directory = request.artifactRoot().resolve(id);
 		Files.createDirectory(directory);
-		current = new ReverbJob(id, "RUNNING", 0, Instant.now(), null, directory, request.outputName(), "");
+		current = new ReverbJob(id, "RUNNING", 0, Instant.now(), null, directory, request.outputName(),
+				parameterSummary(request), "");
 		cancellation.set(false);
 		writeState(current, request);
 		listener.accept(current);
@@ -93,7 +94,7 @@ public final class LocalReverbEngine implements AutoCloseable {
 						status = "INTERRUPTED";
 					jobs.add(new ReverbJob(text(values, "jobId"), status, number(values, "progress"),
 							Instant.parse(text(values, "submittedAt")), instant(values.get("completedAt")), directory,
-							text(values, "outputName"), text(values, "error")));
+							text(values, "outputName"), parameterSummary(values), text(values, "error")));
 				} catch (IOException | RuntimeException ignored) {
 					// An unrelated or incomplete directory is not local job history.
 				}
@@ -223,6 +224,33 @@ public final class LocalReverbEngine implements AutoCloseable {
 		json.writerWithDefaultPrettyPrinter().writeValue(temporary.toFile(), values);
 		Files.move(temporary, job.artifactDirectory().resolve("job.json"), StandardCopyOption.REPLACE_EXISTING,
 				StandardCopyOption.ATOMIC_MOVE);
+	}
+
+	private static String parameterSummary(ReverbRequest request) {
+		return "Wet %s · Dry %s · Pre %s ms · Early %s · Late %s · Attack %s ms · Decay %s%% · EQ %s/%s Hz · Norm %s"
+				.formatted(compact(request.wet()), compact(request.dry()), compact(request.preDelayMilliseconds()),
+						compact(request.earlyLevel()), compact(request.lateLevel()),
+						compact(request.attackMilliseconds()), compact(request.decayLengthPercent()),
+						compact(request.lowCutHertz()), compact(request.highCutHertz()),
+						request.normalizeIr() ? "on" : "off");
+	}
+
+	private static String parameterSummary(Map<String, Object> values) {
+		return "Wet %s · Dry %s · Pre %s ms · Early %s · Late %s · Attack %s ms · Decay %s%% · EQ %s/%s Hz · Norm %s"
+				.formatted(value(values, "wet", "?"), value(values, "dry", "?"),
+						value(values, "preDelayMilliseconds", "?"), value(values, "earlyLevel", "1"),
+						value(values, "lateLevel", "1"), value(values, "attackMilliseconds", "0"),
+						value(values, "decayLengthPercent", "100"), value(values, "lowCutHertz", "0"),
+						value(values, "highCutHertz", "0"), value(values, "normalizeIr", "?"));
+	}
+
+	private static String value(Map<String, Object> values, String key, String fallback) {
+		Object value = values.get(key);
+		return value == null ? fallback : value.toString();
+	}
+
+	private static String compact(double value) {
+		return java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString();
 	}
 
 	@SuppressFBWarnings(value = "VA_FORMAT_STRING_USES_NEWLINE", justification = "The durable plain-text report intentionally uses LF on every platform")

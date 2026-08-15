@@ -48,7 +48,7 @@ create_icon() {
 create_icon "${SCRIPT_DIR}/icons/mechana-server.png" "${SERVER_ICON}"
 create_icon "${SCRIPT_DIR}/icons/mechana-worker-control.png" "${WORKER_ICON}"
 create_icon "${SCRIPT_DIR}/icons/mechana-job-launcher.png" "${JOB_ICON}"
-create_icon "${SCRIPT_DIR}/icons/mechana-job-launcher.png" "${REVERB_ICON}"
+create_icon "${SCRIPT_DIR}/icons/mechana-reverb.png" "${REVERB_ICON}"
 
 cp macos-app-launcher/target/mechana-macos-app-launcher.jar "${STAGING}/server/"
 cp mechana-server/target/mechana-server.jar "${STAGING}/server/"

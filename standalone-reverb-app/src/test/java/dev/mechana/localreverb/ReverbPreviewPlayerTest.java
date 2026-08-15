@@ -99,6 +99,20 @@ class ReverbPreviewPlayerTest {
 	}
 
 	@Test
+	void bypassReturnsLivePreviewToTheUnprocessedSource() throws Exception {
+		double[] source = new double[5_000];
+		java.util.Arrays.fill(source, 0.25);
+		Path dry = wav("bypass-dry.wav", 48_000, new double[][]{source});
+		Path ir = wav("bypass-ir.wav", 48_000, new double[][]{{1}});
+		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 1, 1, 0, 0, 0, false, false, 1);
+
+		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings, player -> player.setBypassed(true));
+
+		assertEquals(0.5, sample(pcm, 500 * 2), 1.0 / 32768);
+		assertEquals(0.25, sample(pcm, 4_000 * 2), 1.0 / 32768);
+	}
+
+	@Test
 	void increasedPredelayTakesEffectAndExtendsPreviewTail() throws Exception {
 		double[] source = new double[3_000];
 		source[2_000] = 0.75;

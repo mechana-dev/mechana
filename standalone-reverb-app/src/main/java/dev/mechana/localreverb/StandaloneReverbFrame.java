@@ -28,6 +28,8 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.prefs.Preferences;
@@ -97,16 +99,17 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField recordedSweepPath = field("recordedSweepPath", "");
 	private final JTextField generatedIrPath = field("generatedIrPath",
 			Path.of(System.getProperty("user.home"), "Documents", "RVB_Plug-IR.wav").toString());
-	private final JButton run = new JButton("Run Reverb");
-	private final JButton preview = new JButton("Play Preview");
-	private final JButton pausePreview = new JButton("Pause");
-	private final JButton stopPreview = new JButton("Stop Preview");
+	private final JButton run = new JButton("Apply");
+	private final JButton preview = transportButton("▶", "Play preview");
+	private final JButton pausePreview = transportButton("⏸", "Pause preview");
+	private final JButton stopPreview = transportButton("■", "Stop preview");
+	private final JCheckBox bypassPreview = new JCheckBox("Bypass (original audio)");
 	private final JButton generateIr = new JButton("Generate IR Profile");
 	private final JButton addProfile = new JButton("Add…");
 	private final JButton manageProfiles = new JButton("Manage…");
-	private final JButton resetCaptured = new JButton("Reset to Captured Response");
-	private final JButton cancel = new JButton("Cancel");
-	private final JButton reveal = new JButton("Show Artifacts");
+	private final JButton resetMix = new JButton("Reset Mix and Timing");
+	private final JButton resetCaptured = new JButton("Reset Captured Response");
+	private final JButton resetEq = new JButton("Reset EQ");
 	private final JButton playOutput = new JButton("Play Output");
 	private final JButton showOutput = new JButton("Show in Finder");
 	private final JLabel status = new JLabel("Ready — processing stays on this Mac");
@@ -178,10 +181,12 @@ final class StandaloneReverbFrame extends JFrame {
 		addRow(panel, c, "Impulse response", profileRow);
 		addPath(panel, c, "Artifacts folder", artifactRoot, true);
 		addRow(panel, c, "Output WAV name", outputName);
+		addActionBar(panel, c);
 		addSection(panel, c, "Mix and timing");
 		addRow(panel, c, "Wet level (0–2)", sliderWithOverride(wetSlider, wet));
 		addRow(panel, c, "Dry level (0–2)", sliderWithOverride(drySlider, dry));
 		addRow(panel, c, "Pre-delay (0–200 ms slider)", sliderWithOverride(preDelaySlider, preDelay));
+		addRow(panel, c, "", resetMix);
 		addSection(panel, c, "Captured-response shaping");
 		addRow(panel, c, "Early reflections level (0–2)", sliderWithOverride(earlySlider, earlyLevel));
 		addRow(panel, c, "Late tail level (0–2)", sliderWithOverride(lateSlider, lateLevel));
@@ -191,25 +196,26 @@ final class StandaloneReverbFrame extends JFrame {
 		addSection(panel, c, "Wet EQ");
 		addRow(panel, c, "Low-cut (Hz, 0 = off)", sliderWithOverride(lowCutSlider, lowCut));
 		addRow(panel, c, "High-cut (Hz, 0 = off)", sliderWithOverride(highCutSlider, highCut));
+		addRow(panel, c, "", resetEq);
 		addSection(panel, c, "Output");
 		addRow(panel, c, "Normalize IR", normalizeIr);
 		addRow(panel, c, "Peak protection", peakProtection);
 		addRow(panel, c, "Safe headroom (dB)", headroom);
-		c.gridx = 1;
-		c.weightx = 1;
-		c.fill = GridBagConstraints.NONE;
-		c.anchor = GridBagConstraints.WEST;
-		JPanel buttons = new JPanel();
-		buttons.add(run);
-		buttons.add(preview);
-		buttons.add(pausePreview);
-		buttons.add(stopPreview);
-		buttons.add(cancel);
-		panel.add(buttons, c);
-		cancel.setEnabled(false);
 		pausePreview.setEnabled(false);
 		stopPreview.setEnabled(false);
 		return panel;
+	}
+
+	private void addActionBar(JPanel panel, GridBagConstraints c) {
+		JPanel actions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 6, 2));
+		run.setToolTipText("Create a new processed WAV with the current settings");
+		actions.add(run);
+		actions.add(new JLabel("Preview:"));
+		actions.add(preview);
+		actions.add(pausePreview);
+		actions.add(stopPreview);
+		actions.add(bypassPreview);
+		addRow(panel, c, "", actions);
 	}
 
 	private JPanel buildIrCreator() {
@@ -241,14 +247,22 @@ final class StandaloneReverbFrame extends JFrame {
 	private JScrollPane buildHistory() {
 		jobTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		jobTable.setFillsViewportHeight(true);
-		jobTable.getSelectionModel().addListSelectionListener(event -> reveal.setEnabled(selectedJob() != null));
+		jobTable.getColumnModel().getColumn(0).setPreferredWidth(150);
+		jobTable.getColumnModel().getColumn(1).setPreferredWidth(280);
+		jobTable.getColumnModel().getColumn(2).setPreferredWidth(620);
+		jobTable.getSelectionModel().addListSelectionListener(event -> {
+			if (!event.getValueIsAdjusting())
+				selectHistoryOutput();
+		});
 		JPanel panel = new JPanel(new BorderLayout(8, 8));
 		panel.setBorder(BorderFactory.createTitledBorder("Local job history"));
 		panel.add(new JScrollPane(jobTable), BorderLayout.CENTER);
 		JPanel actions = new JPanel();
-		actions.add(reveal);
+		actions.add(playOutput);
+		actions.add(showOutput);
 		panel.add(actions, BorderLayout.SOUTH);
-		reveal.setEnabled(false);
+		playOutput.setEnabled(false);
+		showOutput.setEnabled(false);
 		JScrollPane wrapper = new JScrollPane(panel);
 		wrapper.setBorder(BorderFactory.createEmptyBorder());
 		return wrapper;
@@ -258,13 +272,7 @@ final class StandaloneReverbFrame extends JFrame {
 		JPanel panel = new JPanel(new BorderLayout(8, 8));
 		panel.setBorder(BorderFactory.createEmptyBorder(8, 16, 14, 16));
 		progress.setStringPainted(true);
-		JPanel resultActions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 6, 0));
-		resultActions.add(status);
-		resultActions.add(playOutput);
-		resultActions.add(showOutput);
-		playOutput.setEnabled(false);
-		showOutput.setEnabled(false);
-		panel.add(resultActions, BorderLayout.WEST);
+		panel.add(status, BorderLayout.WEST);
 		panel.add(progress, BorderLayout.CENTER);
 		return panel;
 	}
@@ -276,12 +284,20 @@ final class StandaloneReverbFrame extends JFrame {
 		pausePreview.addActionListener(event -> previewPlayer
 				.togglePause(state -> SwingUtilities.invokeLater(() -> updatePreviewState(state))));
 		stopPreview.addActionListener(event -> stopPreview());
+		bypassPreview.addActionListener(event -> {
+			previewPlayer.setBypassed(bypassPreview.isSelected());
+			if (previewPlayer.isActive())
+				status.setText(bypassPreview.isSelected()
+						? "Preview bypassed — playing original audio"
+						: "Reverb preview active");
+		});
 		generateIr.addActionListener(event -> generateImpulseResponse());
 		addProfile.addActionListener(event -> addProfile());
 		manageProfiles.addActionListener(event -> manageProfiles());
 		profileSelector.addActionListener(event -> selectProfile());
+		resetMix.addActionListener(event -> resetMixAndTiming());
 		resetCaptured.addActionListener(event -> resetCapturedResponse());
-		cancel.addActionListener(event -> engine.cancel());
+		resetEq.addActionListener(event -> resetEqualizer());
 		playOutput.addActionListener(event -> openLatestOutput(false));
 		showOutput.addActionListener(event -> openLatestOutput(true));
 		for (JTextField field : List.of(wet, dry, preDelay, lowCut, highCut, earlyLevel, lateLevel, attack, decayLength,
@@ -298,15 +314,6 @@ final class StandaloneReverbFrame extends JFrame {
 			if (previewPlayer.isActive())
 				irPreviewChangeTimer.restart();
 		}));
-		reveal.addActionListener(event -> {
-			ReverbJob selected = selectedJob();
-			if (selected != null)
-				try {
-					Desktop.getDesktop().open(selected.artifactDirectory().toFile());
-				} catch (IOException failure) {
-					showError(failure.getMessage());
-				}
-		});
 		artifactRoot.getDocument().addDocumentListener(listener(this::reloadHistory));
 	}
 
@@ -509,10 +516,11 @@ final class StandaloneReverbFrame extends JFrame {
 		try {
 			profileSelector.removeAllItems();
 			IrProfileLibrary.Profile selected = null;
+			Path selectionFileName = selection == null ? null : selection.getFileName();
 			for (IrProfileLibrary.Profile profile : profileLibrary.profiles()) {
 				profileSelector.addItem(profile);
 				if (selection != null && (profile.path().equals(selection.toAbsolutePath().normalize())
-						|| profile.path().getFileName().equals(selection.getFileName())))
+						|| selectionFileName != null && selectionFileName.equals(profile.path().getFileName())))
 					selected = profile;
 			}
 			if (selected != null)
@@ -532,11 +540,19 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void resetCapturedResponse() {
-		preDelay.setText("0");
 		earlyLevel.setText("1");
 		lateLevel.setText("1");
 		attack.setText("0");
 		decayLength.setText("100");
+	}
+
+	private void resetMixAndTiming() {
+		wet.setText("0");
+		dry.setText("1");
+		preDelay.setText("0");
+	}
+
+	private void resetEqualizer() {
 		lowCut.setText("0");
 		highCut.setText("0");
 	}
@@ -579,7 +595,6 @@ final class StandaloneReverbFrame extends JFrame {
 					peakProtection.isSelected(), decimal(headroom, "Safe headroom"));
 			engine.submit(request, job -> SwingUtilities.invokeLater(() -> update(job)));
 			run.setEnabled(false);
-			cancel.setEnabled(true);
 		} catch (IOException | RuntimeException failure) {
 			showError(failure.getMessage());
 		}
@@ -599,6 +614,7 @@ final class StandaloneReverbFrame extends JFrame {
 					decimal(lateLevel, "Late tail level"), decimal(attack, "Attack"),
 					decimal(decayLength, "Decay length"), normalizeIr.isSelected(), peakProtection.isSelected(),
 					decimal(headroom, "Safe headroom"));
+			previewPlayer.setBypassed(bypassPreview.isSelected());
 			previewPlayer.play(settings, state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)),
 					message -> SwingUtilities.invokeLater(() -> {
 						showError(message);
@@ -651,12 +667,16 @@ final class StandaloneReverbFrame extends JFrame {
 			case PREPARING -> status.setText("Preparing real-time preview…");
 			case REGENERATING_IR -> status.setText("Regenerating IR to match sample rate…");
 			case PLAYING -> {
-				status.setText("Playing reverb preview through the default audio output");
-				pausePreview.setText("Pause");
+				status.setText(bypassPreview.isSelected()
+						? "Preview bypassed — playing original audio"
+						: "Playing reverb preview through the default audio output");
+				pausePreview.setText("⏸");
+				pausePreview.setToolTipText("Pause preview");
 			}
 			case PAUSED -> {
 				status.setText("Reverb preview paused");
-				pausePreview.setText("Resume");
+				pausePreview.setText("▶");
+				pausePreview.setToolTipText("Resume preview");
 			}
 			case STOPPED -> status.setText("Preview stopped");
 			case FINISHED -> {
@@ -676,7 +696,8 @@ final class StandaloneReverbFrame extends JFrame {
 	private void previewFinished() {
 		preview.setEnabled(true);
 		pausePreview.setEnabled(false);
-		pausePreview.setText("Pause");
+		pausePreview.setText("⏸");
+		pausePreview.setToolTipText("Pause preview");
 		stopPreview.setEnabled(false);
 	}
 
@@ -686,10 +707,16 @@ final class StandaloneReverbFrame extends JFrame {
 		status.setText(job.status() + " — " + job.id() + (job.error().isBlank() ? "" : " — " + job.error()));
 		if (!"RUNNING".equals(job.status())) {
 			run.setEnabled(true);
-			cancel.setEnabled(false);
-			if ("SUCCEEDED".equals(job.status()))
+			if ("SUCCEEDED".equals(job.status())) {
 				setLatestOutput(job.artifactDirectory().resolve(job.outputName()));
+				reloadHistory();
+			}
 		}
+	}
+
+	private void selectHistoryOutput() {
+		ReverbJob selected = selectedJob();
+		setLatestOutput(selected == null ? null : selected.artifactDirectory().resolve(selected.outputName()));
 	}
 
 	private void setLatestOutput(Path output) {
@@ -877,11 +904,21 @@ final class StandaloneReverbFrame extends JFrame {
 		};
 	}
 
+	private static JButton transportButton(String symbol, String description) {
+		JButton button = new JButton(symbol);
+		button.setToolTipText(description);
+		button.getAccessibleContext().setAccessibleName(description);
+		button.setPreferredSize(new Dimension(42, 30));
+		return button;
+	}
+
 	@SuppressFBWarnings(value = "SE_BAD_FIELD", justification = "Swing table models are never serialized")
 	private static final class JobTableModel extends AbstractTableModel {
 		private static final long serialVersionUID = 1L;
 		private final List<ReverbJob> items = new ArrayList<>();
-		private final String[] columns = {"Submitted", "Status", "Progress", "Output", "Job"};
+		private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm:ss a")
+				.withZone(ZoneId.systemDefault());
+		private final String[] columns = {"Date", "Output file", "Settings"};
 
 		void replace(List<ReverbJob> values) {
 			items.clear();
@@ -916,11 +953,9 @@ final class StandaloneReverbFrame extends JFrame {
 		public Object getValueAt(int row, int column) {
 			ReverbJob job = items.get(row);
 			return switch (column) {
-				case 0 -> job.submittedAt().toString().replace('T', ' ').replace("Z", " UTC");
-				case 1 -> job.status();
-				case 2 -> job.progress() + "%";
-				case 3 -> job.outputName();
-				default -> job.id();
+				case 0 -> DATE_TIME.format(job.submittedAt());
+				case 1 -> job.outputName();
+				default -> job.parameterSummary();
 			};
 		}
 	}

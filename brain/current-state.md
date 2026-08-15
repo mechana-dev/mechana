@@ -108,7 +108,12 @@ This file reports repository evidence, not desired future status.
 - The standalone app maintains a canonical IR profile library under the user's
   Application Support directory. Factory profiles, validated user imports, and
   generated profiles appear in one selector with Add and Manage actions. Its
-  grouped slider/numeric UI includes a Reset to Captured Response action.
+  grouped slider/numeric UI provides separate neutral resets for mix/timing,
+  captured-response shaping, and wet EQ. Preview transport controls use conventional
+  play/pause/stop icons near the inputs and include a click-smoothed live bypass to
+  the unprocessed source. Local history presents only timestamp, output filename,
+  and a compact settings summary; selecting a completed row enables playback and
+  Finder reveal for that output.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,

@@ -1753,3 +1753,20 @@ cloud providers remain future direction; see `brain/current-state.md` and
   Manage actions.
 - Added DSP bypass/shaping, shortened-tail preview, descriptor, and durable IR
   library tests.
+
+## 2026-08-15 03:11 EDT — Streamline standalone Reverb controls and history
+
+- Moved one offline Apply action and conventional icon-based preview play,
+  pause/resume, and stop controls beside the selected input/output settings.
+- Added a live A/B bypass that smoothly transitions to the unprocessed source and
+  restores the current effect settings when switched off.
+- Split neutral resets by section: mix/timing resets to wet 0, dry 1, and zero
+  pre-delay; captured-response shaping resets to its exact bypass values; wet EQ
+  resets both filters to off.
+- Simplified local history to date/time, output filename, and a compact parameter
+  summary. Selecting an available output enables Play Output and Show in Finder.
+- Added preview bypass coverage while retaining the existing complete-tail and
+  live-parameter tests.
+- Replaced the reused Job Launcher artwork with a dedicated Mechana Reverb icon:
+  the Mechana hexagon now contains an impulse waveform followed by diminishing
+  reflection arcs, reflecting the app's captured-IR convolution workflow.

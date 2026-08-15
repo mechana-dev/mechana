@@ -130,8 +130,13 @@ defines decay, room size, diffusion, and modulation; those algorithmic-reverb
 controls are intentionally not synthesized in this convolution POC.
 The Apply Reverb tab groups functional slider/numeric controls into mix/timing,
 captured-response shaping, wet EQ, and output sections. A Reset to Captured
-Response action restores pre-delay and EQ to off plus neutral early, late, attack,
-and decay values without changing wet/dry playback levels.
+Response action restores neutral early, late, attack, and decay values. Separate
+resets restore mix/timing to wet 0, dry 1, and pre-delay 0, or disable both wet EQ
+filters. Conventional preview transport buttons and the single offline Apply action
+sit near the selected inputs. Live bypass crossfades to the untouched source and
+back without discarding edits to the current reverb settings. Local job history is
+reduced to timestamp, output filename, and a compact parameter summary; row
+selection enables output playback and Finder reveal.
 
 The standalone app owns one durable IR library at
 `~/Library/Application Support/Mechana Reverb/IR Profiles`. Missing factory IRs
