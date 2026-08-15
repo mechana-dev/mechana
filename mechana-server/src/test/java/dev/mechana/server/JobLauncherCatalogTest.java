@@ -86,6 +86,8 @@ class JobLauncherCatalogTest {
 		assertEquals("directory", fields.get("artifactRoot").type());
 		assertFalse(fields.get("artifactRoot").required());
 		assertEquals(List.of("true", "false"), fields.get("normalizeIr").choices());
+		assertEquals("0", fields.get("lowCutHertz").defaultValue());
+		assertEquals("0", fields.get("highCutHertz").defaultValue());
 		assertEquals(List.of("server-local"), fields.get("storageProvider").choices());
 	}
 

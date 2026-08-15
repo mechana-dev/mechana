@@ -58,6 +58,8 @@ final class ReverbJobReport {
 		line(report, "Wet level", Double.toString(request.wet()));
 		line(report, "Dry level", Double.toString(request.dry()));
 		line(report, "Pre-delay", request.preDelayMilliseconds() + " ms");
+		line(report, "Wet low-cut", frequency(request.lowCutHertz()));
+		line(report, "Wet high-cut", frequency(request.highCutHertz()));
 		line(report, "Normalize IR", yesNo(request.normalizeIr()));
 		line(report, "Peak protection", yesNo(request.peakProtection()));
 		line(report, "Safe headroom", request.headroomDecibels() + " dB");
@@ -79,6 +81,10 @@ final class ReverbJobReport {
 		}
 		report.append("- reverb-job-report.txt (this file)\n");
 		return report.toString();
+	}
+
+	private static String frequency(double hertz) {
+		return hertz == 0 ? "Off" : hertz + " Hz";
 	}
 
 	private static String workers(InMemoryJobMonitor.Snapshot snapshot) {

@@ -149,12 +149,15 @@ public final class LocalReverbEngine implements AutoCloseable {
 				java.util.function.IntConsumer progress) {
 			this.directory = directory;
 			this.progress = progress;
-			parameters = Map.of("dryPath", preparedDry.toString(), "irPath", request.irPath().toString(), "wet",
-					Double.toString(request.wet()), "dry", Double.toString(request.dry()), "preDelayMilliseconds",
-					Double.toString(request.preDelayMilliseconds()), "normalizeIr",
-					Boolean.toString(request.normalizeIr()), "peakProtection",
-					Boolean.toString(request.peakProtection()), "headroomDecibels",
-					Double.toString(request.headroomDecibels()));
+			parameters = Map.ofEntries(Map.entry("dryPath", preparedDry.toString()),
+					Map.entry("irPath", request.irPath().toString()), Map.entry("wet", Double.toString(request.wet())),
+					Map.entry("dry", Double.toString(request.dry())),
+					Map.entry("preDelayMilliseconds", Double.toString(request.preDelayMilliseconds())),
+					Map.entry("lowCutHertz", Double.toString(request.lowCutHertz())),
+					Map.entry("highCutHertz", Double.toString(request.highCutHertz())),
+					Map.entry("normalizeIr", Boolean.toString(request.normalizeIr())),
+					Map.entry("peakProtection", Boolean.toString(request.peakProtection())),
+					Map.entry("headroomDecibels", Double.toString(request.headroomDecibels())));
 		}
 
 		@Override
@@ -202,6 +205,8 @@ public final class LocalReverbEngine implements AutoCloseable {
 		values.put("wet", request.wet());
 		values.put("dry", request.dry());
 		values.put("preDelayMilliseconds", request.preDelayMilliseconds());
+		values.put("lowCutHertz", request.lowCutHertz());
+		values.put("highCutHertz", request.highCutHertz());
 		values.put("normalizeIr", request.normalizeIr());
 		values.put("peakProtection", request.peakProtection());
 		values.put("headroomDecibels", request.headroomDecibels());
@@ -242,6 +247,8 @@ public final class LocalReverbEngine implements AutoCloseable {
 				Wet level: %s
 				Dry level: %s
 				Pre-delay: %s ms
+				Wet low-cut: %s
+				Wet high-cut: %s
 				Normalize IR: %s
 				Peak protection: %s
 				Safe headroom: %s dB
@@ -257,9 +264,14 @@ public final class LocalReverbEngine implements AutoCloseable {
 				Duration.between(current.submittedAt(), Instant.now()).toMillis() / 1000.0,
 				request.dryPath().getFileName(), request.dryPath(), Files.size(request.dryPath()),
 				request.irPath().getFileName(), request.irPath(), Files.size(request.irPath()), request.wet(),
-				request.dry(), request.preDelayMilliseconds(), yesNo(request.normalizeIr()),
-				yesNo(request.peakProtection()), request.headroomDecibels(), gain == null ? "Not available" : gain,
-				request.outputName(), Files.size(output), sha256(output));
+				request.dry(), request.preDelayMilliseconds(), frequency(request.lowCutHertz()),
+				frequency(request.highCutHertz()), yesNo(request.normalizeIr()), yesNo(request.peakProtection()),
+				request.headroomDecibels(), gain == null ? "Not available" : gain, request.outputName(),
+				Files.size(output), sha256(output));
+	}
+
+	private static String frequency(double hertz) {
+		return hertz == 0 ? "Off" : hertz + " Hz";
 	}
 
 	private static Double readGain(Path metadata) {

@@ -60,6 +60,8 @@ final class JobLauncherCatalog {
 						integer("taskCount", "Tasks (0 = fleet)", "0", 0, 1), decimal("wet", "Wet level", "0.35", 0, 2),
 						decimal("dry", "Dry level", "1.0", 0, 2),
 						decimal("preDelayMilliseconds", "Pre-delay (ms)", "20", 0, 10000),
+						decimal("lowCutHertz", "Wet low-cut (Hz, 0 = off)", "0", 0, 20000),
+						decimal("highCutHertz", "Wet high-cut (Hz, 0 = off)", "0", 0, 20000),
 						choice("normalizeIr", "Normalize IR", "true", "true", "false"),
 						choice("peakProtection", "Peak protection", "true", "true", "false"),
 						decimal("headroomDecibels", "Safe headroom (dB)", "1.0", 0, 24)),

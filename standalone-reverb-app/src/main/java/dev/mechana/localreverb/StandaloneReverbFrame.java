@@ -71,6 +71,8 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField wet = field("wet", "0.35");
 	private final JTextField dry = field("dry", "1.0");
 	private final JTextField preDelay = field("preDelayMilliseconds", "20");
+	private final JTextField lowCut = field("lowCutHertz", "0");
+	private final JTextField highCut = field("highCutHertz", "0");
 	private final JSlider wetSlider = new JSlider(0, 200, sliderValue(wet, 100, 35));
 	private final JSlider drySlider = new JSlider(0, 200, sliderValue(dry, 100, 100));
 	private final JSlider preDelaySlider = new JSlider(0, 200, Math.min(200, sliderValue(preDelay, 1, 20)));
@@ -141,7 +143,8 @@ final class StandaloneReverbFrame extends JFrame {
 
 	private JPanel buildForm() {
 		JPanel panel = new JPanel(new GridBagLayout());
-		panel.setBorder(BorderFactory.createTitledBorder("New reverb job"));
+		panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createTitledBorder("New reverb job"),
+				BorderFactory.createEmptyBorder(10, 8, 8, 8)));
 		GridBagConstraints c = new GridBagConstraints();
 		c.insets = new Insets(5, 8, 5, 8);
 		c.gridy = 0;
@@ -160,6 +163,8 @@ final class StandaloneReverbFrame extends JFrame {
 		addRow(panel, c, "Wet level (0–2)", sliderWithOverride(wetSlider, wet));
 		addRow(panel, c, "Dry level (0–2)", sliderWithOverride(drySlider, dry));
 		addRow(panel, c, "Pre-delay (0–200 ms slider)", sliderWithOverride(preDelaySlider, preDelay));
+		addRow(panel, c, "Wet low-cut (Hz, 0 = off)", lowCut);
+		addRow(panel, c, "Wet high-cut (Hz, 0 = off)", highCut);
 		addRow(panel, c, "Normalize IR", normalizeIr);
 		addRow(panel, c, "Peak protection", peakProtection);
 		addRow(panel, c, "Safe headroom (dB)", headroom);
@@ -182,7 +187,9 @@ final class StandaloneReverbFrame extends JFrame {
 
 	private JPanel buildIrCreator() {
 		JPanel panel = new JPanel(new GridBagLayout());
-		panel.setBorder(BorderFactory.createTitledBorder("Create an impulse response from a hardware sweep recording"));
+		panel.setBorder(BorderFactory.createCompoundBorder(
+				BorderFactory.createTitledBorder("Create an impulse response from a hardware sweep recording"),
+				BorderFactory.createEmptyBorder(10, 8, 8, 8)));
 		GridBagConstraints c = new GridBagConstraints();
 		c.insets = new Insets(7, 8, 7, 8);
 		c.gridy = 0;
@@ -246,7 +253,7 @@ final class StandaloneReverbFrame extends JFrame {
 		cancel.addActionListener(event -> engine.cancel());
 		playOutput.addActionListener(event -> openLatestOutput(false));
 		showOutput.addActionListener(event -> openLatestOutput(true));
-		for (JTextField field : List.of(wet, dry, preDelay, headroom))
+		for (JTextField field : List.of(wet, dry, preDelay, lowCut, highCut, headroom))
 			field.getDocument().addDocumentListener(listener(this::updatePreviewParameters));
 		normalizeIr.addActionListener(event -> updatePreviewParameters());
 		peakProtection.addActionListener(event -> updatePreviewParameters());
@@ -396,8 +403,8 @@ final class StandaloneReverbFrame extends JFrame {
 		try {
 			ReverbRequest request = new ReverbRequest(path(dryPath), path(irPath), path(artifactRoot),
 					outputName.getText().strip(), decimal(wet, "Wet level"), decimal(dry, "Dry level"),
-					decimal(preDelay, "Pre-delay"), normalizeIr.isSelected(), peakProtection.isSelected(),
-					decimal(headroom, "Safe headroom"));
+					decimal(preDelay, "Pre-delay"), decimal(lowCut, "Wet low-cut"), decimal(highCut, "Wet high-cut"),
+					normalizeIr.isSelected(), peakProtection.isSelected(), decimal(headroom, "Safe headroom"));
 			engine.submit(request, job -> SwingUtilities.invokeLater(() -> update(job)));
 			run.setEnabled(false);
 			cancel.setEnabled(true);
@@ -415,8 +422,9 @@ final class StandaloneReverbFrame extends JFrame {
 			if (selectedIr == null || !Files.isRegularFile(selectedIr))
 				throw new IllegalArgumentException("Choose a readable impulse-response WAV.");
 			var settings = new ReverbPreviewPlayer.Settings(selectedDry, selectedIr, decimal(wet, "Wet level"),
-					decimal(dry, "Dry level"), decimal(preDelay, "Pre-delay"), normalizeIr.isSelected(),
-					peakProtection.isSelected(), decimal(headroom, "Safe headroom"));
+					decimal(dry, "Dry level"), decimal(preDelay, "Pre-delay"), decimal(lowCut, "Wet low-cut"),
+					decimal(highCut, "Wet high-cut"), normalizeIr.isSelected(), peakProtection.isSelected(),
+					decimal(headroom, "Safe headroom"));
 			previewPlayer.play(settings, state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)),
 					message -> SwingUtilities.invokeLater(() -> {
 						showError(message);
@@ -433,7 +441,8 @@ final class StandaloneReverbFrame extends JFrame {
 			return;
 		try {
 			previewPlayer.update(decimal(wet, "Wet level"), decimal(dry, "Dry level"), decimal(preDelay, "Pre-delay"),
-					normalizeIr.isSelected(), peakProtection.isSelected(), decimal(headroom, "Safe headroom"));
+					decimal(lowCut, "Wet low-cut"), decimal(highCut, "Wet high-cut"), normalizeIr.isSelected(),
+					peakProtection.isSelected(), decimal(headroom, "Safe headroom"));
 		} catch (IllegalArgumentException ignored) {
 			// A partially edited numeric field takes effect as soon as it becomes valid.
 		}
@@ -543,6 +552,7 @@ final class StandaloneReverbFrame extends JFrame {
 		addRow(panel, c, label, field);
 		JButton choose = new JButton("Choose…");
 		choose.addActionListener(event -> choose(field, directory));
+		c.gridy--;
 		c.gridx = 2;
 		c.weightx = 0;
 		c.fill = GridBagConstraints.NONE;
@@ -554,6 +564,7 @@ final class StandaloneReverbFrame extends JFrame {
 		addRow(panel, c, label, field);
 		JButton choose = new JButton("Choose…");
 		choose.addActionListener(event -> chooseOutput(field));
+		c.gridy--;
 		c.gridx = 2;
 		c.weightx = 0;
 		c.fill = GridBagConstraints.NONE;

@@ -74,8 +74,9 @@ This file reports repository evidence, not desired future status.
 - A pure-Java `audio-convolution-reverb` POC accepts staged dry and IR WAV
   artifacts, performs single-worker uniform partitioned FFT convolution, and
   publishes a 24-bit WAV through server-local storage. The generic launcher
-  descriptor exposes WAV inputs, output name, wet/dry, pre-delay, IR
-  normalization, peak protection, and headroom. IR normalization safely attenuates
+  descriptor exposes WAV inputs, output name, wet/dry, pre-delay, wet-path
+  low-cut/high-cut EQ, IR normalization, peak protection, and headroom. Both EQ
+  filters default off, so existing jobs and IR profiles retain their sound. IR normalization safely attenuates
   peaks above -1 dBFS without boosting quieter measured responses. A reusable
   pure-Java helper and standalone-app workflow deconvolve recorded wet sweep
   returns into aligned, tail-trimmed IRs. Multi-worker contribution assembly
@@ -94,7 +95,7 @@ This file reports repository evidence, not desired future status.
   play, pause/resume, and stop controls; this preview creates no job artifact and
   retains the complete reverb tail. Wet/dry, pre-delay, IR normalization, peak
   protection, and headroom edits take effect during playback with short smoothed
-  transitions. The pre-delay slider is limited to 0–200 ms (with a numeric
+  transitions; wet low/high cuts also update during active playback. The pre-delay slider is limited to 0–200 ms (with a numeric
   override). Preview preserves the dry recording's native sample rate and keeps
   content-addressed, sample-rate-matched IR variants in the user's cache;
   selecting a mono or stereo IR during playback prepares the needed variant in

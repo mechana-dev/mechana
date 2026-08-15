@@ -23,7 +23,8 @@ import java.nio.file.Path;
  * plugin.
  */
 public record ReverbRequest(Path dryPath, Path irPath, Path artifactRoot, String outputName, double wet, double dry,
-		double preDelayMilliseconds, boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
+		double preDelayMilliseconds, double lowCutHertz, double highCutHertz, boolean normalizeIr,
+		boolean peakProtection, double headroomDecibels) {
 	public ReverbRequest {
 		dryPath = requiredDryFile(dryPath);
 		irPath = requiredWav(irPath, "Impulse-response WAV");
@@ -34,6 +35,8 @@ public record ReverbRequest(Path dryPath, Path irPath, Path artifactRoot, String
 		if (Path.of(outputName).getNameCount() != 1 || !outputName.toLowerCase(java.util.Locale.ROOT).endsWith(".wav"))
 			throw new IllegalArgumentException("Output name must be a WAV file name, not a path");
 		if (!finiteRange(wet, 0, 2) || !finiteRange(dry, 0, 2) || !finiteRange(preDelayMilliseconds, 0, 10_000)
+				|| !finiteRange(lowCutHertz, 0, 20_000) || !finiteRange(highCutHertz, 0, 20_000)
+				|| lowCutHertz > 0 && highCutHertz > 0 && lowCutHertz >= highCutHertz
 				|| !finiteRange(headroomDecibels, 0, 24))
 			throw new IllegalArgumentException("One or more reverb controls are outside the allowed range");
 	}

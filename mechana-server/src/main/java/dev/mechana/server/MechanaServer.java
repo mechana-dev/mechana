@@ -1061,6 +1061,8 @@ public final class MechanaServer implements AutoCloseable {
 				Map.entry("irUrl", publicUrl + "/api/audio-inputs/" + irToken),
 				Map.entry("wet", Double.toString(request.wet())), Map.entry("dry", Double.toString(request.dry())),
 				Map.entry("preDelayMilliseconds", Double.toString(request.preDelayMilliseconds())),
+				Map.entry("lowCutHertz", Double.toString(request.lowCutHertz())),
+				Map.entry("highCutHertz", Double.toString(request.highCutHertz())),
 				Map.entry("normalizeIr", Boolean.toString(request.normalizeIr())),
 				Map.entry("peakProtection", Boolean.toString(request.peakProtection())),
 				Map.entry("headroomDecibels", Double.toString(request.headroomDecibels())));

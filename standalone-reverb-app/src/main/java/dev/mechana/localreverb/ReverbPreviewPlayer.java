@@ -19,6 +19,7 @@ import dev.mechana.plugins.audio.DryAudioImporter;
 import dev.mechana.plugins.audio.ImpulseResponse;
 import dev.mechana.plugins.audio.PartitionedConvolver;
 import dev.mechana.plugins.audio.WavFile;
+import dev.mechana.plugins.audio.WetEqualizer;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -53,7 +54,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private volatile AudioSink activeSink;
 	private volatile ConvolutionBank pendingBank;
 	private volatile int previewSampleRate;
-	private volatile LiveParameters liveParameters = new LiveParameters(0, 0, 0, false, true, 1);
+	private volatile LiveParameters liveParameters = new LiveParameters(0, 0, 0, 0, 0, false, true, 1);
 
 	ReverbPreviewPlayer() {
 		this(new ImpulseResponseCache());
@@ -67,20 +68,22 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		PREPARING, REGENERATING_IR, PLAYING, PAUSED, STOPPED, FINISHED
 	}
 
-	record Settings(Path dryPath, Path irPath, double wet, double dry, double preDelayMilliseconds, boolean normalizeIr,
-			boolean peakProtection, double headroomDecibels) {
+	record Settings(Path dryPath, Path irPath, double wet, double dry, double preDelayMilliseconds, double lowCutHertz,
+			double highCutHertz, boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
 		Settings {
 			Objects.requireNonNull(dryPath, "dryPath");
 			Objects.requireNonNull(irPath, "irPath");
 			if (!Double.isFinite(wet) || wet < 0 || !Double.isFinite(dry) || dry < 0
 					|| !Double.isFinite(preDelayMilliseconds) || preDelayMilliseconds < 0
+					|| !validFrequency(lowCutHertz) || !validFrequency(highCutHertz)
+					|| lowCutHertz > 0 && highCutHertz > 0 && lowCutHertz >= highCutHertz
 					|| !Double.isFinite(headroomDecibels) || headroomDecibels < 0)
 				throw new IllegalArgumentException("Invalid preview settings");
 		}
 	}
 
-	private record LiveParameters(double wet, double dry, double preDelayMilliseconds, boolean normalizeIr,
-			boolean peakProtection, double headroomDecibels) {
+	private record LiveParameters(double wet, double dry, double preDelayMilliseconds, double lowCutHertz,
+			double highCutHertz, boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
 	}
 
 	interface AudioSink extends AutoCloseable {
@@ -119,8 +122,9 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			}
 		stopped.set(false);
 		paused = false;
-		update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.normalizeIr(),
-				settings.peakProtection(), settings.headroomDecibels());
+		update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.lowCutHertz(),
+				settings.highCutHertz(), settings.normalizeIr(), settings.peakProtection(),
+				settings.headroomDecibels());
 		Thread thread = Thread.ofVirtual().name("mechana-reverb-preview").start(() -> {
 			state.accept(State.PREPARING);
 			try {
@@ -139,15 +143,16 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		playbackThread = thread;
 	}
 
-	void update(double wet, double dry, double preDelayMilliseconds, boolean normalizeIr, boolean peakProtection,
-			double headroomDecibels) {
+	void update(double wet, double dry, double preDelayMilliseconds, double lowCutHertz, double highCutHertz,
+			boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
 		if (!Double.isFinite(wet) || wet < 0 || wet > 2 || !Double.isFinite(dry) || dry < 0 || dry > 2
 				|| !Double.isFinite(preDelayMilliseconds) || preDelayMilliseconds < 0
 				|| preDelayMilliseconds > MAX_PRE_DELAY_MILLISECONDS || !Double.isFinite(headroomDecibels)
-				|| headroomDecibels < 0)
+				|| !validFrequency(lowCutHertz) || !validFrequency(highCutHertz)
+				|| lowCutHertz > 0 && highCutHertz > 0 && lowCutHertz >= highCutHertz || headroomDecibels < 0)
 			throw new IllegalArgumentException("Invalid live preview settings");
-		liveParameters = new LiveParameters(wet, dry, preDelayMilliseconds, normalizeIr, peakProtection,
-				headroomDecibels);
+		liveParameters = new LiveParameters(wet, dry, preDelayMilliseconds, lowCutHertz, highCutHertz, normalizeIr,
+				peakProtection, headroomDecibels);
 	}
 
 	void togglePause(Consumer<State> state) {
@@ -259,8 +264,12 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private void process(WavFile.Reader source, WavFile.Format format, ConvolutionBank initialBank, int outputChannels,
 			long outputFrames, AudioSink sink) throws IOException {
 		VariableDelayLine[] delays = new VariableDelayLine[outputChannels];
+		WetEqualizer[] equalizers = new WetEqualizer[outputChannels];
 		for (int channel = 0; channel < outputChannels; channel++)
 			delays[channel] = new VariableDelayLine(format.sampleRate(), liveParameters.preDelayMilliseconds());
+		for (int channel = 0; channel < outputChannels; channel++)
+			equalizers[channel] = new WetEqualizer(format.sampleRate(), liveParameters.lowCutHertz(),
+					liveParameters.highCutHertz());
 		SmoothedValue wetLevel = new SmoothedValue(liveParameters.wet());
 		SmoothedValue dryLevel = new SmoothedValue(liveParameters.dry());
 		SmoothedValue headroom = new SmoothedValue(headroomTarget(liveParameters));
@@ -319,6 +328,8 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 						wetSample = wetSample * (1 - blend) + transitionWet[channel][frame] * blend
 								* (parameters.normalizeIr() ? transitionBank.normalizationGain() : 1);
 					double delayed = delays[channel].push(wetSample, parameters.preDelayMilliseconds());
+					equalizers[channel].update(parameters.lowCutHertz(), parameters.highCutHertz());
+					delayed = equalizers[channel].process(delayed);
 					double sample = direct * currentDry + delayed * currentWet;
 					if (parameters.peakProtection())
 						sample = Math.max(-currentHeadroom, Math.min(currentHeadroom, sample));
@@ -389,6 +400,10 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		return Math.pow(10, -parameters.headroomDecibels() / 20);
 	}
 
+	private static boolean validFrequency(double value) {
+		return Double.isFinite(value) && value >= 0 && value <= 20_000;
+	}
+
 	private void awaitResume() throws IOException {
 		synchronized (pauseLock) {
 			while (paused && !stopped.get())
@@ -433,8 +448,9 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		Path cache = parent.resolve("preview-ir-cache");
 		ReverbPreviewPlayer player = new ReverbPreviewPlayer(new ImpulseResponseCache(cache));
 		player.stopped.set(false);
-		player.update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.normalizeIr(),
-				settings.peakProtection(), settings.headroomDecibels());
+		player.update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.lowCutHertz(),
+				settings.highCutHertz(), settings.normalizeIr(), settings.peakProtection(),
+				settings.headroomDecibels());
 		player.stream(settings,
 				(sampleRate, channels) -> new MemoryAudioSink(output, () -> afterFirstBlock.accept(player)),
 				ignored -> {
