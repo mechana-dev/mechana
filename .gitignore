@@ -32,6 +32,8 @@ Thumbs.db
 # Logs and local environment
 *.log
 .mechana/
+native/build*/
+native/.juce/
 .env
 .env.*
 !.env.example
