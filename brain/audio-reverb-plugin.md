@@ -152,6 +152,7 @@ Add and Manage actions; factory profiles cannot be removed through the app.
 Manage opens a dedicated profile window with the complete library in a scrolling list.
 User-added profiles can be renamed or deleted, including their generation report
 sidecars; any profile can be exported. Factory profiles remain read-only.
+Factory selection also disables Finder reveal, while Export remains available.
 The application bundle carries the five synthetic development IRs previously used
 for listening tests and exposes them through a dedicated chooser. It also bundles
 the standardized 48 kHz/24-bit stereo Mechana sweep and provides a **Create IR

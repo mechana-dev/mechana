@@ -106,8 +106,8 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField sweepPath = field("sweepPath", bundledSweepDefault());
 	private final JTextField recordedSweepPath = field("recordedSweepPath", "");
 	private final JButton run = new JButton("Apply");
-	private final JButton preview = transportButton("▶", "Play preview", 64, 50, 26);
-	private final JButton stopPreview = transportButton("■", "Stop preview", 78, 58, 40);
+	private final JButton preview = transportButton("▶", "Play preview", 78, 58, 30);
+	private final JButton stopPreview = transportButton("■", "Stop preview", 78, 58, 44);
 	private final JCheckBox bypassPreview = new JCheckBox("Bypass (original audio)");
 	private final JCheckBox loopPreview = check("loopPreview", false);
 	private final JButton generateIr = new JButton("Generate IR Profile");
@@ -678,7 +678,7 @@ final class StandaloneReverbFrame extends JFrame {
 			rename.setEnabled(editable);
 			delete.setEnabled(editable);
 			export.setEnabled(selected != null);
-			reveal.setEnabled(selected != null);
+			reveal.setEnabled(editable);
 			kind.setText(selected == null
 					? " "
 					: selected.factory() ? "Factory profile — protected" : "Added profile — editable");

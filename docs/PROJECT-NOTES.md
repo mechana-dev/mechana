@@ -1795,3 +1795,5 @@ cloud providers remain future direction; see `brain/current-state.md` and
   on the right, enlarged the Stop-square glyph, and added optional full-clip preview
   looping. Each iteration includes the complete reverb tail and continues until
   Stop; disabling Loop allows the current iteration to finish normally.
+- Matched the Play/Pause and Stop button dimensions while enlarging the Stop square,
+  and disabled Show in Finder for factory-protected IRs without disabling Export.

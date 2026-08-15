@@ -109,8 +109,9 @@ This file reports repository evidence, not desired future status.
   Application Support directory. Factory profiles, validated user imports, and
   generated profiles appear in one selector with Add and Manage actions. Manage
   opens the full library in a scrolling list, supports rename/delete for added profiles,
-  exports any profile, and keeps factory profiles read-only. Sweep
-  generation uses temporary storage, then offers library addition with an editable
+  exports any profile, and keeps factory profiles read-only. Factory profiles may
+  be exported but cannot be revealed through Manage. Sweep generation uses temporary
+  storage, then offers library addition with an editable
   derived name, explicit Save to File, or discard. Manage can rename or delete
   user-added profiles but never factory profiles. Its
   grouped slider/numeric UI provides separate neutral resets for mix/timing,
