@@ -65,14 +65,14 @@ class LocalReverbEngineTest {
 
 	@Test
 	void createsSameDescriptiveNameShapeAsNetworkLauncher() {
-		assertEquals("Scott-Voice-reverb-ir-Small-Room-wet0p35-dry1-pre20ms-norm-on.wav", StandaloneReverbFrame
-				.suggestedOutputName("/tmp/Scott Voice.wav", "/tmp/Small Room.wav", "0.35", "1.0", "20", true));
+		assertEquals("Scott-Voice-reverb-ir-Small-Room-wet0p35-dry1-pre20ms.wav", StandaloneReverbFrame
+				.suggestedOutputName("/tmp/Scott Voice.wav", "/tmp/Small Room.wav", "0.35", "1.0", "20"));
 	}
 
 	@Test
 	void descriptiveNameUsesCompressedDrySourceStem() {
-		assertEquals("Scott-Voice-reverb-ir-Small-Room-wet0p35-dry1-pre20ms-norm-on.wav", StandaloneReverbFrame
-				.suggestedOutputName("/tmp/Scott Voice.m4a", "/tmp/Small Room.wav", "0.35", "1", "20", true));
+		assertEquals("Scott-Voice-reverb-ir-Small-Room-wet0p35-dry1-pre20ms.wav", StandaloneReverbFrame
+				.suggestedOutputName("/tmp/Scott Voice.m4a", "/tmp/Small Room.wav", "0.35", "1", "20"));
 	}
 
 	@Test
@@ -85,11 +85,11 @@ class LocalReverbEngineTest {
 	@Test
 	void suggestedNameChangesWithEitherAudioInput() {
 		String first = StandaloneReverbFrame.suggestedOutputName("/tmp/Voice One.wav", "/tmp/Room One.wav", "0.35",
-				"1.0", "20", true);
+				"1.0", "20");
 		String changedDry = StandaloneReverbFrame.suggestedOutputName("/tmp/Voice Two.wav", "/tmp/Room One.wav", "0.35",
-				"1.0", "20", true);
+				"1.0", "20");
 		String changedIr = StandaloneReverbFrame.suggestedOutputName("/tmp/Voice One.wav", "/tmp/Room Two.wav", "0.35",
-				"1.0", "20", true);
+				"1.0", "20");
 		assertTrue(!first.equals(changedDry));
 		assertTrue(!first.equals(changedIr));
 		assertTrue(changedDry.startsWith("Voice-Two-reverb-ir-Room-One-"));

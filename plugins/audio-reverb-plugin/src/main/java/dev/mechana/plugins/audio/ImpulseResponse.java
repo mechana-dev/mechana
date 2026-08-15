@@ -66,6 +66,19 @@ public record ImpulseResponse(int sampleRate, double[][] channels) {
 		}
 	}
 
+	public ImpulseResponse attenuatePeak() {
+		double[][] samples = channels();
+		double peak = 0;
+		for (double[] channel : samples)
+			for (double value : channel)
+				peak = Math.max(peak, Math.abs(value));
+		if (peak > NORMALIZED_PEAK)
+			for (double[] channel : samples)
+				for (int index = 0; index < channel.length; index++)
+					channel[index] *= NORMALIZED_PEAK / peak;
+		return new ImpulseResponse(sampleRate, samples);
+	}
+
 	public int length() {
 		return channels[0].length;
 	}

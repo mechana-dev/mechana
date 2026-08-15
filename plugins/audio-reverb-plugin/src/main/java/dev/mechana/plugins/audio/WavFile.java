@@ -44,6 +44,7 @@ public final class WavFile {
 	public static final class Reader implements Closeable {
 		private final RandomAccessFile input;
 		private final Format format;
+		private final long dataOffset;
 		private final long dataEnd;
 
 		private Reader(Path path) throws IOException {
@@ -58,7 +59,7 @@ public final class WavFile {
 				int channels = 0;
 				int sampleRate = 0;
 				int bits = 0;
-				long dataOffset = -1;
+				long foundDataOffset = -1;
 				long dataSize = -1;
 				while (input.getFilePointer() + 8 <= input.length()) {
 					String id = ascii(input, 4);
@@ -80,17 +81,18 @@ public final class WavFile {
 							}
 						}
 					} else if ("data".equals(id)) {
-						dataOffset = input.getFilePointer();
+						foundDataOffset = input.getFilePointer();
 						dataSize = size;
 					}
 					input.seek(next);
 				}
 				boolean floating = audioFormat == 3;
-				if (dataOffset < 0 || channels < 1 || sampleRate < 1
+				if (foundDataOffset < 0 || channels < 1 || sampleRate < 1
 						|| !(audioFormat == 1 && (bits == 16 || bits == 24) || floating && bits == 32))
 					throw new IOException("Supported WAV formats are 16/24-bit PCM and 32-bit IEEE float");
 				int frameSize = Math.multiplyExact(channels, bits / 8);
 				format = new Format(sampleRate, channels, bits, floating, dataSize / frameSize);
+				dataOffset = foundDataOffset;
 				dataEnd = dataOffset + dataSize;
 				input.seek(dataOffset);
 			} catch (IOException | RuntimeException failure) {
@@ -111,6 +113,14 @@ public final class WavFile {
 				for (int channel = 0; channel < format.channels(); channel++)
 					destination[channel][offset + frame] = sample();
 			return available;
+		}
+
+		/** Positions the next read at an absolute zero-based audio frame. */
+		public void seekFrame(long frame) throws IOException {
+			if (frame < 0 || frame > format.frames())
+				throw new IllegalArgumentException("WAV frame is outside the audio data");
+			long frameBytes = Math.multiplyExact(frame, format.channels() * (format.bitsPerSample() / 8L));
+			input.seek(dataOffset + frameBytes);
 		}
 
 		private double sample() throws IOException {

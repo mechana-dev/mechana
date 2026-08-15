@@ -50,7 +50,7 @@ public final class AudioConvolutionReverbPlugin implements TaskPlugin {
 					decimal(parameters, "lateLevel", 1), decimal(parameters, "attackMilliseconds", 0),
 					decimal(parameters, "decayLengthPercent", 100), bool(parameters, "normalizeIr"),
 					bool(parameters, "peakProtection"), decimal(parameters, "headroomDecibels"),
-					AudioConvolutionProcessor.DEFAULT_BLOCK_SIZE);
+					AudioConvolutionProcessor.DEFAULT_BLOCK_SIZE, decimal(parameters, "irCalibrationGain", 1));
 			AudioConvolutionProcessor.Result result = new AudioConvolutionProcessor().process(
 					Path.of(required(parameters, "dryPath")), Path.of(required(parameters, "irPath")), output, scratch,
 					options, percent -> {

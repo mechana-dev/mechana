@@ -15,9 +15,19 @@ code signing, hardened-runtime validation, and notarization.
 
 Mechana Reverb keeps its working impulse-response library in
 `~/Library/Application Support/Mechana Reverb/IR Profiles`. On launch it installs
-missing factory profiles from the bundle without overwriting existing files.
+or refreshes factory profiles from the bundle.
 Profiles imported with **Add…** and profiles created from sweep recordings are
 copied into the same durable library and remain available across app upgrades.
+Each library WAV remains untouched and receives a checksum-bound calibration
+sidecar. One stereo-linked, sample-rate-aware energy gain is applied identically
+in Preview and Apply; recalibration happens automatically when profile audio
+changes. The gain is capped conservatively to avoid amplifying noisy captures.
+IR peak safety and streaming peak protection are automatic in the standalone app,
+with fixed 1 dB headroom. These implementation safeguards are not shown alongside
+the creative reverb controls.
+The preview transport includes an elapsed/total scrub bar. Releasing a dragged
+position restarts preview there after a silent state-building pre-roll, preserving
+the captured reverb rather than starting the effect from an empty convolution.
 
 The build also writes `Mechana-Reverb-macOS-arm64.zip`, preserving the application
 bundle for transfer to another Apple Silicon Mac. Because development builds are

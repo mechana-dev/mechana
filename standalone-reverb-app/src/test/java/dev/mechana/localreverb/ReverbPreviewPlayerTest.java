@@ -18,6 +18,7 @@ package dev.mechana.localreverb;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.mechana.plugins.audio.AudioConvolutionProcessor;
 import dev.mechana.plugins.audio.WavFile;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -207,6 +208,68 @@ class ReverbPreviewPlayerTest {
 		assertEquals(0.5, sample(pcm, 1 * 2), 1.0 / 32768);
 		assertEquals(1, sample(pcm, 3 * 2), 1.0 / 32768);
 		assertEquals(0.5, sample(pcm, 4 * 2), 1.0 / 32768);
+	}
+
+	@Test
+	void scrubStartsAtRequestedFrameWithRebuiltConvolutionHistory() throws Exception {
+		double[] source = new double[4_000];
+		for (int frame = 0; frame < source.length; frame++)
+			source[frame] = frame / 8_000.0;
+		Path dry = wav("seek-dry.wav", 1_000, new double[][]{source});
+		Path ir = wav("seek-ir.wav", 1_000, new double[][]{{0.5, 0.25}});
+		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, 0, 0, false, false, 1);
+
+		byte[] pcm = ReverbPreviewPlayer.renderFromForTest(settings, 0.5);
+
+		assertEquals((2_001) * 2 * 2, pcm.length);
+		double expected = source[2_000] * 0.5 + source[1_999] * 0.25;
+		assertEquals(expected, sample(pcm, 0), 2.0 / 32768);
+	}
+
+	@Test
+	void previewAndFinalRenderUseEquivalentCalibratedStreamingDsp() throws Exception {
+		double[][] source = new double[2][5_000];
+		for (int frame = 0; frame < source[0].length; frame++) {
+			source[0][frame] = Math.sin(frame * 0.071) * 0.42;
+			source[1][frame] = Math.cos(frame * 0.053) * 0.31;
+		}
+		double[][] response = new double[2][2_200];
+		for (int frame = 0; frame < response[0].length; frame++) {
+			double decay = Math.exp(-frame / 420.0);
+			response[0][frame] = decay * Math.sin(frame * 0.19) * 0.18;
+			response[1][frame] = decay * Math.cos(frame * 0.17) * 0.14;
+		}
+		Path dry = wav("equivalence-dry.wav", 48_000, source);
+		Path ir = wav("equivalence-ir.wav", 48_000, response);
+		double calibrationGain = 0.37;
+		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 0.6, 1, 20, 90, 9_000, 0.8, 0.7, 8, 85, true, true, 3,
+				calibrationGain);
+		byte[] preview = ReverbPreviewPlayer.renderForTest(settings);
+		Path rendered = temporary.resolve("equivalence-rendered.wav");
+		var options = new AudioConvolutionProcessor.Options(0.6, 1, 20, 90, 9_000, 0.8, 0.7, 8, 85, true, true, 3,
+				AudioConvolutionProcessor.DEFAULT_BLOCK_SIZE, calibrationGain);
+		new AudioConvolutionProcessor().process(dry, ir, rendered, temporary, options, ignored -> {
+		});
+
+		try (WavFile.Reader reader = WavFile.open(rendered)) {
+			assertEquals(preview.length / 4, reader.format().frames());
+			double[][] block = new double[2][1024];
+			int previewFrame = 0;
+			double squaredError = 0;
+			double maximumError = 0;
+			long samples = 0;
+			for (int count; (count = reader.read(block, 0, block[0].length)) > 0;)
+				for (int frame = 0; frame < count; frame++, previewFrame++)
+					for (int channel = 0; channel < 2; channel++) {
+						double error = block[channel][frame] - sample(preview, previewFrame * 2 + channel);
+						squaredError += error * error;
+						maximumError = Math.max(maximumError, Math.abs(error));
+						samples++;
+					}
+			double rmsError = Math.sqrt(squaredError / samples);
+			assertTrue(rmsError < 0.0001, "Preview/render RMS error was " + rmsError);
+			assertTrue(maximumError < 0.001, "Preview/render maximum error was " + maximumError);
+		}
 	}
 
 	private Path wav(String name, int sampleRate, double[][] channels) throws Exception {

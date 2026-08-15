@@ -1818,3 +1818,37 @@ cloud providers remain future direction; see `brain/current-state.md` and
   emergency limiting was required. Replaced that scheduling with a rolling-window
   minimum-gain detector, a 1 ms smoothed attack within the 10 ms look-ahead, and
   the existing 250 ms release.
+
+## 2026-08-15 06:45 EDT — Calibrate IRs and align Preview with Apply
+
+- Added non-destructive, stereo-linked IR energy calibration with sample-rate-aware
+  measurement, a +12 dB boost ceiling, and calibrated peak safety. Original IR WAVs
+  remain unchanged; checksum-bound properties sidecars retain the calibration.
+- Factory profiles are calibrated or refreshed automatically. Imported profiles
+  and profiles generated from recorded sweeps are calibrated when added, and their
+  metadata follows rename/delete operations.
+- Routed the same calibration scalar through live preview and final rendering.
+- Replaced Apply's whole-file peak gain with the same streaming 10 ms look-ahead,
+  1 ms attack, and 250 ms release protection used by Preview.
+- Added numerical regression coverage comparing a calibrated, shaped, EQ'd,
+  peak-protected preview stream with the corresponding final rendered WAV.
+
+## 2026-08-15 07:05 EDT — Simplify standalone output safety controls
+
+- Removed Normalize IR, Peak Protection, and Safe Headroom from the standalone
+  consumer UI; they are engineering safeguards rather than reverb-shaping controls.
+- Made IR peak safety and streaming peak protection automatic with fixed 1 dB
+  headroom in both Preview and Apply while retaining compatibility fields in job
+  metadata and the general worker plugin.
+- Removed the obsolete normalization suffix from newly suggested output filenames
+  and removed normalization state from compact History summaries.
+
+## 2026-08-15 07:20 EDT — Add preview scrubbing
+
+- Added a conventional elapsed/total preview timeline supporting click and drag
+  seeking without creating an output artifact.
+- Added random-access WAV frame positioning and hidden seek pre-roll covering the
+  selected IR, pre-delay, and an additional second of filter/limiter settling so
+  scrubbed playback resumes with established reverb state.
+- Throttled timeline updates to audio blocks to avoid flooding the Swing event
+  queue, and added regression coverage for convolution continuity at a seek point.
