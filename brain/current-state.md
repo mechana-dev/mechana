@@ -128,6 +128,9 @@ This file reports repository evidence, not desired future status.
   is isolated on the right. The Loop checkbox repeats the complete selected clip
   plus its reverb tail until Stop; current live settings and selected IR carry into
   subsequent iterations.
+- Preview peak protection uses a stereo-linked gain limiter with immediate peak
+  reduction and a smooth release instead of hard-clipping individual samples.
+  Offline Apply retains its deterministic two-pass global gain.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,

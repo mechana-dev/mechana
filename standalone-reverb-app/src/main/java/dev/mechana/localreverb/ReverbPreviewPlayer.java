@@ -44,6 +44,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private static final int DRY_END_FADE_MILLISECONDS = 10;
 	private static final int PARAMETER_RAMP_MILLISECONDS = 20;
 	private static final int IR_CROSSFADE_MILLISECONDS = 50;
+	private static final int LIMITER_RELEASE_MILLISECONDS = 250;
 	private static final int MAX_PRE_DELAY_MILLISECONDS = 10_000;
 	private static final double NORMALIZED_IR_PEAK = Math.pow(10, -1.0 / 20);
 	private final AtomicBoolean stopped = new AtomicBoolean(true);
@@ -322,9 +323,12 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		SmoothedValue dryLevel = new SmoothedValue(liveParameters.dry());
 		SmoothedValue headroom = new SmoothedValue(headroomTarget(liveParameters));
 		SmoothedValue bypass = new SmoothedValue(bypassed ? 1 : 0);
+		PreviewLimiter limiter = new PreviewLimiter(format.sampleRate());
 		int rampFrames = Math.max(1, format.sampleRate() * PARAMETER_RAMP_MILLISECONDS / 1000);
 		double[][] input = new double[format.channels()][BLOCK_SIZE];
 		byte[] pcm = new byte[BLOCK_SIZE * outputChannels * 2];
+		double[] processedFrame = new double[outputChannels];
+		double[] originalFrame = new double[outputChannels];
 		long sourcePosition = 0;
 		long outputPosition = 0;
 		long requiredOutputFrames = outputFrames;
@@ -372,6 +376,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					double original = absolute < format.frames()
 							? input[Math.min(channel, input.length - 1)][frame]
 							: 0;
+					originalFrame[channel] = original;
 					double direct = original * dryEndEnvelope(absolute, format.frames(), format.sampleRate());
 					double wetSample = wet[channel][frame]
 							* (parameters.normalizeIr() ? activeBank.normalizationGain() : 1);
@@ -381,10 +386,12 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					double delayed = delays[channel].push(wetSample, parameters.preDelayMilliseconds());
 					equalizers[channel].update(parameters.lowCutHertz(), parameters.highCutHertz());
 					delayed = equalizers[channel].process(delayed);
-					double sample = direct * currentDry + delayed * currentWet;
-					if (parameters.peakProtection())
-						sample = Math.max(-currentHeadroom, Math.min(currentHeadroom, sample));
-					sample = sample * (1 - currentBypass) + original * currentBypass;
+					processedFrame[channel] = direct * currentDry + delayed * currentWet;
+				}
+				limiter.apply(processedFrame, currentHeadroom, parameters.peakProtection());
+				for (int channel = 0; channel < outputChannels; channel++) {
+					double sample = processedFrame[channel] * (1 - currentBypass)
+							+ originalFrame[channel] * currentBypass;
 					int value = (int) Math.max(Short.MIN_VALUE,
 							Math.min(Short.MAX_VALUE, Math.round(sample * 32768.0)));
 					pcm[byteIndex++] = (byte) value;
@@ -629,6 +636,33 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					current = target;
 			}
 			return current;
+		}
+	}
+
+	private static final class PreviewLimiter {
+		private final double releaseCoefficient;
+		private double gain = 1;
+
+		private PreviewLimiter(int sampleRate) {
+			double releaseFrames = Math.max(1, sampleRate * LIMITER_RELEASE_MILLISECONDS / 1000.0);
+			releaseCoefficient = 1 - Math.exp(-1 / releaseFrames);
+		}
+
+		private void apply(double[] frame, double target, boolean enabled) {
+			if (!enabled) {
+				gain = 1;
+				return;
+			}
+			double peak = 0;
+			for (double sample : frame)
+				peak = Math.max(peak, Math.abs(sample));
+			double requiredGain = peak > target ? target / peak : 1;
+			if (requiredGain < gain)
+				gain = requiredGain;
+			else
+				gain += (requiredGain - gain) * releaseCoefficient;
+			for (int channel = 0; channel < frame.length; channel++)
+				frame[channel] *= gain;
 		}
 	}
 

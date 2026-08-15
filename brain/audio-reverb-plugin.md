@@ -113,9 +113,10 @@ continues to accept larger precise values. Those controls plus IR normalization,
 headroom take effect during playback with a 20 ms transition that avoids
 control-change clicks. Normalization is an exact linear gain change on the live
 wet convolution result, so it does not restart or approximate the IR. Because
-streaming cannot know the future global peak, preview peak
-protection is an instantaneous ceiling at the selected headroom; offline export
-retains its deterministic two-pass global gain.
+streaming cannot know the future global peak, preview peak protection uses a
+stereo-linked gain limiter with immediate peak reduction and a smooth 250 ms
+release. This preserves waveform shape instead of hard-clipping over-range preview
+samples; offline export retains its deterministic two-pass global gain.
 On the first launch of a newly packaged application build, the app compares the
 bundle JAR fingerprint with a marker inside its owned cache directory and removes
 regular cached entries when that fingerprint changes. Repeated launches of the

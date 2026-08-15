@@ -84,6 +84,19 @@ class ReverbPreviewPlayerTest {
 	}
 
 	@Test
+	void previewPeakProtectionPreservesWaveformInsteadOfHardClipping() throws Exception {
+		Path dry = wav("dynamic-dry.wav", 48_000, new double[][]{{0.9, 0.45}});
+		Path ir = wav("dynamic-ir.wav", 48_000, new double[][]{{1}});
+
+		byte[] pcm = ReverbPreviewPlayer
+				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 1, 0, 0, 0, false, true, 6));
+
+		double target = Math.pow(10, -6.0 / 20);
+		assertEquals(target, sample(pcm, 0), 1.0 / 32768);
+		assertEquals(target / 2, sample(pcm, 2), 2.0 / 32768);
+	}
+
+	@Test
 	void wetDryAndNormalizationChangesTakeEffectDuringPlayback() throws Exception {
 		double[] source = new double[3_000];
 		java.util.Arrays.fill(source, 0.5);

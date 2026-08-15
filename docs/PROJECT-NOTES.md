@@ -1797,3 +1797,14 @@ cloud providers remain future direction; see `brain/current-state.md` and
   Stop; disabling Loop allows the current iteration to finish normally.
 - Matched the Play/Pause and Stop button dimensions while enlarging the Stop square,
   and disabled Show in Finder for factory-protected IRs without disabling Export.
+
+## 2026-08-15 05:48 EDT — Prevent preview-only clipping on energetic IRs
+
+- Replaced the live preview's instantaneous hard ceiling with a stereo-linked gain
+  limiter that reduces over-range peaks immediately and releases smoothly over
+  250 ms.
+- Preserved the offline renderer's deterministic two-pass peak protection while
+  preventing long, energetic room IRs from turning high-wetness preview playback
+  into flat-topped crackling.
+- Added regression coverage proving protected preview retains relative waveform
+  amplitude rather than independently clamping successive samples.
