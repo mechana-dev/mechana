@@ -223,6 +223,7 @@ public final class Messages {
 
 	public record AudioReverbJobSubmitRequest(String dryPath, String irPath, String outputName, int taskCount,
 			double wet, double dry, double preDelayMilliseconds, double lowCutHertz, double highCutHertz,
+			double earlyLevel, double lateLevel, double attackMilliseconds, double decayLengthPercent,
 			boolean normalizeIr, boolean peakProtection, double headroomDecibels, String storageProvider,
 			String artifactRoot) {
 		public AudioReverbJobSubmitRequest {
@@ -231,6 +232,11 @@ public final class Messages {
 			outputName = outputName == null || outputName.isBlank() ? "reverberated.wav" : outputName;
 			storageProvider = storageProvider == null || storageProvider.isBlank() ? "server-local" : storageProvider;
 			artifactRoot = artifactRoot == null ? "" : artifactRoot.strip();
+			if (earlyLevel == 0 && lateLevel == 0 && attackMilliseconds == 0 && decayLengthPercent == 0) {
+				earlyLevel = 1;
+				lateLevel = 1;
+				decayLengthPercent = 100;
+			}
 			if (!"server-local".equals(storageProvider))
 				throw new IllegalArgumentException("Audio reverb POC currently supports server-local storage only");
 			if (!outputName.matches("[A-Za-z0-9._-]+\\.wav") || taskCount < 0 || taskCount > 1)
@@ -239,12 +245,25 @@ public final class Messages {
 					|| !Double.isFinite(preDelayMilliseconds) || preDelayMilliseconds < 0
 					|| preDelayMilliseconds > 10_000 || !validFrequency(lowCutHertz) || !validFrequency(highCutHertz)
 					|| lowCutHertz > 0 && highCutHertz > 0 && lowCutHertz >= highCutHertz
+					|| !finiteRange(earlyLevel, 0, 2) || !finiteRange(lateLevel, 0, 2)
+					|| !finiteRange(attackMilliseconds, 0, 5_000) || !finiteRange(decayLengthPercent, 1, 100)
 					|| !Double.isFinite(headroomDecibels) || headroomDecibels < 0 || headroomDecibels > 24)
 				throw new IllegalArgumentException("Invalid audio reverb controls");
 		}
 
+		public AudioReverbJobSubmitRequest(String dryPath, String irPath, String outputName, int taskCount, double wet,
+				double dry, double preDelayMilliseconds, double lowCutHertz, double highCutHertz, boolean normalizeIr,
+				boolean peakProtection, double headroomDecibels, String storageProvider, String artifactRoot) {
+			this(dryPath, irPath, outputName, taskCount, wet, dry, preDelayMilliseconds, lowCutHertz, highCutHertz, 1,
+					1, 0, 100, normalizeIr, peakProtection, headroomDecibels, storageProvider, artifactRoot);
+		}
+
 		private static boolean validFrequency(double value) {
 			return Double.isFinite(value) && value >= 0 && value <= 20_000;
+		}
+
+		private static boolean finiteRange(double value, double minimum, double maximum) {
+			return Double.isFinite(value) && value >= minimum && value <= maximum;
 		}
 	}
 

@@ -1735,3 +1735,86 @@ cloud providers remain future direction; see `brain/current-state.md` and
   IR rather than adding algorithmic-reverb approximations to the convolution POC.
 - Added numerical frequency-response, descriptor, validation, and reporting
   coverage for the new controls.
+
+## 2026-08-15 — Add captured-response shaping and a canonical IR library
+
+- Added neutral-by-default early-reflection level, late-tail level, attack, and
+  decay-length controls to the production plugin, server descriptor, reports,
+  standalone renderer, and live preview.
+- Implemented shaping as IR preparation before FFT partitioning. Neutral values
+  bypass sample transformation exactly; decay shortening fades and truncates the
+  captured tail rather than inventing new response material.
+- Reorganized the standalone Apply Reverb UI into scrolling Mix and timing,
+  Captured-response shaping, Wet EQ, and Output sections with sliders and numeric
+  overrides. Added Reset to Captured Response while preserving wet/dry choices.
+- Replaced direct bundled-file selection with a unified IR selector backed by
+  `~/Library/Application Support/Mechana Reverb/IR Profiles`, including factory
+  installation, validated Add/import, generated-profile registration, and basic
+  Manage actions.
+- Added DSP bypass/shaping, shortened-tail preview, descriptor, and durable IR
+  library tests.
+
+## 2026-08-15 03:11 EDT — Streamline standalone Reverb controls and history
+
+- Moved one offline Apply action and conventional icon-based preview play,
+  pause/resume, and stop controls beside the selected input/output settings.
+- Added a live A/B bypass that smoothly transitions to the unprocessed source and
+  restores the current effect settings when switched off.
+- Split neutral resets by section: mix/timing resets to wet 0, dry 1, and zero
+  pre-delay; captured-response shaping resets to its exact bypass values; wet EQ
+  resets both filters to off.
+- Simplified local history to date/time, output filename, and a compact parameter
+  summary. Selecting an available output enables Play Output and Show in Finder.
+- Added preview bypass coverage while retaining the existing complete-tail and
+  live-parameter tests.
+- Replaced the reused Job Launcher artwork with a dedicated Mechana Reverb icon:
+  the Mechana hexagon now contains an impulse waveform followed by diminishing
+  reflection arcs, reflecting the app's captured-IR convolution workflow.
+- Moved history output actions above the table so split-pane sizing cannot hide
+  them, enlarged the preview transport buttons and glyphs, and made an active
+  preview automatically restart with a newly selected dry-audio file.
+- Added a lightweight copy of the dedicated Reverb icon to the application header
+  so the window and Dock share the same visual identity.
+- Simplified Create IR from Sweep by removing its permanent output-path field.
+  Generation now finishes in temporary storage and offers Add to Library, Save to
+  File, or Cancel. Library addition proposes a return-derived name, allows a rename,
+  and offers Replace Existing or Keep Both for duplicate names while protecting
+  factory profiles from replacement.
+- Expanded Manage for imported and generated profiles with Rename and confirmed
+  Delete actions. Matching generation reports move or delete with their WAV, name
+  conflicts are rejected, and factory profiles remain read-only.
+- Replaced the per-profile Manage prompt with a dedicated library window whose
+  scrolling list shows every IR. Added context-sensitive Rename/Delete, WAV Export, and
+  factory-profile protection.
+- Combined preview Play and Pause into one stateful control, enlarged Stop and
+  Apply, and visually separated offline Apply from preview transport.
+- Renamed the lower panel to History and the artifact root to Output folder,
+  simplified the product subtitle, and added confirmed deletion of a selected
+  history job and all files in its validated job folder.
+- Reversed the action-row emphasis so Preview is on the left and Apply is isolated
+  on the right, enlarged the Stop-square glyph, and added optional full-clip preview
+  looping. Each iteration includes the complete reverb tail and continues until
+  Stop; disabling Loop allows the current iteration to finish normally.
+- Matched the Play/Pause and Stop button dimensions while enlarging the Stop square,
+  and disabled Show in Finder for factory-protected IRs without disabling Export.
+
+## 2026-08-15 05:48 EDT — Prevent preview-only clipping on energetic IRs
+
+- Replaced the live preview's instantaneous hard ceiling with a stereo-linked gain
+  limiter that reduces over-range peaks immediately and releases smoothly over
+  250 ms.
+- Preserved the offline renderer's deterministic two-pass peak protection while
+  preventing long, energetic room IRs from turning high-wetness preview playback
+  into flat-topped crackling.
+- Added regression coverage proving protected preview retains relative waveform
+  amplitude rather than independently clamping successive samples.
+- Follow-up analysis of a lossless Audio Hijack preview capture found no recurring
+  buffer gaps or flat-topped clipping, but did show that zero-look-ahead gain
+  changes remained audible under heavy reduction. Added 10 ms stereo-linked
+  look-ahead so attenuation begins smoothly before each over-range peak, plus a
+  regression test for the pre-peak gain ramp.
+- A second lossless capture exposed a defect in the first look-ahead envelope:
+  progressively rising peaks could restart and postpone its attack until abrupt
+  emergency limiting was required. Replaced that scheduling with a rolling-window
+  minimum-gain detector, a 1 ms smoothed attack within the 10 ms look-ahead, and
+  the existing 250 ms release.

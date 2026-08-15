@@ -64,7 +64,8 @@ public final class LocalReverbEngine implements AutoCloseable {
 				+ UUID.randomUUID().toString().substring(0, 8);
 		Path directory = request.artifactRoot().resolve(id);
 		Files.createDirectory(directory);
-		current = new ReverbJob(id, "RUNNING", 0, Instant.now(), null, directory, request.outputName(), "");
+		current = new ReverbJob(id, "RUNNING", 0, Instant.now(), null, directory, request.outputName(),
+				parameterSummary(request), "");
 		cancellation.set(false);
 		writeState(current, request);
 		listener.accept(current);
@@ -93,13 +94,28 @@ public final class LocalReverbEngine implements AutoCloseable {
 						status = "INTERRUPTED";
 					jobs.add(new ReverbJob(text(values, "jobId"), status, number(values, "progress"),
 							Instant.parse(text(values, "submittedAt")), instant(values.get("completedAt")), directory,
-							text(values, "outputName"), text(values, "error")));
+							text(values, "outputName"), parameterSummary(values), text(values, "error")));
 				} catch (IOException | RuntimeException ignored) {
 					// An unrelated or incomplete directory is not local job history.
 				}
 			}
 		}
 		return jobs.stream().sorted(Comparator.comparing(ReverbJob::submittedAt).reversed()).toList();
+	}
+
+	public synchronized void deleteJob(Path root, ReverbJob job) throws IOException {
+		if (root == null || job == null)
+			throw new IOException("Select a job to delete");
+		if (current != null && "RUNNING".equals(current.status()) && current.id().equals(job.id()))
+			throw new IOException("The running job cannot be deleted");
+		Path normalizedRoot = root.toAbsolutePath().normalize();
+		Path directory = job.artifactDirectory().toAbsolutePath().normalize();
+		if (!normalizedRoot.equals(directory.getParent()) || !Files.isRegularFile(directory.resolve("job.json")))
+			throw new IOException("The selected folder is not a Mechana Reverb job");
+		try (var contents = Files.walk(directory)) {
+			for (Path entry : contents.sorted(Comparator.reverseOrder()).toList())
+				Files.delete(entry);
+		}
 	}
 
 	private void execute(ReverbRequest request, Consumer<ReverbJob> listener) {
@@ -155,6 +171,10 @@ public final class LocalReverbEngine implements AutoCloseable {
 					Map.entry("preDelayMilliseconds", Double.toString(request.preDelayMilliseconds())),
 					Map.entry("lowCutHertz", Double.toString(request.lowCutHertz())),
 					Map.entry("highCutHertz", Double.toString(request.highCutHertz())),
+					Map.entry("earlyLevel", Double.toString(request.earlyLevel())),
+					Map.entry("lateLevel", Double.toString(request.lateLevel())),
+					Map.entry("attackMilliseconds", Double.toString(request.attackMilliseconds())),
+					Map.entry("decayLengthPercent", Double.toString(request.decayLengthPercent())),
 					Map.entry("normalizeIr", Boolean.toString(request.normalizeIr())),
 					Map.entry("peakProtection", Boolean.toString(request.peakProtection())),
 					Map.entry("headroomDecibels", Double.toString(request.headroomDecibels())));
@@ -207,6 +227,10 @@ public final class LocalReverbEngine implements AutoCloseable {
 		values.put("preDelayMilliseconds", request.preDelayMilliseconds());
 		values.put("lowCutHertz", request.lowCutHertz());
 		values.put("highCutHertz", request.highCutHertz());
+		values.put("earlyLevel", request.earlyLevel());
+		values.put("lateLevel", request.lateLevel());
+		values.put("attackMilliseconds", request.attackMilliseconds());
+		values.put("decayLengthPercent", request.decayLengthPercent());
 		values.put("normalizeIr", request.normalizeIr());
 		values.put("peakProtection", request.peakProtection());
 		values.put("headroomDecibels", request.headroomDecibels());
@@ -215,6 +239,33 @@ public final class LocalReverbEngine implements AutoCloseable {
 		json.writerWithDefaultPrettyPrinter().writeValue(temporary.toFile(), values);
 		Files.move(temporary, job.artifactDirectory().resolve("job.json"), StandardCopyOption.REPLACE_EXISTING,
 				StandardCopyOption.ATOMIC_MOVE);
+	}
+
+	private static String parameterSummary(ReverbRequest request) {
+		return "Wet %s · Dry %s · Pre %s ms · Early %s · Late %s · Attack %s ms · Decay %s%% · EQ %s/%s Hz · Norm %s"
+				.formatted(compact(request.wet()), compact(request.dry()), compact(request.preDelayMilliseconds()),
+						compact(request.earlyLevel()), compact(request.lateLevel()),
+						compact(request.attackMilliseconds()), compact(request.decayLengthPercent()),
+						compact(request.lowCutHertz()), compact(request.highCutHertz()),
+						request.normalizeIr() ? "on" : "off");
+	}
+
+	private static String parameterSummary(Map<String, Object> values) {
+		return "Wet %s · Dry %s · Pre %s ms · Early %s · Late %s · Attack %s ms · Decay %s%% · EQ %s/%s Hz · Norm %s"
+				.formatted(value(values, "wet", "?"), value(values, "dry", "?"),
+						value(values, "preDelayMilliseconds", "?"), value(values, "earlyLevel", "1"),
+						value(values, "lateLevel", "1"), value(values, "attackMilliseconds", "0"),
+						value(values, "decayLengthPercent", "100"), value(values, "lowCutHertz", "0"),
+						value(values, "highCutHertz", "0"), value(values, "normalizeIr", "?"));
+	}
+
+	private static String value(Map<String, Object> values, String key, String fallback) {
+		Object value = values.get(key);
+		return value == null ? fallback : value.toString();
+	}
+
+	private static String compact(double value) {
+		return java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString();
 	}
 
 	@SuppressFBWarnings(value = "VA_FORMAT_STRING_USES_NEWLINE", justification = "The durable plain-text report intentionally uses LF on every platform")
@@ -249,6 +300,10 @@ public final class LocalReverbEngine implements AutoCloseable {
 				Pre-delay: %s ms
 				Wet low-cut: %s
 				Wet high-cut: %s
+				Early reflections level: %s
+				Late tail level: %s
+				Attack: %s ms
+				Decay length: %s%%
 				Normalize IR: %s
 				Peak protection: %s
 				Safe headroom: %s dB
@@ -265,9 +320,10 @@ public final class LocalReverbEngine implements AutoCloseable {
 				request.dryPath().getFileName(), request.dryPath(), Files.size(request.dryPath()),
 				request.irPath().getFileName(), request.irPath(), Files.size(request.irPath()), request.wet(),
 				request.dry(), request.preDelayMilliseconds(), frequency(request.lowCutHertz()),
-				frequency(request.highCutHertz()), yesNo(request.normalizeIr()), yesNo(request.peakProtection()),
-				request.headroomDecibels(), gain == null ? "Not available" : gain, request.outputName(),
-				Files.size(output), sha256(output));
+				frequency(request.highCutHertz()), request.earlyLevel(), request.lateLevel(),
+				request.attackMilliseconds(), request.decayLengthPercent(), yesNo(request.normalizeIr()),
+				yesNo(request.peakProtection()), request.headroomDecibels(), gain == null ? "Not available" : gain,
+				request.outputName(), Files.size(output), sha256(output));
 	}
 
 	private static String frequency(double hertz) {

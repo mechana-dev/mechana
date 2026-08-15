@@ -84,6 +84,37 @@ class ReverbPreviewPlayerTest {
 	}
 
 	@Test
+	void previewPeakProtectionPreservesWaveformInsteadOfHardClipping() throws Exception {
+		Path dry = wav("dynamic-dry.wav", 48_000, new double[][]{{0.9, 0.45}});
+		Path ir = wav("dynamic-ir.wav", 48_000, new double[][]{{1}});
+
+		byte[] pcm = ReverbPreviewPlayer
+				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 1, 0, 0, 0, false, true, 6));
+
+		double target = Math.pow(10, -6.0 / 20);
+		assertEquals(target, sample(pcm, 0), 1.0 / 32768);
+		assertEquals(target / 2, sample(pcm, 2), 8.0 / 32768);
+	}
+
+	@Test
+	void previewPeakProtectionReducesGainBeforeAnOverRangePeak() throws Exception {
+		double[] source = new double[1_500];
+		java.util.Arrays.fill(source, 0.1);
+		source[1_000] = 0.9;
+		Path dry = wav("lookahead-dry.wav", 48_000, new double[][]{source});
+		Path ir = wav("lookahead-ir.wav", 48_000, new double[][]{{1}});
+
+		byte[] pcm = ReverbPreviewPlayer
+				.renderForTest(new ReverbPreviewPlayer.Settings(dry, ir, 1, 1, 0, 0, 0, false, true, 6));
+
+		double target = Math.pow(10, -6.0 / 20);
+		assertEquals(0.2, sample(pcm, 400 * 2), 2.0 / 32768);
+		assertTrue(sample(pcm, 550 * 2) < 0.18);
+		assertTrue(sample(pcm, 550 * 2) > 0.1);
+		assertEquals(target, sample(pcm, 1_000 * 2), 2.0 / 32768);
+	}
+
+	@Test
 	void wetDryAndNormalizationChangesTakeEffectDuringPlayback() throws Exception {
 		double[] source = new double[3_000];
 		java.util.Arrays.fill(source, 0.5);
@@ -96,6 +127,20 @@ class ReverbPreviewPlayerTest {
 
 		assertEquals(0.5, sample(pcm, 500 * 2), 1.0 / 32768);
 		assertEquals(0.5 * Math.pow(10, -1.0 / 20), sample(pcm, 2_500 * 2), 2.0 / 32768);
+	}
+
+	@Test
+	void bypassReturnsLivePreviewToTheUnprocessedSource() throws Exception {
+		double[] source = new double[5_000];
+		java.util.Arrays.fill(source, 0.25);
+		Path dry = wav("bypass-dry.wav", 48_000, new double[][]{source});
+		Path ir = wav("bypass-ir.wav", 48_000, new double[][]{{1}});
+		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 1, 1, 0, 0, 0, false, false, 1);
+
+		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings, player -> player.setBypassed(true));
+
+		assertEquals(0.5, sample(pcm, 500 * 2), 1.0 / 32768);
+		assertEquals(0.25, sample(pcm, 4_000 * 2), 1.0 / 32768);
 	}
 
 	@Test
@@ -133,6 +178,35 @@ class ReverbPreviewPlayerTest {
 
 		assertEquals(0.25, sample(pcm, 500 * 2), 1.0 / 32768);
 		assertEquals(-0.25, sample(pcm, 4_000 * 2), 2.0 / 32768);
+	}
+
+	@Test
+	void capturedResponseShapingShortensPreviewTail() throws Exception {
+		Path dry = wav("shaped-dry.wav", 1_000, new double[][]{{1}});
+		double[] response = new double[200];
+		java.util.Arrays.fill(response, 0.5);
+		Path ir = wav("shaped-ir.wav", 1_000, new double[][]{response});
+		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, 0, 0, 1, 1, 0, 50, false, false, 1);
+
+		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings);
+
+		assertEquals(100 * 2 * 2, pcm.length);
+		assertEquals(0, sample(pcm, 99 * 2), 1.0 / 32768);
+	}
+
+	@Test
+	void loopPlaybackRepeatsTheCompleteClipAndTail() throws Exception {
+		Path dry = wav("loop-dry.wav", 1_000, new double[][]{{1, 0}});
+		Path ir = wav("loop-ir.wav", 1_000, new double[][]{{1, 0.5}});
+		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, 0, 0, false, false, 1);
+
+		byte[] pcm = ReverbPreviewPlayer.renderLoopsForTest(settings, 2);
+
+		assertEquals(3 * 2 * 2 * 2, pcm.length);
+		assertEquals(1, sample(pcm, 0), 1.0 / 32768);
+		assertEquals(0.5, sample(pcm, 1 * 2), 1.0 / 32768);
+		assertEquals(1, sample(pcm, 3 * 2), 1.0 / 32768);
+		assertEquals(0.5, sample(pcm, 4 * 2), 1.0 / 32768);
 	}
 
 	private Path wav(String name, int sampleRate, double[][] channels) throws Exception {

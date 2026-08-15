@@ -13,6 +13,12 @@ so Finder and Dock launches do not depend on a shell, `JAVA_HOME`, Maven, or a
 Terminal window. Distribution to other users will require an Apple Developer ID,
 code signing, hardened-runtime validation, and notarization.
 
+Mechana Reverb keeps its working impulse-response library in
+`~/Library/Application Support/Mechana Reverb/IR Profiles`. On launch it installs
+missing factory profiles from the bundle without overwriting existing files.
+Profiles imported with **Add…** and profiles created from sweep recordings are
+copied into the same durable library and remain available across app upgrades.
+
 The build also writes `Mechana-Reverb-macOS-arm64.zip`, preserving the application
 bundle for transfer to another Apple Silicon Mac. Because development builds are
 not notarized, a recipient may need to Control-click the app and choose **Open**.
@@ -49,6 +55,10 @@ standard **Applications** shortcut. Drag each app from there to the Dock. Set
 is explicitly required. Rebuilding is deterministic from the shaded application JARs, the
 function-specific Mechana icon variants, the current Java 25 `jpackage`, macOS's
 Swift compiler and WebKit framework, and a bundled runtime image.
+
+Mechana Reverb uses its own impulse-and-decaying-reflections icon rather than the
+Job Launcher's paper-plane artwork, while retaining the shared Mechana hexagon and
+color family.
 
 ## Server lifecycle
 

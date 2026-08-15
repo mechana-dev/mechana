@@ -123,8 +123,10 @@ class AudioConvolutionProcessorTest {
 		Path ir = wav("eq-ir.wav", 48_000, new double[][]{{1}});
 		Path wetOutput = temporary.resolve("eq-wet.wav");
 		Path dryOutput = temporary.resolve("eq-direct.wav");
-		processor(dry, ir, wetOutput, new AudioConvolutionProcessor.Options(1, 0, 0, 0, 1_000, false, false, 1, 2048));
-		processor(dry, ir, dryOutput, new AudioConvolutionProcessor.Options(0, 1, 0, 0, 1_000, false, false, 1, 2048));
+		processor(dry, ir, wetOutput,
+				new AudioConvolutionProcessor.Options(1, 0, 0, 0, 1_000, 1, 1, 0, 100, false, false, 1, 2048));
+		processor(dry, ir, dryOutput,
+				new AudioConvolutionProcessor.Options(0, 1, 0, 0, 1_000, 1, 1, 0, 100, false, false, 1, 2048));
 
 		double[] wet = read(wetOutput)[0];
 		double[] direct = read(dryOutput)[0];
@@ -190,7 +192,8 @@ class AudioConvolutionProcessorTest {
 
 	private static AudioConvolutionProcessor.Options options(double wet, double dry, double preDelay,
 			boolean protection) {
-		return new AudioConvolutionProcessor.Options(wet, dry, preDelay, 0, 0, false, protection, 1, 2048);
+		return new AudioConvolutionProcessor.Options(wet, dry, preDelay, 0, 0, 1, 1, 0, 100, false, protection, 1,
+				2048);
 	}
 
 	private static double rms(double[] samples, int start, int end) {

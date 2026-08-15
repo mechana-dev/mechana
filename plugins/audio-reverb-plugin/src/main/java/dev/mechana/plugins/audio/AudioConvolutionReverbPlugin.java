@@ -46,7 +46,9 @@ public final class AudioConvolutionReverbPlugin implements TaskPlugin {
 			Path output = scratch.resolve("reverberated.wav");
 			var options = new AudioConvolutionProcessor.Options(decimal(parameters, "wet"), decimal(parameters, "dry"),
 					decimal(parameters, "preDelayMilliseconds"), decimal(parameters, "lowCutHertz", 0),
-					decimal(parameters, "highCutHertz", 0), bool(parameters, "normalizeIr"),
+					decimal(parameters, "highCutHertz", 0), decimal(parameters, "earlyLevel", 1),
+					decimal(parameters, "lateLevel", 1), decimal(parameters, "attackMilliseconds", 0),
+					decimal(parameters, "decayLengthPercent", 100), bool(parameters, "normalizeIr"),
 					bool(parameters, "peakProtection"), decimal(parameters, "headroomDecibels"),
 					AudioConvolutionProcessor.DEFAULT_BLOCK_SIZE);
 			AudioConvolutionProcessor.Result result = new AudioConvolutionProcessor().process(

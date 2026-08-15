@@ -75,7 +75,8 @@ This file reports repository evidence, not desired future status.
   artifacts, performs single-worker uniform partitioned FFT convolution, and
   publishes a 24-bit WAV through server-local storage. The generic launcher
   descriptor exposes WAV inputs, output name, wet/dry, pre-delay, wet-path
-  low-cut/high-cut EQ, IR normalization, peak protection, and headroom. Both EQ
+  low-cut/high-cut EQ, neutral-bypass early/late levels, attack, decay shortening,
+  IR normalization, peak protection, and headroom. Both EQ
   filters default off, so existing jobs and IR profiles retain their sound. IR normalization safely attenuates
   peaks above -1 dBFS without boosting quieter measured responses. A reusable
   pure-Java helper and standalone-app workflow deconvolve recorded wet sweep
@@ -100,10 +101,37 @@ This file reports repository evidence, not desired future status.
   content-addressed, sample-rate-matched IR variants in the user's cache;
   selecting a mono or stereo IR during playback prepares the needed variant in
   the background and crossfades it into the active preview. Variants are generated
-  only on demand, and the status bar identifies that one-time work; IR generation
+  only on demand, and the status bar identifies that one-time work. IR generation
   and the user-facing profile library continue to expose one master file. A new
   packaged application build clears regular entries from its owned IR cache on
   first launch; subsequent launches of that build retain them.
+- The standalone app maintains a canonical IR profile library under the user's
+  Application Support directory. Factory profiles, validated user imports, and
+  generated profiles appear in one selector with Add and Manage actions. Manage
+  opens the full library in a scrolling list, supports rename/delete for added profiles,
+  exports any profile, and keeps factory profiles read-only. Factory profiles may
+  be exported but cannot be revealed through Manage. Sweep generation uses temporary
+  storage, then offers library addition with an editable
+  derived name, explicit Save to File, or discard. Manage can rename or delete
+  user-added profiles but never factory profiles. Its
+  grouped slider/numeric UI provides separate neutral resets for mix/timing,
+  captured-response shaping, and wet EQ. Preview transport controls use conventional
+  play/pause/stop icons near the inputs and include a click-smoothed live bypass to
+  the unprocessed source. Changing the selected dry-audio file during playback
+  automatically restarts preview with that source after a short debounce. Local
+  history presents only timestamp, output filename, and a compact settings summary;
+  its always-visible toolbar enables playback, Finder reveal, and confirmed job
+  deletion when a row is selected. The dedicated Reverb icon also appears in the
+  window header. UI language calls the artifact root the Output folder and avoids
+  worker/runtime terminology.
+- Preview controls are left-aligned beneath the inputs and the offline Apply action
+  is isolated on the right. The Loop checkbox repeats the complete selected clip
+  plus its reverb tail until Stop; current live settings and selected IR carry into
+  subsequent iterations.
+- Preview peak protection uses a stereo-linked gain limiter with 10 ms look-ahead
+  and a smooth release instead of hard-clipping individual samples or changing
+  gain at the peak itself. Offline Apply retains its deterministic two-pass global
+  gain.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,

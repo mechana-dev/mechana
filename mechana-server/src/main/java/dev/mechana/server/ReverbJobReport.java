@@ -60,6 +60,10 @@ final class ReverbJobReport {
 		line(report, "Pre-delay", request.preDelayMilliseconds() + " ms");
 		line(report, "Wet low-cut", frequency(request.lowCutHertz()));
 		line(report, "Wet high-cut", frequency(request.highCutHertz()));
+		line(report, "Early reflections level", Double.toString(request.earlyLevel()));
+		line(report, "Late tail level", Double.toString(request.lateLevel()));
+		line(report, "Attack", request.attackMilliseconds() + " ms");
+		line(report, "Decay length", request.decayLengthPercent() + "%");
 		line(report, "Normalize IR", yesNo(request.normalizeIr()));
 		line(report, "Peak protection", yesNo(request.peakProtection()));
 		line(report, "Safe headroom", request.headroomDecibels() + " dB");

@@ -50,11 +50,17 @@ tail and optional pre-delay are retained. The direct dry component receives a
 the wet-only tail; the samples sent through convolution are unchanged.
 
 Controls are wet level, dry level, pre-delay, wet-path low-cut and high-cut EQ,
+captured early-reflection and late-tail levels, captured-response attack, decay shortening,
 safe IR peak normalization, output peak protection, and safe headroom. The EQ uses
 pure-Java second-order Butterworth filters after convolution and pre-delay. A zero
 cutoff disables that filter; both defaults are zero, preserving prior jobs and IR
 profiles. When both cuts are enabled, the low-cut frequency must be below the
 high-cut frequency and both must be below the audio sample rate's Nyquist limit.
+Early and late levels default to 1, attack defaults to 0 ms, and decay length
+defaults to 100%, producing an exact shaping bypass. Active shaping operates only
+on samples in the captured IR before FFT partition preparation. Decay shortening
+fades and truncates the prepared IR, reducing partition count where possible;
+the implementation does not synthesize a longer tail or new reflections.
 IR normalization is attenuation-only: peaks
 above -1 dBFS are reduced to -1 dBFS, while quieter measured responses retain
 their captured gain. This prevents hardware IRs from being unintentionally
@@ -107,9 +113,13 @@ continues to accept larger precise values. Those controls plus IR normalization,
 headroom take effect during playback with a 20 ms transition that avoids
 control-change clicks. Normalization is an exact linear gain change on the live
 wet convolution result, so it does not restart or approximate the IR. Because
-streaming cannot know the future global peak, preview peak
-protection is an instantaneous ceiling at the selected headroom; offline export
+streaming cannot know the future global peak, preview peak protection uses a
+stereo-linked gain limiter with 10 ms look-ahead and a smooth 250 ms release. This
+begins gain reduction before an over-range peak reaches the audio output and
+preserves waveform shape instead of hard-clipping preview samples; offline export
 retains its deterministic two-pass global gain.
+The limiter tracks the most restrictive gain across the complete rolling
+look-ahead window, so a rising peak cannot repeatedly postpone the attack ramp.
 On the first launch of a newly packaged application build, the app compares the
 bundle JAR fingerprint with a marker inside its owned cache directory and removes
 regular cached entries when that fingerprint changes. Repeated launches of the
@@ -122,13 +132,41 @@ Wet low-cut and high-cut fields are also available in the standalone app and tak
 effect on the live wet signal without restarting playback. The captured IR still
 defines decay, room size, diffusion, and modulation; those algorithmic-reverb
 controls are intentionally not synthesized in this convolution POC.
+The Apply Reverb tab groups functional slider/numeric controls into mix/timing,
+captured-response shaping, wet EQ, and output sections. A Reset to Captured
+Response action restores neutral early, late, attack, and decay values. Separate
+resets restore mix/timing to wet 0, dry 1, and pre-delay 0, or disable both wet EQ
+filters. Conventional preview transport buttons and the single offline Apply action
+sit near the selected inputs. Live bypass crossfades to the untouched source and
+back without discarding edits to the current reverb settings. Selecting a new dry
+audio file while preview is active restarts playback with that source automatically.
+History is reduced to timestamp, output filename, and a compact parameter summary;
+its visible toolbar enables output playback, Finder reveal, and confirmed job-folder
+deletion after row selection. Preview uses one stateful Play/Pause button plus a
+larger Stop control. Preview controls sit to the left while the larger Apply action
+sits separately at the right. An optional Loop setting repeats the selected clip
+and its full reverb tail until Stop, and may be toggled during playback.
+
+The standalone app owns one durable IR library at
+`~/Library/Application Support/Mechana Reverb/IR Profiles`. Missing factory IRs
+are copied from the bundle into this library, imported WAVs are validated and
+copied there under unique names, and newly generated profiles are added and
+selected automatically. The UI selects profiles by readable name and provides
+Add and Manage actions; factory profiles cannot be removed through the app.
+Manage opens a dedicated profile window with the complete library in a scrolling list.
+User-added profiles can be renamed or deleted, including their generation report
+sidecars; any profile can be exported. Factory profiles remain read-only.
+Factory selection also disables Finder reveal, while Export remains available.
 The application bundle carries the five synthetic development IRs previously used
 for listening tests and exposes them through a dedicated chooser. It also bundles
 the standardized 48 kHz/24-bit stereo Mechana sweep and provides a **Create IR
-from Sweep** tab. A user selects a recorded wet return and output path; the app
-generates the aligned, trimmed IR locally and selects it for immediate use in the
-Apply Reverb tab. The unrestricted IR chooser continues to accept compatible WAVs
-created elsewhere.
+from Sweep** tab. A user selects a recorded wet return, and the app generates the
+aligned, trimmed IR into temporary storage before offering Add to Library, Save to
+File, or Cancel. Add to Library proposes a return-derived name, allows a rename,
+and selects the new profile for immediate use. If that name already exists, the
+user can replace it or keep both with an automatic suffix; factory profiles remain
+protected. Save to File opens the normal save dialog. The unrestricted IR chooser
+continues to accept compatible WAVs created elsewhere.
 
 The companion `audio-ir-deconvolution` capability uses the same module and DSP
 code as the standalone app. It accepts an original sweep WAV plus the hardware

@@ -20,17 +20,19 @@ import java.time.Instant;
 
 /** Durable local job state presented by the standalone application. */
 public record ReverbJob(String id, String status, int progress, Instant submittedAt, Instant completedAt,
-		Path artifactDirectory, String outputName, String error) {
+		Path artifactDirectory, String outputName, String parameterSummary, String error) {
 	public ReverbJob {
+		parameterSummary = parameterSummary == null ? "" : parameterSummary;
 		error = error == null ? "" : error;
 	}
 
 	ReverbJob withProgress(int value) {
-		return new ReverbJob(id, status, value, submittedAt, completedAt, artifactDirectory, outputName, error);
+		return new ReverbJob(id, status, value, submittedAt, completedAt, artifactDirectory, outputName,
+				parameterSummary, error);
 	}
 
 	ReverbJob terminal(String terminalStatus, String message) {
 		return new ReverbJob(id, terminalStatus, "SUCCEEDED".equals(terminalStatus) ? 100 : progress, submittedAt,
-				Instant.now(), artifactDirectory, outputName, message);
+				Instant.now(), artifactDirectory, outputName, parameterSummary, message);
 	}
 }

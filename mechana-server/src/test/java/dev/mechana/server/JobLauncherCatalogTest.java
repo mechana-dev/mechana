@@ -88,6 +88,10 @@ class JobLauncherCatalogTest {
 		assertEquals(List.of("true", "false"), fields.get("normalizeIr").choices());
 		assertEquals("0", fields.get("lowCutHertz").defaultValue());
 		assertEquals("0", fields.get("highCutHertz").defaultValue());
+		assertEquals("1", fields.get("earlyLevel").defaultValue());
+		assertEquals("1", fields.get("lateLevel").defaultValue());
+		assertEquals("0", fields.get("attackMilliseconds").defaultValue());
+		assertEquals("100", fields.get("decayLengthPercent").defaultValue());
 		assertEquals(List.of("server-local"), fields.get("storageProvider").choices());
 	}
 
