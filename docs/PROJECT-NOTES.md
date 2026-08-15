@@ -1735,3 +1735,21 @@ cloud providers remain future direction; see `brain/current-state.md` and
   IR rather than adding algorithmic-reverb approximations to the convolution POC.
 - Added numerical frequency-response, descriptor, validation, and reporting
   coverage for the new controls.
+
+## 2026-08-15 — Add captured-response shaping and a canonical IR library
+
+- Added neutral-by-default early-reflection level, late-tail level, attack, and
+  decay-length controls to the production plugin, server descriptor, reports,
+  standalone renderer, and live preview.
+- Implemented shaping as IR preparation before FFT partitioning. Neutral values
+  bypass sample transformation exactly; decay shortening fades and truncates the
+  captured tail rather than inventing new response material.
+- Reorganized the standalone Apply Reverb UI into scrolling Mix and timing,
+  Captured-response shaping, Wet EQ, and Output sections with sliders and numeric
+  overrides. Added Reset to Captured Response while preserving wet/dry choices.
+- Replaced direct bundled-file selection with a unified IR selector backed by
+  `~/Library/Application Support/Mechana Reverb/IR Profiles`, including factory
+  installation, validated Add/import, generated-profile registration, and basic
+  Manage actions.
+- Added DSP bypass/shaping, shortened-tail preview, descriptor, and durable IR
+  library tests.

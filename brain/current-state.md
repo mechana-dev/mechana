@@ -75,7 +75,8 @@ This file reports repository evidence, not desired future status.
   artifacts, performs single-worker uniform partitioned FFT convolution, and
   publishes a 24-bit WAV through server-local storage. The generic launcher
   descriptor exposes WAV inputs, output name, wet/dry, pre-delay, wet-path
-  low-cut/high-cut EQ, IR normalization, peak protection, and headroom. Both EQ
+  low-cut/high-cut EQ, neutral-bypass early/late levels, attack, decay shortening,
+  IR normalization, peak protection, and headroom. Both EQ
   filters default off, so existing jobs and IR profiles retain their sound. IR normalization safely attenuates
   peaks above -1 dBFS without boosting quieter measured responses. A reusable
   pure-Java helper and standalone-app workflow deconvolve recorded wet sweep
@@ -100,10 +101,14 @@ This file reports repository evidence, not desired future status.
   content-addressed, sample-rate-matched IR variants in the user's cache;
   selecting a mono or stereo IR during playback prepares the needed variant in
   the background and crossfades it into the active preview. Variants are generated
-  only on demand, and the status bar identifies that one-time work; IR generation
+  only on demand, and the status bar identifies that one-time work. IR generation
   and the user-facing profile library continue to expose one master file. A new
   packaged application build clears regular entries from its owned IR cache on
   first launch; subsequent launches of that build retain them.
+- The standalone app maintains a canonical IR profile library under the user's
+  Application Support directory. Factory profiles, validated user imports, and
+  generated profiles appear in one selector with Add and Manage actions. Its
+  grouped slider/numeric UI includes a Reset to Captured Response action.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,

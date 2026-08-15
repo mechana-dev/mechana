@@ -135,6 +135,20 @@ class ReverbPreviewPlayerTest {
 		assertEquals(-0.25, sample(pcm, 4_000 * 2), 2.0 / 32768);
 	}
 
+	@Test
+	void capturedResponseShapingShortensPreviewTail() throws Exception {
+		Path dry = wav("shaped-dry.wav", 1_000, new double[][]{{1}});
+		double[] response = new double[200];
+		java.util.Arrays.fill(response, 0.5);
+		Path ir = wav("shaped-ir.wav", 1_000, new double[][]{response});
+		var settings = new ReverbPreviewPlayer.Settings(dry, ir, 1, 0, 0, 0, 0, 1, 1, 0, 50, false, false, 1);
+
+		byte[] pcm = ReverbPreviewPlayer.renderForTest(settings);
+
+		assertEquals(100 * 2 * 2, pcm.length);
+		assertEquals(0, sample(pcm, 99 * 2), 1.0 / 32768);
+	}
+
 	private Path wav(String name, int sampleRate, double[][] channels) throws Exception {
 		Path path = temporary.resolve(name);
 		try (WavFile.Writer writer = WavFile.create24Bit(path, sampleRate, channels.length, channels[0].length)) {

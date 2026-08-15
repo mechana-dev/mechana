@@ -155,6 +155,10 @@ public final class LocalReverbEngine implements AutoCloseable {
 					Map.entry("preDelayMilliseconds", Double.toString(request.preDelayMilliseconds())),
 					Map.entry("lowCutHertz", Double.toString(request.lowCutHertz())),
 					Map.entry("highCutHertz", Double.toString(request.highCutHertz())),
+					Map.entry("earlyLevel", Double.toString(request.earlyLevel())),
+					Map.entry("lateLevel", Double.toString(request.lateLevel())),
+					Map.entry("attackMilliseconds", Double.toString(request.attackMilliseconds())),
+					Map.entry("decayLengthPercent", Double.toString(request.decayLengthPercent())),
 					Map.entry("normalizeIr", Boolean.toString(request.normalizeIr())),
 					Map.entry("peakProtection", Boolean.toString(request.peakProtection())),
 					Map.entry("headroomDecibels", Double.toString(request.headroomDecibels())));
@@ -207,6 +211,10 @@ public final class LocalReverbEngine implements AutoCloseable {
 		values.put("preDelayMilliseconds", request.preDelayMilliseconds());
 		values.put("lowCutHertz", request.lowCutHertz());
 		values.put("highCutHertz", request.highCutHertz());
+		values.put("earlyLevel", request.earlyLevel());
+		values.put("lateLevel", request.lateLevel());
+		values.put("attackMilliseconds", request.attackMilliseconds());
+		values.put("decayLengthPercent", request.decayLengthPercent());
 		values.put("normalizeIr", request.normalizeIr());
 		values.put("peakProtection", request.peakProtection());
 		values.put("headroomDecibels", request.headroomDecibels());
@@ -249,6 +257,10 @@ public final class LocalReverbEngine implements AutoCloseable {
 				Pre-delay: %s ms
 				Wet low-cut: %s
 				Wet high-cut: %s
+				Early reflections level: %s
+				Late tail level: %s
+				Attack: %s ms
+				Decay length: %s%%
 				Normalize IR: %s
 				Peak protection: %s
 				Safe headroom: %s dB
@@ -265,9 +277,10 @@ public final class LocalReverbEngine implements AutoCloseable {
 				request.dryPath().getFileName(), request.dryPath(), Files.size(request.dryPath()),
 				request.irPath().getFileName(), request.irPath(), Files.size(request.irPath()), request.wet(),
 				request.dry(), request.preDelayMilliseconds(), frequency(request.lowCutHertz()),
-				frequency(request.highCutHertz()), yesNo(request.normalizeIr()), yesNo(request.peakProtection()),
-				request.headroomDecibels(), gain == null ? "Not available" : gain, request.outputName(),
-				Files.size(output), sha256(output));
+				frequency(request.highCutHertz()), request.earlyLevel(), request.lateLevel(),
+				request.attackMilliseconds(), request.decayLengthPercent(), yesNo(request.normalizeIr()),
+				yesNo(request.peakProtection()), request.headroomDecibels(), gain == null ? "Not available" : gain,
+				request.outputName(), Files.size(output), sha256(output));
 	}
 
 	private static String frequency(double hertz) {

@@ -50,11 +50,17 @@ tail and optional pre-delay are retained. The direct dry component receives a
 the wet-only tail; the samples sent through convolution are unchanged.
 
 Controls are wet level, dry level, pre-delay, wet-path low-cut and high-cut EQ,
+captured early-reflection and late-tail levels, captured-response attack, decay shortening,
 safe IR peak normalization, output peak protection, and safe headroom. The EQ uses
 pure-Java second-order Butterworth filters after convolution and pre-delay. A zero
 cutoff disables that filter; both defaults are zero, preserving prior jobs and IR
 profiles. When both cuts are enabled, the low-cut frequency must be below the
 high-cut frequency and both must be below the audio sample rate's Nyquist limit.
+Early and late levels default to 1, attack defaults to 0 ms, and decay length
+defaults to 100%, producing an exact shaping bypass. Active shaping operates only
+on samples in the captured IR before FFT partition preparation. Decay shortening
+fades and truncates the prepared IR, reducing partition count where possible;
+the implementation does not synthesize a longer tail or new reflections.
 IR normalization is attenuation-only: peaks
 above -1 dBFS are reduced to -1 dBFS, while quieter measured responses retain
 their captured gain. This prevents hardware IRs from being unintentionally
@@ -122,6 +128,17 @@ Wet low-cut and high-cut fields are also available in the standalone app and tak
 effect on the live wet signal without restarting playback. The captured IR still
 defines decay, room size, diffusion, and modulation; those algorithmic-reverb
 controls are intentionally not synthesized in this convolution POC.
+The Apply Reverb tab groups functional slider/numeric controls into mix/timing,
+captured-response shaping, wet EQ, and output sections. A Reset to Captured
+Response action restores pre-delay and EQ to off plus neutral early, late, attack,
+and decay values without changing wet/dry playback levels.
+
+The standalone app owns one durable IR library at
+`~/Library/Application Support/Mechana Reverb/IR Profiles`. Missing factory IRs
+are copied from the bundle into this library, imported WAVs are validated and
+copied there under unique names, and newly generated profiles are added and
+selected automatically. The UI selects profiles by readable name and provides
+Add and Manage actions; factory profiles cannot be removed through the app.
 The application bundle carries the five synthetic development IRs previously used
 for listening tests and exposes them through a dedicated chooser. It also bundles
 the standardized 48 kHz/24-bit stereo Mechana sweep and provides a **Create IR

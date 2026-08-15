@@ -32,6 +32,7 @@ public final class AudioConvolutionProcessor {
 	public static final int DEFAULT_BLOCK_SIZE = 2048;
 
 	public record Options(double wet, double dry, double preDelayMilliseconds, double lowCutHertz, double highCutHertz,
+			double earlyLevel, double lateLevel, double attackMilliseconds, double decayLengthPercent,
 			boolean normalizeIr, boolean peakProtection, double headroomDecibels, int blockSize) {
 		public Options {
 			if (!Double.isFinite(wet) || !Double.isFinite(dry) || wet < 0 || dry < 0
@@ -40,6 +41,7 @@ public final class AudioConvolutionProcessor {
 					|| highCutHertz < 0 || !Double.isFinite(headroomDecibels) || headroomDecibels < 0 || blockSize < 1
 					|| Integer.bitCount(blockSize) != 1)
 				throw new IllegalArgumentException("Invalid convolution options");
+			new ImpulseResponseShaper.Options(earlyLevel, lateLevel, attackMilliseconds, decayLengthPercent);
 		}
 	}
 
@@ -49,7 +51,9 @@ public final class AudioConvolutionProcessor {
 	public Result process(Path dryPath, Path irPath, Path outputPath, Path workDirectory, Options options,
 			IntConsumer progress) throws IOException {
 		Objects.requireNonNull(progress, "progress");
-		ImpulseResponse ir = ImpulseResponse.read(irPath, options.normalizeIr());
+		ImpulseResponse ir = ImpulseResponseShaper.shape(ImpulseResponse.read(irPath, options.normalizeIr()),
+				new ImpulseResponseShaper.Options(options.earlyLevel(), options.lateLevel(),
+						options.attackMilliseconds(), options.decayLengthPercent()));
 		Files.createDirectories(workDirectory);
 		Path spool = Files.createTempFile(workDirectory, "audio-reverb-", ".f64");
 		try (WavFile.Reader dry = WavFile.open(dryPath)) {

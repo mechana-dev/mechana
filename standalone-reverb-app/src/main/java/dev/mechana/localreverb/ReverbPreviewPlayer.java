@@ -17,6 +17,7 @@ package dev.mechana.localreverb;
 
 import dev.mechana.plugins.audio.DryAudioImporter;
 import dev.mechana.plugins.audio.ImpulseResponse;
+import dev.mechana.plugins.audio.ImpulseResponseShaper;
 import dev.mechana.plugins.audio.PartitionedConvolver;
 import dev.mechana.plugins.audio.WavFile;
 import dev.mechana.plugins.audio.WetEqualizer;
@@ -54,7 +55,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private volatile AudioSink activeSink;
 	private volatile ConvolutionBank pendingBank;
 	private volatile int previewSampleRate;
-	private volatile LiveParameters liveParameters = new LiveParameters(0, 0, 0, 0, 0, false, true, 1);
+	private volatile LiveParameters liveParameters = new LiveParameters(0, 0, 0, 0, 0, 1, 1, 0, 100, false, true, 1);
 
 	ReverbPreviewPlayer() {
 		this(new ImpulseResponseCache());
@@ -69,7 +70,8 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	}
 
 	record Settings(Path dryPath, Path irPath, double wet, double dry, double preDelayMilliseconds, double lowCutHertz,
-			double highCutHertz, boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
+			double highCutHertz, double earlyLevel, double lateLevel, double attackMilliseconds,
+			double decayLengthPercent, boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
 		Settings {
 			Objects.requireNonNull(dryPath, "dryPath");
 			Objects.requireNonNull(irPath, "irPath");
@@ -77,13 +79,21 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					|| !Double.isFinite(preDelayMilliseconds) || preDelayMilliseconds < 0
 					|| !validFrequency(lowCutHertz) || !validFrequency(highCutHertz)
 					|| lowCutHertz > 0 && highCutHertz > 0 && lowCutHertz >= highCutHertz
+					|| !validShaping(earlyLevel, lateLevel, attackMilliseconds, decayLengthPercent)
 					|| !Double.isFinite(headroomDecibels) || headroomDecibels < 0)
 				throw new IllegalArgumentException("Invalid preview settings");
+		}
+
+		Settings(Path dryPath, Path irPath, double wet, double dry, double preDelayMilliseconds, double lowCutHertz,
+				double highCutHertz, boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
+			this(dryPath, irPath, wet, dry, preDelayMilliseconds, lowCutHertz, highCutHertz, 1, 1, 0, 100, normalizeIr,
+					peakProtection, headroomDecibels);
 		}
 	}
 
 	private record LiveParameters(double wet, double dry, double preDelayMilliseconds, double lowCutHertz,
-			double highCutHertz, boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
+			double highCutHertz, double earlyLevel, double lateLevel, double attackMilliseconds,
+			double decayLengthPercent, boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
 	}
 
 	interface AudioSink extends AutoCloseable {
@@ -123,7 +133,8 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		stopped.set(false);
 		paused = false;
 		update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.lowCutHertz(),
-				settings.highCutHertz(), settings.normalizeIr(), settings.peakProtection(),
+				settings.highCutHertz(), settings.earlyLevel(), settings.lateLevel(), settings.attackMilliseconds(),
+				settings.decayLengthPercent(), settings.normalizeIr(), settings.peakProtection(),
 				settings.headroomDecibels());
 		Thread thread = Thread.ofVirtual().name("mechana-reverb-preview").start(() -> {
 			state.accept(State.PREPARING);
@@ -144,6 +155,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	}
 
 	void update(double wet, double dry, double preDelayMilliseconds, double lowCutHertz, double highCutHertz,
+			double earlyLevel, double lateLevel, double attackMilliseconds, double decayLengthPercent,
 			boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
 		if (!Double.isFinite(wet) || wet < 0 || wet > 2 || !Double.isFinite(dry) || dry < 0 || dry > 2
 				|| !Double.isFinite(preDelayMilliseconds) || preDelayMilliseconds < 0
@@ -151,8 +163,16 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 				|| !validFrequency(lowCutHertz) || !validFrequency(highCutHertz)
 				|| lowCutHertz > 0 && highCutHertz > 0 && lowCutHertz >= highCutHertz || headroomDecibels < 0)
 			throw new IllegalArgumentException("Invalid live preview settings");
-		liveParameters = new LiveParameters(wet, dry, preDelayMilliseconds, lowCutHertz, highCutHertz, normalizeIr,
-				peakProtection, headroomDecibels);
+		if (!validShaping(earlyLevel, lateLevel, attackMilliseconds, decayLengthPercent))
+			throw new IllegalArgumentException("Invalid live preview settings");
+		liveParameters = new LiveParameters(wet, dry, preDelayMilliseconds, lowCutHertz, highCutHertz, earlyLevel,
+				lateLevel, attackMilliseconds, decayLengthPercent, normalizeIr, peakProtection, headroomDecibels);
+	}
+
+	void update(double wet, double dry, double preDelayMilliseconds, double lowCutHertz, double highCutHertz,
+			boolean normalizeIr, boolean peakProtection, double headroomDecibels) {
+		update(wet, dry, preDelayMilliseconds, lowCutHertz, highCutHertz, 1, 1, 0, 100, normalizeIr, peakProtection,
+				headroomDecibels);
 	}
 
 	void togglePause(Consumer<State> state) {
@@ -235,8 +255,11 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 			Path prepared = DryAudioImporter.prepareNative(settings.dryPath(), converted);
 			try (WavFile.Reader source = WavFile.open(prepared)) {
 				WavFile.Format format = source.format();
-				ImpulseResponse ir = ImpulseResponse.read(impulseResponseCache.prepare(settings.irPath(),
-						format.sampleRate(), () -> state.accept(State.REGENERATING_IR)), false);
+				ImpulseResponse ir = shape(
+						ImpulseResponse.read(impulseResponseCache.prepare(settings.irPath(), format.sampleRate(),
+								() -> state.accept(State.REGENERATING_IR)), false),
+						settings.earlyLevel(), settings.lateLevel(), settings.attackMilliseconds(),
+						settings.decayLengthPercent());
 				previewSampleRate = format.sampleRate();
 				if (format.channels() > 2 || ir.channelCount() > 2)
 					throw new IOException("Preview supports mono or stereo audio");
@@ -360,7 +383,11 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	}
 
 	private ConvolutionBank prepareBank(Path path, int sampleRate, Runnable resampling) throws IOException {
-		ImpulseResponse ir = ImpulseResponse.read(impulseResponseCache.prepare(path, sampleRate, resampling), false);
+		LiveParameters parameters = liveParameters;
+		ImpulseResponse ir = shape(
+				ImpulseResponse.read(impulseResponseCache.prepare(path, sampleRate, resampling), false),
+				parameters.earlyLevel(), parameters.lateLevel(), parameters.attackMilliseconds(),
+				parameters.decayLengthPercent());
 		if (ir.channelCount() > 2)
 			throw new IOException("Preview supports mono or stereo impulse responses");
 		return new ConvolutionBank(ir, 2);
@@ -402,6 +429,19 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 
 	private static boolean validFrequency(double value) {
 		return Double.isFinite(value) && value >= 0 && value <= 20_000;
+	}
+
+	private static boolean validShaping(double early, double late, double attack, double decay) {
+		try {
+			new ImpulseResponseShaper.Options(early, late, attack, decay);
+			return true;
+		} catch (IllegalArgumentException invalid) {
+			return false;
+		}
+	}
+
+	private static ImpulseResponse shape(ImpulseResponse ir, double early, double late, double attack, double decay) {
+		return ImpulseResponseShaper.shape(ir, new ImpulseResponseShaper.Options(early, late, attack, decay));
 	}
 
 	private void awaitResume() throws IOException {
@@ -449,7 +489,8 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		ReverbPreviewPlayer player = new ReverbPreviewPlayer(new ImpulseResponseCache(cache));
 		player.stopped.set(false);
 		player.update(settings.wet(), settings.dry(), settings.preDelayMilliseconds(), settings.lowCutHertz(),
-				settings.highCutHertz(), settings.normalizeIr(), settings.peakProtection(),
+				settings.highCutHertz(), settings.earlyLevel(), settings.lateLevel(), settings.attackMilliseconds(),
+				settings.decayLengthPercent(), settings.normalizeIr(), settings.peakProtection(),
 				settings.headroomDecibels());
 		player.stream(settings,
 				(sampleRate, channels) -> new MemoryAudioSink(output, () -> afterFirstBlock.accept(player)),

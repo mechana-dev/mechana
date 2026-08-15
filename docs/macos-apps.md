@@ -13,6 +13,12 @@ so Finder and Dock launches do not depend on a shell, `JAVA_HOME`, Maven, or a
 Terminal window. Distribution to other users will require an Apple Developer ID,
 code signing, hardened-runtime validation, and notarization.
 
+Mechana Reverb keeps its working impulse-response library in
+`~/Library/Application Support/Mechana Reverb/IR Profiles`. On launch it installs
+missing factory profiles from the bundle without overwriting existing files.
+Profiles imported with **Add…** and profiles created from sweep recordings are
+copied into the same durable library and remain available across app upgrades.
+
 The build also writes `Mechana-Reverb-macOS-arm64.zip`, preserving the application
 bundle for transfer to another Apple Silicon Mac. Because development builds are
 not notarized, a recipient may need to Control-click the app and choose **Open**.

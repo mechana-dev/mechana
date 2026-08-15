@@ -35,6 +35,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -62,6 +63,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private final transient Preferences settings = Preferences.userNodeForPackage(StandaloneReverbFrame.class);
 	private final transient LocalReverbEngine engine = new LocalReverbEngine();
 	private final transient ImpulseResponseCache impulseResponseCache = new ImpulseResponseCache();
+	private final transient IrProfileLibrary profileLibrary = new IrProfileLibrary();
 	private final transient ReverbPreviewPlayer previewPlayer = new ReverbPreviewPlayer(impulseResponseCache);
 	private final JTextField dryPath = field("dryPath", "");
 	private final JTextField irPath = field("irPath", "");
@@ -73,9 +75,20 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField preDelay = field("preDelayMilliseconds", "20");
 	private final JTextField lowCut = field("lowCutHertz", "0");
 	private final JTextField highCut = field("highCutHertz", "0");
+	private final JTextField earlyLevel = field("earlyLevel", "1.0");
+	private final JTextField lateLevel = field("lateLevel", "1.0");
+	private final JTextField attack = field("attackMilliseconds", "0");
+	private final JTextField decayLength = field("decayLengthPercent", "100");
 	private final JSlider wetSlider = new JSlider(0, 200, sliderValue(wet, 100, 35));
 	private final JSlider drySlider = new JSlider(0, 200, sliderValue(dry, 100, 100));
 	private final JSlider preDelaySlider = new JSlider(0, 200, Math.min(200, sliderValue(preDelay, 1, 20)));
+	private final JSlider lowCutSlider = new JSlider(0, 1000, frequencySliderValue(lowCut));
+	private final JSlider highCutSlider = new JSlider(0, 1000, frequencySliderValue(highCut));
+	private final JSlider earlySlider = new JSlider(0, 200, sliderValue(earlyLevel, 100, 100));
+	private final JSlider lateSlider = new JSlider(0, 200, sliderValue(lateLevel, 100, 100));
+	private final JSlider attackSlider = new JSlider(0, 2000, sliderValue(attack, 1, 0));
+	private final JSlider decaySlider = new JSlider(1, 100, sliderValue(decayLength, 1, 100));
+	private final JComboBox<IrProfileLibrary.Profile> profileSelector = new JComboBox<>();
 	private final Timer irPreviewChangeTimer = new Timer(350, event -> updatePreviewImpulseResponse());
 	private final JCheckBox normalizeIr = check("normalizeIr", true);
 	private final JCheckBox peakProtection = check("peakProtection", true);
@@ -89,6 +102,9 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JButton pausePreview = new JButton("Pause");
 	private final JButton stopPreview = new JButton("Stop Preview");
 	private final JButton generateIr = new JButton("Generate IR Profile");
+	private final JButton addProfile = new JButton("Add…");
+	private final JButton manageProfiles = new JButton("Manage…");
+	private final JButton resetCaptured = new JButton("Reset to Captured Response");
 	private final JButton cancel = new JButton("Cancel");
 	private final JButton reveal = new JButton("Show Artifacts");
 	private final JButton playOutput = new JButton("Play Output");
@@ -123,12 +139,16 @@ final class StandaloneReverbFrame extends JFrame {
 		configureLiveControls();
 		configureActions();
 		configureSuggestedName();
+		reloadProfiles(path(irPath));
 		reloadHistory();
 	}
 
 	private JTabbedPane buildTools() {
 		JTabbedPane tabs = new JTabbedPane();
-		tabs.addTab("Apply Reverb", buildForm());
+		JScrollPane form = new JScrollPane(buildForm());
+		form.setBorder(BorderFactory.createEmptyBorder());
+		form.getVerticalScrollBar().setUnitIncrement(18);
+		tabs.addTab("Apply Reverb", form);
 		tabs.addTab("Create IR from Sweep", buildIrCreator());
 		return tabs;
 	}
@@ -149,22 +169,29 @@ final class StandaloneReverbFrame extends JFrame {
 		c.insets = new Insets(5, 8, 5, 8);
 		c.gridy = 0;
 		addPath(panel, c, "Dry audio", dryPath, false);
-		addPath(panel, c, "Impulse response WAV", irPath, false);
-		JButton profiles = new JButton("Choose a bundled IR profile…");
-		profiles.addActionListener(event -> chooseBundledProfile());
-		c.gridx = 1;
-		c.weightx = 1;
-		c.fill = GridBagConstraints.NONE;
-		c.anchor = GridBagConstraints.WEST;
-		panel.add(profiles, c);
-		c.gridy++;
+		JPanel profileRow = new JPanel(new BorderLayout(8, 0));
+		profileRow.add(profileSelector, BorderLayout.CENTER);
+		JPanel profileActions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 4, 0));
+		profileActions.add(addProfile);
+		profileActions.add(manageProfiles);
+		profileRow.add(profileActions, BorderLayout.EAST);
+		addRow(panel, c, "Impulse response", profileRow);
 		addPath(panel, c, "Artifacts folder", artifactRoot, true);
 		addRow(panel, c, "Output WAV name", outputName);
+		addSection(panel, c, "Mix and timing");
 		addRow(panel, c, "Wet level (0–2)", sliderWithOverride(wetSlider, wet));
 		addRow(panel, c, "Dry level (0–2)", sliderWithOverride(drySlider, dry));
 		addRow(panel, c, "Pre-delay (0–200 ms slider)", sliderWithOverride(preDelaySlider, preDelay));
-		addRow(panel, c, "Wet low-cut (Hz, 0 = off)", lowCut);
-		addRow(panel, c, "Wet high-cut (Hz, 0 = off)", highCut);
+		addSection(panel, c, "Captured-response shaping");
+		addRow(panel, c, "Early reflections level (0–2)", sliderWithOverride(earlySlider, earlyLevel));
+		addRow(panel, c, "Late tail level (0–2)", sliderWithOverride(lateSlider, lateLevel));
+		addRow(panel, c, "Attack (ms)", sliderWithOverride(attackSlider, attack));
+		addRow(panel, c, "Decay length (%)", sliderWithOverride(decaySlider, decayLength));
+		addRow(panel, c, "", resetCaptured);
+		addSection(panel, c, "Wet EQ");
+		addRow(panel, c, "Low-cut (Hz, 0 = off)", sliderWithOverride(lowCutSlider, lowCut));
+		addRow(panel, c, "High-cut (Hz, 0 = off)", sliderWithOverride(highCutSlider, highCut));
+		addSection(panel, c, "Output");
 		addRow(panel, c, "Normalize IR", normalizeIr);
 		addRow(panel, c, "Peak protection", peakProtection);
 		addRow(panel, c, "Safe headroom (dB)", headroom);
@@ -250,11 +277,21 @@ final class StandaloneReverbFrame extends JFrame {
 				.togglePause(state -> SwingUtilities.invokeLater(() -> updatePreviewState(state))));
 		stopPreview.addActionListener(event -> stopPreview());
 		generateIr.addActionListener(event -> generateImpulseResponse());
+		addProfile.addActionListener(event -> addProfile());
+		manageProfiles.addActionListener(event -> manageProfiles());
+		profileSelector.addActionListener(event -> selectProfile());
+		resetCaptured.addActionListener(event -> resetCapturedResponse());
 		cancel.addActionListener(event -> engine.cancel());
 		playOutput.addActionListener(event -> openLatestOutput(false));
 		showOutput.addActionListener(event -> openLatestOutput(true));
-		for (JTextField field : List.of(wet, dry, preDelay, lowCut, highCut, headroom))
+		for (JTextField field : List.of(wet, dry, preDelay, lowCut, highCut, earlyLevel, lateLevel, attack, decayLength,
+				headroom))
 			field.getDocument().addDocumentListener(listener(this::updatePreviewParameters));
+		for (JTextField field : List.of(earlyLevel, lateLevel, attack, decayLength))
+			field.getDocument().addDocumentListener(listener(() -> {
+				if (previewPlayer.isActive())
+					irPreviewChangeTimer.restart();
+			}));
 		normalizeIr.addActionListener(event -> updatePreviewParameters());
 		peakProtection.addActionListener(event -> updatePreviewParameters());
 		irPath.getDocument().addDocumentListener(listener(() -> {
@@ -277,6 +314,43 @@ final class StandaloneReverbFrame extends JFrame {
 		configureLiveControl(wetSlider, wet, 100);
 		configureLiveControl(drySlider, dry, 100);
 		configureLiveControl(preDelaySlider, preDelay, 1);
+		configureFrequencyControl(lowCutSlider, lowCut);
+		configureFrequencyControl(highCutSlider, highCut);
+		configureLiveControl(earlySlider, earlyLevel, 100);
+		configureLiveControl(lateSlider, lateLevel, 100);
+		configureLiveControl(attackSlider, attack, 1);
+		configureLiveControl(decaySlider, decayLength, 1);
+	}
+
+	private void configureFrequencyControl(JSlider slider, JTextField override) {
+		override.setColumns(7);
+		slider.addChangeListener(event -> {
+			if (synchronizingLiveControls)
+				return;
+			synchronizingLiveControls = true;
+			try {
+				override.setText(Integer.toString(sliderFrequency(slider.getValue())));
+			} finally {
+				synchronizingLiveControls = false;
+			}
+		});
+		override.getDocument().addDocumentListener(listener(() -> {
+			if (synchronizingLiveControls)
+				return;
+			try {
+				int value = frequencySliderValue(Double.parseDouble(override.getText().strip()));
+				if (value != slider.getValue()) {
+					synchronizingLiveControls = true;
+					try {
+						slider.setValue(value);
+					} finally {
+						synchronizingLiveControls = false;
+					}
+				}
+			} catch (NumberFormatException ignored) {
+				// A partially edited value keeps the last slider position.
+			}
+		}));
 	}
 
 	private void configureLiveControl(JSlider slider, JTextField override, int scale) {
@@ -327,6 +401,25 @@ final class StandaloneReverbFrame extends JFrame {
 		}
 	}
 
+	private static int frequencySliderValue(JTextField field) {
+		try {
+			return frequencySliderValue(Double.parseDouble(field.getText().strip()));
+		} catch (NumberFormatException invalid) {
+			return 0;
+		}
+	}
+
+	private static int frequencySliderValue(double hertz) {
+		if (hertz <= 0)
+			return 0;
+		double position = 1 + 999 * Math.log(hertz / 20) / Math.log(20_000.0 / 20);
+		return (int) Math.max(1, Math.min(1000, Math.round(position)));
+	}
+
+	private static int sliderFrequency(int value) {
+		return value == 0 ? 0 : (int) Math.round(20 * Math.pow(20_000.0 / 20, (value - 1) / 999.0));
+	}
+
 	static String sliderText(int value, int scale) {
 		return scale == 1 ? Integer.toString(value) : BigDecimal.valueOf(value, 2).stripTrailingZeros().toPlainString();
 	}
@@ -354,8 +447,9 @@ final class StandaloneReverbFrame extends JFrame {
 								+ " Hz\nChannels: " + result.channels() + "\nFrames: " + result.frames()
 								+ "\nCapture latency: " + result.latencyMilliseconds() + " ms\nRecovered peak: "
 								+ result.peak() + "\nAlgorithm: regularized FFT deconvolution\n");
+				IrProfileLibrary.Profile generated = profileLibrary.addGenerated(output);
 				SwingUtilities.invokeLater(() -> {
-					irPath.setText(output.toString());
+					reloadProfiles(generated.path());
 					status.setText("IR ready — " + output.getFileName() + " — "
 							+ String.format("%.2f seconds, %.1f ms capture latency",
 									result.frames() / (double) result.sampleRate(), result.latencyMilliseconds()));
@@ -369,6 +463,82 @@ final class StandaloneReverbFrame extends JFrame {
 				});
 			}
 		});
+	}
+
+	private void addProfile() {
+		JFileChooser chooser = new JFileChooser();
+		chooser.setDialogTitle("Add an impulse response to the library");
+		chooser.setFileFilter(new FileNameExtensionFilter("WAV impulse responses (.wav)", "wav"));
+		if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+			return;
+		try {
+			IrProfileLibrary.Profile added = profileLibrary.add(chooser.getSelectedFile().toPath());
+			reloadProfiles(added.path());
+			status.setText("Added IR profile — " + added.name());
+		} catch (IOException failure) {
+			showError(failure.getMessage());
+		}
+	}
+
+	private void manageProfiles() {
+		IrProfileLibrary.Profile selected = (IrProfileLibrary.Profile) profileSelector.getSelectedItem();
+		if (selected == null)
+			return;
+		Object[] actions = selected.factory()
+				? new Object[]{"Show in Finder", "Open Library", "Cancel"}
+				: new Object[]{"Show in Finder", "Remove", "Open Library", "Cancel"};
+		int choice = JOptionPane.showOptionDialog(this,
+				selected.name() + "\n" + selected.path()
+						+ (selected.factory() ? "\nFactory profile" : "\nAdded profile"),
+				"Manage IR Profile", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, actions, actions[0]);
+		try {
+			if (choice == 0)
+				Desktop.getDesktop().open(
+						java.util.Objects.requireNonNull(selected.path().getParent(), "IR profile folder").toFile());
+			else if (!selected.factory() && choice == 1) {
+				profileLibrary.remove(selected);
+				reloadProfiles(null);
+			} else if ((selected.factory() && choice == 1) || (!selected.factory() && choice == 2))
+				Desktop.getDesktop().open(profileLibrary.directory().toFile());
+		} catch (IOException failure) {
+			showError(failure.getMessage());
+		}
+	}
+
+	private void reloadProfiles(Path selection) {
+		try {
+			profileSelector.removeAllItems();
+			IrProfileLibrary.Profile selected = null;
+			for (IrProfileLibrary.Profile profile : profileLibrary.profiles()) {
+				profileSelector.addItem(profile);
+				if (selection != null && (profile.path().equals(selection.toAbsolutePath().normalize())
+						|| profile.path().getFileName().equals(selection.getFileName())))
+					selected = profile;
+			}
+			if (selected != null)
+				profileSelector.setSelectedItem(selected);
+			else if (profileSelector.getItemCount() > 0)
+				profileSelector.setSelectedIndex(0);
+			selectProfile();
+		} catch (IOException failure) {
+			showError("Could not load the IR profile library: " + failure.getMessage());
+		}
+	}
+
+	private void selectProfile() {
+		IrProfileLibrary.Profile selected = (IrProfileLibrary.Profile) profileSelector.getSelectedItem();
+		if (selected != null && !selected.path().toString().equals(irPath.getText()))
+			irPath.setText(selected.path().toString());
+	}
+
+	private void resetCapturedResponse() {
+		preDelay.setText("0");
+		earlyLevel.setText("1");
+		lateLevel.setText("1");
+		attack.setText("0");
+		decayLength.setText("100");
+		lowCut.setText("0");
+		highCut.setText("0");
 	}
 
 	private void generationFinished() {
@@ -404,7 +574,9 @@ final class StandaloneReverbFrame extends JFrame {
 			ReverbRequest request = new ReverbRequest(path(dryPath), path(irPath), path(artifactRoot),
 					outputName.getText().strip(), decimal(wet, "Wet level"), decimal(dry, "Dry level"),
 					decimal(preDelay, "Pre-delay"), decimal(lowCut, "Wet low-cut"), decimal(highCut, "Wet high-cut"),
-					normalizeIr.isSelected(), peakProtection.isSelected(), decimal(headroom, "Safe headroom"));
+					decimal(earlyLevel, "Early reflections level"), decimal(lateLevel, "Late tail level"),
+					decimal(attack, "Attack"), decimal(decayLength, "Decay length"), normalizeIr.isSelected(),
+					peakProtection.isSelected(), decimal(headroom, "Safe headroom"));
 			engine.submit(request, job -> SwingUtilities.invokeLater(() -> update(job)));
 			run.setEnabled(false);
 			cancel.setEnabled(true);
@@ -423,7 +595,9 @@ final class StandaloneReverbFrame extends JFrame {
 				throw new IllegalArgumentException("Choose a readable impulse-response WAV.");
 			var settings = new ReverbPreviewPlayer.Settings(selectedDry, selectedIr, decimal(wet, "Wet level"),
 					decimal(dry, "Dry level"), decimal(preDelay, "Pre-delay"), decimal(lowCut, "Wet low-cut"),
-					decimal(highCut, "Wet high-cut"), normalizeIr.isSelected(), peakProtection.isSelected(),
+					decimal(highCut, "Wet high-cut"), decimal(earlyLevel, "Early reflections level"),
+					decimal(lateLevel, "Late tail level"), decimal(attack, "Attack"),
+					decimal(decayLength, "Decay length"), normalizeIr.isSelected(), peakProtection.isSelected(),
 					decimal(headroom, "Safe headroom"));
 			previewPlayer.play(settings, state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)),
 					message -> SwingUtilities.invokeLater(() -> {
@@ -441,7 +615,9 @@ final class StandaloneReverbFrame extends JFrame {
 			return;
 		try {
 			previewPlayer.update(decimal(wet, "Wet level"), decimal(dry, "Dry level"), decimal(preDelay, "Pre-delay"),
-					decimal(lowCut, "Wet low-cut"), decimal(highCut, "Wet high-cut"), normalizeIr.isSelected(),
+					decimal(lowCut, "Wet low-cut"), decimal(highCut, "Wet high-cut"),
+					decimal(earlyLevel, "Early reflections level"), decimal(lateLevel, "Late tail level"),
+					decimal(attack, "Attack"), decimal(decayLength, "Decay length"), normalizeIr.isSelected(),
 					peakProtection.isSelected(), decimal(headroom, "Safe headroom"));
 		} catch (IllegalArgumentException ignored) {
 			// A partially edited numeric field takes effect as soon as it becomes valid.
@@ -585,6 +761,18 @@ final class StandaloneReverbFrame extends JFrame {
 		c.gridy++;
 	}
 
+	private static void addSection(JPanel panel, GridBagConstraints c, String title) {
+		c.gridx = 0;
+		c.gridwidth = 3;
+		c.weightx = 1;
+		c.fill = GridBagConstraints.HORIZONTAL;
+		JLabel heading = new JLabel("<html><b>" + title + "</b></html>");
+		heading.setBorder(BorderFactory.createEmptyBorder(8, 0, 2, 0));
+		panel.add(heading, c);
+		c.gridy++;
+		c.gridwidth = 1;
+	}
+
 	private void choose(JTextField target, boolean directory) {
 		JFileChooser chooser = new JFileChooser();
 		if (directory)
@@ -610,19 +798,6 @@ final class StandaloneReverbFrame extends JFrame {
 			String selected = chooser.getSelectedFile().getAbsolutePath();
 			target.setText(selected.toLowerCase(java.util.Locale.ROOT).endsWith(".wav") ? selected : selected + ".wav");
 		}
-	}
-
-	private void chooseBundledProfile() {
-		Path directory = BundledProfiles.directory();
-		if (directory == null) {
-			showError("Bundled IR profiles could not be found.");
-			return;
-		}
-		JFileChooser chooser = new JFileChooser(directory.toFile());
-		chooser.setDialogTitle("Choose a bundled impulse response");
-		chooser.setFileFilter(new FileNameExtensionFilter("WAV impulse responses (.wav)", "wav"));
-		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
-			irPath.setText(chooser.getSelectedFile().getAbsolutePath());
 	}
 
 	private JTextField field(String key, String fallback) {

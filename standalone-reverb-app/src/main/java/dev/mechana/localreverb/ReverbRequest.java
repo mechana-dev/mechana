@@ -23,8 +23,9 @@ import java.nio.file.Path;
  * plugin.
  */
 public record ReverbRequest(Path dryPath, Path irPath, Path artifactRoot, String outputName, double wet, double dry,
-		double preDelayMilliseconds, double lowCutHertz, double highCutHertz, boolean normalizeIr,
-		boolean peakProtection, double headroomDecibels) {
+		double preDelayMilliseconds, double lowCutHertz, double highCutHertz, double earlyLevel, double lateLevel,
+		double attackMilliseconds, double decayLengthPercent, boolean normalizeIr, boolean peakProtection,
+		double headroomDecibels) {
 	public ReverbRequest {
 		dryPath = requiredDryFile(dryPath);
 		irPath = requiredWav(irPath, "Impulse-response WAV");
@@ -36,9 +37,17 @@ public record ReverbRequest(Path dryPath, Path irPath, Path artifactRoot, String
 			throw new IllegalArgumentException("Output name must be a WAV file name, not a path");
 		if (!finiteRange(wet, 0, 2) || !finiteRange(dry, 0, 2) || !finiteRange(preDelayMilliseconds, 0, 10_000)
 				|| !finiteRange(lowCutHertz, 0, 20_000) || !finiteRange(highCutHertz, 0, 20_000)
-				|| lowCutHertz > 0 && highCutHertz > 0 && lowCutHertz >= highCutHertz
-				|| !finiteRange(headroomDecibels, 0, 24))
+				|| lowCutHertz > 0 && highCutHertz > 0 && lowCutHertz >= highCutHertz || !finiteRange(earlyLevel, 0, 2)
+				|| !finiteRange(lateLevel, 0, 2) || !finiteRange(attackMilliseconds, 0, 5_000)
+				|| !finiteRange(decayLengthPercent, 1, 100) || !finiteRange(headroomDecibels, 0, 24))
 			throw new IllegalArgumentException("One or more reverb controls are outside the allowed range");
+	}
+
+	public ReverbRequest(Path dryPath, Path irPath, Path artifactRoot, String outputName, double wet, double dry,
+			double preDelayMilliseconds, double lowCutHertz, double highCutHertz, boolean normalizeIr,
+			boolean peakProtection, double headroomDecibels) {
+		this(dryPath, irPath, artifactRoot, outputName, wet, dry, preDelayMilliseconds, lowCutHertz, highCutHertz, 1, 1,
+				0, 100, normalizeIr, peakProtection, headroomDecibels);
 	}
 
 	private static Path requiredDryFile(Path path) {

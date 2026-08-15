@@ -1063,6 +1063,10 @@ public final class MechanaServer implements AutoCloseable {
 				Map.entry("preDelayMilliseconds", Double.toString(request.preDelayMilliseconds())),
 				Map.entry("lowCutHertz", Double.toString(request.lowCutHertz())),
 				Map.entry("highCutHertz", Double.toString(request.highCutHertz())),
+				Map.entry("earlyLevel", Double.toString(request.earlyLevel())),
+				Map.entry("lateLevel", Double.toString(request.lateLevel())),
+				Map.entry("attackMilliseconds", Double.toString(request.attackMilliseconds())),
+				Map.entry("decayLengthPercent", Double.toString(request.decayLengthPercent())),
 				Map.entry("normalizeIr", Boolean.toString(request.normalizeIr())),
 				Map.entry("peakProtection", Boolean.toString(request.peakProtection())),
 				Map.entry("headroomDecibels", Double.toString(request.headroomDecibels())));
