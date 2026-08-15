@@ -225,6 +225,21 @@ class SshProvisionerTest {
 	}
 
 	@Test
+	void windowsAgentTaskIsOnDemandInsteadOfStartingAtLogin() {
+		String scriptPath = "C:\\Users\\markf\\.mechana\\host-agent\\run-worker-host-agent.ps1";
+		String registration = SshProvisioner.windowsTaskRegistrationScript(scriptPath);
+		String install = SshProvisioner.windowsTaskInstallCommand(scriptPath);
+
+		assertTrue(registration.contains("Unregister-ScheduledTask -TaskName 'MechanaWorkerHostAgent'"));
+		assertTrue(registration.contains("Register-ScheduledTask -TaskName 'MechanaWorkerHostAgent'"));
+		assertTrue(registration.contains("-Action $action"));
+		assertTrue(!registration.contains("New-ScheduledTaskTrigger"));
+		assertTrue(!registration.contains("AtLogOn"));
+		assertTrue(!install.contains("ONLOGON"));
+		assertTrue(install.contains("schtasks /Run /TN MechanaWorkerHostAgent"));
+	}
+
+	@Test
 	void windowsRestartExplainsWhenTheManagedAgentIsNotInstalled() throws Exception {
 		Path agent = Files.writeString(temporary.resolve("agent.jar"), "agent");
 		Path worker = Files.writeString(temporary.resolve("worker.jar"), "worker");

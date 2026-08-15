@@ -167,11 +167,25 @@ final class SshProvisioner {
 				StandardCharsets.UTF_8);
 		copy(request, target, script, remote + "/run-worker-host-agent.ps1");
 		String scriptPath = remote.replace('/', '\\') + "\\run-worker-host-agent.ps1";
-		ssh(request, target,
-				"schtasks /End /TN MechanaWorkerHostAgent 2>NUL & "
-						+ "schtasks /Create /TN MechanaWorkerHostAgent /SC ONLOGON /RL HIGHEST /F /TR "
-						+ cmdQuote("powershell.exe -NoProfile -ExecutionPolicy Bypass -File " + psQuote(scriptPath))
-						+ " & schtasks /Run /TN MechanaWorkerHostAgent");
+		ssh(request, target, windowsTaskInstallCommand(scriptPath));
+	}
+
+	static String windowsTaskInstallCommand(String scriptPath) {
+		String registration = windowsTaskRegistrationScript(scriptPath);
+		String encoded = java.util.Base64.getEncoder()
+				.encodeToString(registration.getBytes(StandardCharsets.UTF_16LE));
+		return "schtasks /End /TN MechanaWorkerHostAgent 2>NUL & "
+				+ "powershell.exe -NoProfile -NonInteractive -EncodedCommand " + encoded
+				+ " & schtasks /Run /TN MechanaWorkerHostAgent";
+	}
+
+	static String windowsTaskRegistrationScript(String scriptPath) {
+		String arguments = "-NoProfile -ExecutionPolicy Bypass -File " + psQuote(scriptPath);
+		return "Unregister-ScheduledTask -TaskName 'MechanaWorkerHostAgent' -Confirm:$false "
+				+ "-ErrorAction SilentlyContinue;"
+				+ "$action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '" + psLiteral(arguments)
+				+ "';Register-ScheduledTask -TaskName 'MechanaWorkerHostAgent' -Action $action "
+				+ "-User $env:USERNAME -RunLevel Highest -Force|Out-Null";
 	}
 
 	static String windowsAgentStopCommand(String remote, boolean deleteTask) {
