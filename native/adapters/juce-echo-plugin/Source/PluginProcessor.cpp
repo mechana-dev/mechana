@@ -12,6 +12,8 @@ namespace {
 constexpr std::array modelNames { "Echoplex-style Tape", "Deluxe Memory Man-style Analog" };
 }
 
+const juce::String MechanaEchoAudioProcessor::getName() const { return "Mechana Echo"; }
+
 MechanaEchoAudioProcessor::MechanaEchoAudioProcessor()
     : AudioProcessor(BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
                                        .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
@@ -149,5 +151,3 @@ void MechanaEchoAudioProcessor::setStateInformation(const void* data, const int 
 juce::AudioProcessorEditor* MechanaEchoAudioProcessor::createEditor() {
     return new juce::GenericAudioProcessorEditor(*this);
 }
-
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new MechanaEchoAudioProcessor(); }
