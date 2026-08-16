@@ -26,6 +26,10 @@ private:
         std::size_t blockSize {};
         std::size_t delay {};
         std::size_t position {};
+        std::size_t partitionsPerSlice {};
+        std::size_t samplesUntilWork {};
+        std::size_t scheduledFirst {};
+        bool processing {};
         PartitionedConvolver convolver;
         std::vector<float> input;
         std::vector<float> output;
@@ -34,6 +38,8 @@ private:
     std::vector<Stage> stages_;
     std::vector<float> outputRing_;
     std::size_t outputPosition_ {};
+
+    void processSlice(Stage& stage) noexcept;
 };
 
 } // namespace mechana::reverb

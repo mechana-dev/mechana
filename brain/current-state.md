@@ -87,6 +87,11 @@ This file reports repository evidence, not desired future status.
   durable user-library management, smoothing, automatic peak-protection parity,
   Universal packaging, signing, and notarization remain future work. JUCE is
   fetched only into the ignored build directory and is not part of the core.
+  A JUCE-free native benchmark with embedded deterministic audio now reports
+  per-effect preparation, average/p95/maximum block milliseconds, deadline use,
+  and median real-time load. Its suite runs both arm64 and x86_64 on Apple Silicon
+  and x86_64 on Intel; timings are informational rather than machine-independent
+  pass/fail thresholds.
 
 - A pure-Java `audio-convolution-reverb` POC accepts staged dry and IR WAV
   artifacts, performs single-worker uniform partitioned FFT convolution, and

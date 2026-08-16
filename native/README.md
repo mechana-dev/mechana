@@ -13,6 +13,21 @@ cmake --build native/build --config Release
 ctest --test-dir native/build -C Release --output-on-failure
 ```
 
+For the JUCE-free correctness suite followed by standardized performance output:
+
+```shell
+native/verify.sh
+```
+
+The performance suite reports preparation separately, then average,
+95th-percentile, and maximum milliseconds per 128-sample block with each value
+expressed as a percentage of the sample rate's callback deadline. Every effect is
+measured at 44.1, 48, 88.2, and 96 kHz. Results are informational rather than a
+machine-specific pass/fail gate. On Apple Silicon, verification also runs the
+x86_64 benchmark under Rosetta; Intel hosts run x86_64 natively. The distributable
+benchmark suite is built with `packaging/macos/build-effect-benchmarks.sh` and
+automatically discovers each registered native effect benchmark.
+
 The build downloads the pinned JUCE 9.0.0 source into the ignored build tree.
 JUCE is not vendored and no JUCE type crosses into `reverb-core`. The AU component
 is emitted beneath `native/build/adapters/juce-plugin/MechanaReverb_artefacts`.

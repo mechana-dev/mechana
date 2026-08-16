@@ -19,6 +19,15 @@ Accelerate/vDSP supplies architecture-optimized real FFT operations on both Appl
 Silicon and Intel; a portable radix-2 implementation remains available elsewhere.
 The adapter is deliberately not a dependency of the Java plugin.
 
+The native tree also contains a JUCE-free, self-contained real-time benchmark.
+Its embedded deterministic workload uses a 5.8-second stereo response at 48 kHz
+and 128-sample blocks. Each cycle identifies the effect and architecture, reports
+preparation separately, and reports average, 95th-percentile, and maximum
+milliseconds per block together with their percentages of the 2.667 ms callback
+deadline. A packaged suite runs arm64 natively plus x86_64 under Rosetta on Apple
+Silicon, or x86_64 natively on Intel, and discovers future registered effect
+benchmarks using the same reporting contract.
+
 JUCE is pinned through CMake FetchContent and remains outside version control.
 It is AGPLv3/commercial dual-licensed; this internal POC does not establish rights
 to distribute a closed-source JUCE build. The core compiles and tests with JUCE
@@ -222,3 +231,14 @@ code as the standalone app. It accepts an original sweep WAV plus the hardware
 unit's recorded wet return, requires matching sample rates, and emits a trimmed
 24-bit convolution-ready IR. Both paths use regularized FFT division, preserve
 captured gain, align the impulse, estimate the decay tail, and fade the trim edge.
+
+Native real-time performance uses the shared effect benchmark contract. The
+Reverb benchmark carries a constant-duration deterministic response and reports
+44.1, 48, 88.2, and 96 kHz separately, including each rate's actual callback
+deadline; this prevents higher-rate cost from being inferred solely from 48 kHz.
+
+The native non-uniform convolver retains a fixed 128-sample latency. Its 512- and
+2,048-sample response tiers incrementally accumulate their frequency-domain
+partitions across the intervening 128-sample callbacks, while scheduling completed
+samples at the same original output positions. This smooths callback deadlines
+without changing partition order, convolution output, response timing, or latency.

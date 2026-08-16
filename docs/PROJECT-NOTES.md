@@ -1916,3 +1916,47 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added output-list refresh to expose an AirPlay route connected after app launch.
   macOS reports the destination generically as `AirPlay` at this API layer even
   when the selected receiver is the Living Room Apple TV.
+
+## 2026-08-16 07:25 EDT — Standardize native effect performance measurements
+
+- Added a self-contained native benchmark using embedded deterministic stereo
+  audio and a 5.8-second captured response at 48 kHz with 128-sample callbacks.
+- Standardized effect identity, preparation time, average/p95/maximum milliseconds
+  per block, callback-deadline percentages, overall real-time load, and repeated
+  median summaries for future Reverb, Leslie, Echo, and other native effects.
+- Added a packaged suite that discovers registered effect benchmarks and runs
+  arm64 plus x86_64 under Rosetta on Apple Silicon, or x86_64 natively on Intel.
+  Native verification prints a short performance sample without imposing a
+  hardware-specific pass/fail threshold.
+- Built a separate temporary before/after comparison from the identical benchmark
+  source against the pre-optimization and current engines for both architectures;
+  no legacy DSP implementation was restored to the maintained source tree.
+
+## 2026-08-16 08:25 EDT — Benchmark all standard audio sample rates
+
+- Expanded the shared native effect benchmark contract and packaged runner to
+  report 44.1, 48, 88.2, and 96 kHz for every registered effect.
+- Callback deadlines and constant-duration fixture sizes now scale with sample
+  rate, allowing the actual high-rate cost to be measured instead of estimated
+  from the 48 kHz result.
+- Added a separated end-of-run report giving minimum, arithmetic-average, median,
+  and maximum real-time deadline load for every architecture/sample-rate case.
+
+## 2026-08-16 09:10 EDT — Smooth native convolution callback deadlines
+
+- Changed the middle and long-tail non-uniform convolution tiers to accumulate
+  their partition work incrementally across intervening 128-sample callbacks,
+  rather than concentrating each complete tier calculation into one callback.
+- Preserved frequency-domain accumulation order, original output-ring positions,
+  and the existing fixed 128-sample latency; numerical, tier-boundary, and latency
+  tests verify sonic and timing equivalence.
+- Rebuilt the dual-architecture benchmark package. Five-cycle ARM64 and Rosetta
+  measurements show every 96 kHz callback comfortably below its deadline, with
+  substantially lower p95 and worst-callback times.
+
+## 2026-08-16 09:25 EDT — Make Intel benchmark package Rosetta-aware
+
+- Changed the packaged benchmark runner to discover available architecture
+  folders independently. The Intel-only ZIP now runs x86_64 benchmarks natively
+  on Intel Macs or through Rosetta on Apple Silicon and labels the execution mode
+  accurately, without failing because an ARM64 executable is absent.
