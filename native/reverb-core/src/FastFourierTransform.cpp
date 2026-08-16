@@ -10,7 +10,7 @@
 
 namespace mechana::reverb {
 
-void transform(std::span<double> real, std::span<double> imaginary, const bool inverse) noexcept {
+void transform(std::span<float> real, std::span<float> imaginary, const bool inverse) noexcept {
     const auto size = real.size();
     for (std::size_t index = 1, reversed = 0; index < size; ++index) {
         auto bit = size >> 1U;
@@ -23,12 +23,12 @@ void transform(std::span<double> real, std::span<double> imaginary, const bool i
         }
     }
     for (std::size_t length = 2; length <= size; length <<= 1U) {
-        const auto angle = (inverse ? 2.0 : -2.0) * std::numbers::pi / static_cast<double>(length);
+        const auto angle = static_cast<float>((inverse ? 2.0 : -2.0) * std::numbers::pi / static_cast<double>(length));
         const auto stepReal = std::cos(angle);
         const auto stepImaginary = std::sin(angle);
         for (std::size_t start = 0; start < size; start += length) {
-            auto twiddleReal = 1.0;
-            auto twiddleImaginary = 0.0;
+            auto twiddleReal = 1.0F;
+            auto twiddleImaginary = 0.0F;
             for (std::size_t offset = 0; offset < length / 2; ++offset) {
                 const auto even = start + offset;
                 const auto odd = even + length / 2;
@@ -50,8 +50,8 @@ void transform(std::span<double> real, std::span<double> imaginary, const bool i
     }
     if (inverse)
         for (std::size_t index = 0; index < size; ++index) {
-            real[index] /= static_cast<double>(size);
-            imaginary[index] /= static_cast<double>(size);
+            real[index] /= static_cast<float>(size);
+            imaginary[index] /= static_cast<float>(size);
         }
 }
 

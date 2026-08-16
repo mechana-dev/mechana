@@ -5,7 +5,7 @@ Last verified: 2026-08-15
 ## Native Audio Unit proof of concept
 
 A native development tree now lives under `native/`. Its `reverb-core` C++20
-library contains the product-owned FFT, uniform partitioned convolver, IR
+library contains the product-owned real FFT, non-uniform partitioned convolver, IR
 sample-rate preparation, and block engine without any JUCE dependency. A separate
 temporary JUCE 9 adapter translates Audio Unit buffers, ten automatable parameters,
 project state, six bundled factory responses, and imported WAV responses into
@@ -13,8 +13,11 @@ core-owned types. The editor exposes Wet, Dry, Pre-delay, Early, Late, Attack,
 Decay, wet Low-cut/High-cut, Bypass, profile selection/import, and neutral reset
 controls for each processing group.
 The development AU is a version 2 effect supporting matched mono and stereo layouts,
-reports its 128-sample convolution latency and captured tail, and passes `auval` on
-Apple Silicon. The adapter is deliberately not a dependency of the Java plugin.
+reports its 128-sample convolution latency and captured tail. The real-time path
+uses 32-bit float samples and half-spectrum FFT data. On macOS, Apple
+Accelerate/vDSP supplies architecture-optimized real FFT operations on both Apple
+Silicon and Intel; a portable radix-2 implementation remains available elsewhere.
+The adapter is deliberately not a dependency of the Java plugin.
 
 JUCE is pinned through CMake FetchContent and remains outside version control.
 It is AGPLv3/commercial dual-licensed; this internal POC does not establish rights
@@ -23,8 +26,11 @@ disabled, preserving later direct Apple/VST3 adapters and possible extraction to
 separate product repository. The existing Java engine remains the current Mechana
 worker and standalone implementation; cross-language conformance and a native
 command-line renderer are future work. IR resampling, shaping, and calibration
-occur outside the real-time callback; shaping changes are therefore asynchronous
-rather than sample-accurate in this POC.
+occur on a background preparation thread. Prepared, calibrated responses are
+cached by source and processing settings, then exchanged with a short crossfade;
+FFT construction, cache work, and old-engine destruction stay off the audio
+callback. Shaping changes are therefore asynchronous rather than sample-accurate
+in this POC.
 
 ## Implemented proof of concept
 

@@ -12,6 +12,13 @@
 #include <JuceHeader.h>
 #include <mechana/reverb/ReverbEngine.h>
 
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <optional>
+#include <thread>
+#include <unordered_map>
+
 class MechanaReverbAudioProcessor final : public juce::AudioProcessor,
                                           private juce::AudioProcessorValueTreeState::Listener,
                                           private juce::AsyncUpdater {
@@ -30,7 +37,7 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return tailSeconds_; }
+    double getTailLengthSeconds() const override { return tailSeconds_.load(); }
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram(int) override {}
@@ -51,15 +58,42 @@ private:
     void loadFactoryImpulseResponse();
     bool loadReader(std::unique_ptr<juce::AudioFormatReader> reader, const juce::String& profileName,
                     const juce::String& sourcePath);
-    void rebuildPreparedResponse();
+    void requestPreparedResponse();
+    void preparationLoop(std::stop_token stopToken);
     void parameterChanged(const juce::String&, float) override;
     void handleAsyncUpdate() override;
 
-    mechana::reverb::ReverbEngine engine_;
+    struct PreparationRequest final {
+        std::string key;
+        std::vector<std::vector<float>> source;
+        double sourceSampleRate {};
+        double processingSampleRate {};
+        std::size_t channelCount {};
+        std::size_t maximumBlockSize {};
+        mechana::reverb::ImpulseResponseParameters shaping;
+    };
+
+    std::shared_ptr<mechana::reverb::ReverbEngine> preparedEngine_;
+    std::shared_ptr<mechana::reverb::ReverbEngine> renderingEngine_;
+    std::shared_ptr<mechana::reverb::ReverbEngine> fadingEngine_;
+    // The preparation thread retains published engines so that replacing or
+    // fading one never triggers a large deallocation on the audio thread.
+    std::vector<std::shared_ptr<mechana::reverb::ReverbEngine>> engineLifetime_;
+    std::unordered_map<std::string, std::vector<std::vector<float>>> preparedCache_;
+    std::mutex preparationMutex_;
+    std::condition_variable_any preparationCondition_;
+    std::optional<PreparationRequest> pendingPreparation_;
+    std::jthread preparationThread_;
+    juce::AudioBuffer<float> newRenderBuffer_;
+    juce::AudioBuffer<float> oldRenderBuffer_;
+    std::size_t fadeRemaining_ {};
+    std::size_t fadeLength_ {};
     juce::AudioProcessorValueTreeState parameters_;
     double processingSampleRate_ { 48'000.0 };
-    double tailSeconds_ { 0.0 };
+    std::atomic<double> tailSeconds_ { 0.0 };
     double sourceSampleRate_ { 48'000.0 };
+    std::size_t maximumBlockSize_ { 512 };
+    std::size_t channelCount_ { 2 };
     std::vector<std::vector<float>> sourceImpulseResponse_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MechanaReverbAudioProcessor)

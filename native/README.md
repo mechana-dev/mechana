@@ -26,13 +26,16 @@ before distributing a closed-source binary containing the adapter.
 
 - mono/stereo effect layouts
 - allocation-free processing after preparation
-- native uniform partitioned convolution with a 128-sample reported latency
+- 32-bit float real/half-spectrum FFT convolution with a 128-sample reported latency
+- non-uniform 128/512/2048-sample partitions for efficient long responses
+- Apple Accelerate/vDSP FFT acceleration on Intel and Apple Silicon, with a
+  portable radix-2 fallback
 - six bundled factory responses plus custom WAV import
 - automatable Wet, Dry, Pre-delay, Early, Late, Attack, Decay, wet Low-cut,
   wet High-cut, and Bypass parameters
 - reset controls for mix/timing, captured-response shaping, and EQ
-- IR sample-rate conversion, response shaping, and calibration outside the
-  real-time audio callback
+- background IR sample-rate conversion, response shaping, calibration, prepared
+  response caching, and crossfaded engine exchange outside the real-time callback
 - Logic project state save/restore
 - JUCE-free core regression test
 

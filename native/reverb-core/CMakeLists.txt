@@ -4,7 +4,9 @@
 add_library(mechana_reverb_core STATIC
     src/FastFourierTransform.cpp
     src/ImpulseResponsePreparation.cpp
+    src/NonUniformConvolver.cpp
     src/PartitionedConvolver.cpp
+    src/RealFft.cpp
     src/ReverbEngine.cpp)
 
 target_include_directories(mechana_reverb_core PUBLIC include)
@@ -14,3 +16,7 @@ target_compile_options(mechana_reverb_core PRIVATE
 
 set_target_properties(mechana_reverb_core PROPERTIES
     POSITION_INDEPENDENT_CODE ON)
+
+if(APPLE)
+    target_link_libraries(mechana_reverb_core PUBLIC "-framework Accelerate")
+endif()

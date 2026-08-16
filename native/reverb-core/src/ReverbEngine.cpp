@@ -4,7 +4,7 @@
  */
 #include <mechana/reverb/ReverbEngine.h>
 
-#include "PartitionedConvolver.h"
+#include "NonUniformConvolver.h"
 
 #include <algorithm>
 #include <array>
@@ -51,9 +51,6 @@ public:
     void prepare(const double sampleRate, const std::size_t channels, const std::size_t maximumBlockSize) {
         sampleRate_ = sampleRate;
         channelCount_ = std::clamp<std::size_t>(channels, 1, 2);
-        input_.assign(channelCount_, std::vector<float>(partitionSize));
-        wetBlock_.assign(channelCount_, std::vector<float>(partitionSize));
-        wetQueue_.assign(channelCount_, std::vector<float>(partitionSize * 2));
         dryDelay_.assign(channelCount_, std::vector<float>(partitionSize + maximumBlockSize + 1));
         preDelay_.assign(channelCount_, std::vector<float>(partitionSize + static_cast<std::size_t>(sampleRate_ * 2.0) + 1));
         lowCut_.resize(channelCount_);
@@ -66,23 +63,16 @@ public:
         convolvers_.resize(channelCount_);
         for (std::size_t channel = 0; channel < channelCount_; ++channel) {
             const auto& ir = channels[std::min(channel, channels.size() - 1)];
-            convolvers_[channel].prepare(ir, partitionSize);
+            convolvers_[channel].prepare(ir);
         }
         reset();
     }
 
     void reset() noexcept {
-        inputPosition_ = 0;
-        queueRead_ = 0;
-        queueAvailable_ = 0;
         dryPosition_ = 0;
         preDelayPosition_ = 0;
         for (auto& convolver : convolvers_)
             convolver.reset();
-        for (auto& channel : input_)
-            std::fill(channel.begin(), channel.end(), 0.0F);
-        for (auto& channel : wetQueue_)
-            std::fill(channel.begin(), channel.end(), 0.0F);
         for (auto& channel : dryDelay_)
             std::fill(channel.begin(), channel.end(), 0.0F);
         for (auto& channel : preDelay_)
@@ -110,12 +100,11 @@ public:
         for (std::size_t frame = 0; frame < frames; ++frame) {
             for (std::size_t channel = 0; channel < channelsToProcess; ++channel) {
                 const auto input = channels[channel][frame];
-                input_[channel][inputPosition_] = input;
                 auto& dry = dryDelay_[channel];
                 dry[dryPosition_] = input;
                 const auto dryRead = (dryPosition_ + dry.size() - partitionSize) % dry.size();
                 const auto alignedDry = dry[dryRead];
-                auto wet = queueAvailable_ == 0 ? 0.0F : wetQueue_[channel][queueRead_];
+                auto wet = convolvers_[channel].processSample(input);
                 wet = highCut_[channel].process(lowCut_[channel].process(wet));
                 auto& delay = preDelay_[channel];
                 delay[preDelayPosition_] = wet;
@@ -125,40 +114,19 @@ public:
                                                : alignedDry * parameters.dryLevel
                                                      + delay[wetRead] * parameters.wetLevel;
             }
-            inputPosition_++;
             dryPosition_ = (dryPosition_ + 1) % dryDelay_.front().size();
             preDelayPosition_ = (preDelayPosition_ + 1) % preDelay_.front().size();
-            if (queueAvailable_ > 0) {
-                queueRead_ = (queueRead_ + 1) % wetQueue_.front().size();
-                queueAvailable_--;
-            }
-            if (inputPosition_ == partitionSize) {
-                const auto write = (queueRead_ + queueAvailable_) % wetQueue_.front().size();
-                for (std::size_t channel = 0; channel < channelsToProcess; ++channel) {
-                    convolvers_[channel].process(input_[channel], wetBlock_[channel]);
-                    for (std::size_t index = 0; index < partitionSize; ++index)
-                        wetQueue_[channel][(write + index) % wetQueue_[channel].size()] = wetBlock_[channel][index];
-                }
-                queueAvailable_ += partitionSize;
-                inputPosition_ = 0;
-            }
         }
     }
 
 private:
     double sampleRate_ { 48'000.0 };
     std::size_t channelCount_ { 2 };
-    std::size_t inputPosition_ {};
-    std::size_t queueRead_ {};
-    std::size_t queueAvailable_ {};
     std::size_t dryPosition_ {};
     std::size_t preDelayPosition_ {};
     float currentLowCut_ { -1.0F };
     float currentHighCut_ { -1.0F };
-    std::vector<PartitionedConvolver> convolvers_;
-    std::vector<std::vector<float>> input_;
-    std::vector<std::vector<float>> wetBlock_;
-    std::vector<std::vector<float>> wetQueue_;
+    std::vector<NonUniformConvolver> convolvers_;
     std::vector<std::vector<float>> dryDelay_;
     std::vector<std::vector<float>> preDelay_;
     std::vector<Biquad> lowCut_;
