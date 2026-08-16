@@ -1895,3 +1895,15 @@ cloud providers remain future direction; see `brain/current-state.md` and
   bundles pass Apple's complete `auval` suite (the Intel build under Rosetta),
   their extracted ZIPs pass architecture and ad-hoc signature checks, and the
   repository-wide `mvn verify` reactor succeeds.
+
+## 2026-08-15 20:35 EDT — Route standalone Preview through macOS Core Audio
+
+- Added a Preview output selector with macOS System Output, explicitly enumerated
+  Core Audio devices, and a Java compatibility route. Selecting another output
+  while playing restarts Preview on that destination.
+- Added a minimal Apache-licensed Core Audio helper that accepts the existing
+  streamed 16-bit Preview PCM over standard input. Packaged macOS builds compile
+  and embed an architecture-matched helper, allowing the application to honor an
+  active AirPlay system route without changing convolution or rendered artifacts.
+- Compiled the helper for arm64 and x86_64, verified Core Audio enumeration and
+  silent playback, and added device-list parsing coverage to the standalone app.
