@@ -54,13 +54,13 @@ cp standalone-reverb-app/src/main/distribution/capture/* "${STAGING}/capture/"
 cp LICENSE NOTICE "${STAGING}/"
 
 "${JPACKAGE}" --type app-image --dest "${APPS}" --input "${STAGING}" \
-	--name "Mechana Reverb" --main-jar mechana-standalone-reverb.jar \
+	--name "Mechana Effects" --main-jar mechana-standalone-reverb.jar \
 	--main-class dev.mechana.localreverb.StandaloneReverbMain --icon "${ICON}" \
-	--mac-package-identifier dev.mechana.reverb --app-version 1.0.0
+	--mac-package-identifier dev.mechana.effects --app-version 1.0.0
 
-/usr/bin/ditto -c -k --sequesterRsrc --keepParent "${APPS}/Mechana Reverb.app" \
-	"${SCRIPT_DIR}/target/Mechana-Reverb-macOS-${PACKAGE_ARCH}.zip"
+/usr/bin/ditto -c -k --sequesterRsrc --keepParent "${APPS}/Mechana Effects.app" \
+	"${SCRIPT_DIR}/target/Mechana-Effects-macOS-${PACKAGE_ARCH}.zip"
 
-print "Built ${PACKAGE_ARCH} Reverb app:"
-print "${APPS}/Mechana Reverb.app"
-print "${SCRIPT_DIR}/target/Mechana-Reverb-macOS-${PACKAGE_ARCH}.zip"
+print "Built ${PACKAGE_ARCH} Effects app:"
+print "${APPS}/Mechana Effects.app"
+print "${SCRIPT_DIR}/target/Mechana-Effects-macOS-${PACKAGE_ARCH}.zip"

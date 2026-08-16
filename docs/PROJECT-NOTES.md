@@ -1984,3 +1984,18 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Built and ad-hoc signed architecture-specific app, Audio Unit, and benchmark
   ZIPs for Apple Silicon and Intel. Both native DSP test suites pass for arm64
   and for x86_64 under Rosetta.
+
+## 2026-08-16 13:40 EDT — Restore file-oriented standalone Effects workflow
+
+- Replaced the native plug-in-editor standalone shell with the established local
+  file workflow: shared source/output selection, AirPlay-aware Preview transport,
+  Apply, scrub/loop/bypass controls, and a common effect-labeled History table.
+- Added separate Reverb and Echo settings tabs while retaining the local sweep-to-IR
+  creation tab and the original convolution-reverb controls.
+- Added streaming Java Echo rendering and preview support for the same Tape and
+  Analog Memory behavioral models exposed by the separate native Echo Audio Unit.
+- Echo job folders now contain reloadable JSON metadata and a human-readable report;
+  renderer and DSP tests verify repeat timing, feedback decay, tail preservation,
+  finite colored-model output, and shared-history persistence.
+- Renamed the packaged standalone product to **Mechana Effects** so it can coexist
+  with older Mechana Reverb builds and cannot be confused with the AU host shell.
