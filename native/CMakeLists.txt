@@ -24,10 +24,12 @@ option(MECHANA_BUILD_TESTS "Build the JUCE-free core tests" ON)
 option(MECHANA_BUILD_BENCHMARKS "Build the self-contained native DSP benchmark" ON)
 
 add_subdirectory(reverb-core)
+add_subdirectory(echo-core)
 
 if(MECHANA_BUILD_TESTS)
     enable_testing()
     add_subdirectory(reverb-core/tests)
+    add_subdirectory(echo-core/tests)
 endif()
 
 if(MECHANA_BUILD_BENCHMARKS)
@@ -36,4 +38,5 @@ endif()
 
 if(MECHANA_BUILD_JUCE_PLUGIN)
     add_subdirectory(adapters/juce-plugin)
+    add_subdirectory(adapters/juce-echo-plugin)
 endif()

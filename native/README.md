@@ -5,6 +5,11 @@ from JUCE. `reverb-core` contains product DSP and has no JUCE dependency. The
 temporary adapter under `adapters/juce-plugin` translates Audio Unit buffers,
 parameters, state, and the bundled factory WAV into core-owned types.
 
+`echo-core` is a separate JUCE-free real-time delay engine. It owns fractional
+delay, feedback, repeat filtering, saturation, modulation, stereo routing, and
+neutral plus initial tape/BBD-style behavioral defaults. The temporary Echo
+adapter builds a separate AU and standalone test host; it does not use convolution.
+
 ## Build on macOS
 
 ```shell

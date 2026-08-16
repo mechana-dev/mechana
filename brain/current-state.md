@@ -71,6 +71,15 @@ This file reports repository evidence, not desired future status.
 
 ## Present in the repository
 
+- A JUCE-free C++20 `echo-core` provides a zero-latency, allocation-free-after-prepare
+  real-time delay loop with fractional delay, feedback, repeat-path low/high cuts,
+  saturation, modulation, stereo ping-pong, wet/dry mix, bypass, and smoothed delay
+  changes. Neutral, Vintage Tape, and Analog Memory starting models are code-owned
+  parameter sets; the latter two are behavioral approximations rather than measured
+  captures or claims of exact hardware reproduction. Native tests cover repeat timing,
+  feedback decay, stereo routing, optional processing stability, model invariants,
+  and reported latency. No JUCE adapter or user interface exposes the engine yet.
+
 - An initial native Audio Unit POC under `native/` separates a JUCE-free C++20
   reverb core from a thin JUCE 9 adapter. The core owns 32-bit float real/half-spectrum
   FFT convolution, IR

@@ -1960,3 +1960,15 @@ cloud providers remain future direction; see `brain/current-state.md` and
   folders independently. The Intel-only ZIP now runs x86_64 benchmarks natively
   on Intel Macs or through Rosetta on Apple Silicon and labels the execution mode
   accurately, without failing because an ARM64 executable is absent.
+## 2026-08-16 10:15 EDT — Start reusable native echo engine
+
+- Added a JUCE-free C++20 echo core with fractional delay, feedback, repeat-path
+  low/high cuts, saturation, modulation, stereo ping-pong, wet/dry mix, bypass,
+  smoothed delay changes, zero reported latency, and no audio-callback allocation.
+- Added neutral, Vintage Tape, and Analog Memory behavioral starting models. The
+  latter two deliberately use generic names and are documented as hand-tuned
+  approximations, not measured captures of trademarked hardware.
+- Added an initial separate Echo AU/standalone adapter with two development model
+  presets and native timing, feedback, routing, processing, model, and latency tests.
+- Documented a future multi-recording hardware characterization procedure; the
+  initial device styles rely on public manufacturer behavior descriptions.
