@@ -34,6 +34,7 @@ endif()
 
 if(MECHANA_BUILD_BENCHMARKS)
     add_subdirectory(reverb-core/benchmarks)
+    add_subdirectory(echo-core/benchmarks)
 endif()
 
 if(MECHANA_BUILD_JUCE_PLUGIN)

@@ -1972,3 +1972,15 @@ cloud providers remain future direction; see `brain/current-state.md` and
   presets and native timing, feedback, routing, processing, model, and latency tests.
 - Documented a future multi-recording hardware characterization procedure; the
   initial device styles rely on public manufacturer behavior descriptions.
+
+## 2026-08-16 10:50 EDT — Package Reverb and Echo native effects
+
+- Added a separate Echo Audio Unit with Echoplex-style Tape and Deluxe Memory
+  Man-style Analog development presets backed by the JUCE-free Echo engine.
+- Added a live-input `Mechana Effects` macOS app with separate Reverb and Echo
+  tabs while retaining separately installable Reverb and Echo Audio Units.
+- Registered Modeled Echo in the standard native benchmark suite. Packaged
+  runners now report Reverb and Echo independently at 44.1, 48, 88.2, and 96 kHz.
+- Built and ad-hoc signed architecture-specific app, Audio Unit, and benchmark
+  ZIPs for Apple Silicon and Intel. Both native DSP test suites pass for arm64
+  and for x86_64 under Rosetta.

@@ -8,7 +8,8 @@ parameters, state, and the bundled factory WAV into core-owned types.
 `echo-core` is a separate JUCE-free real-time delay engine. It owns fractional
 delay, feedback, repeat filtering, saturation, modulation, stereo routing, and
 neutral plus initial tape/BBD-style behavioral defaults. The temporary Echo
-adapter builds a separate AU and standalone test host; it does not use convolution.
+adapter builds a separate AU; it does not use convolution. `apps/mechana-effects`
+builds a live-input macOS application with separate Reverb and Echo tabs.
 
 ## Build on macOS
 
@@ -32,6 +33,10 @@ machine-specific pass/fail gate. On Apple Silicon, verification also runs the
 x86_64 benchmark under Rosetta; Intel hosts run x86_64 natively. The distributable
 benchmark suite is built with `packaging/macos/build-effect-benchmarks.sh` and
 automatically discovers each registered native effect benchmark.
+
+`packaging/macos/package-native-effects.sh` packages architecture-specific ZIPs
+for the combined app, both separate AU components, and the benchmark suite. The
+Echo and Reverb benchmark results remain distinct at all four standard rates.
 
 The build downloads the pinned JUCE 9.0.0 source into the ignored build tree.
 JUCE is not vendored and no JUCE type crosses into `reverb-core`. The AU component

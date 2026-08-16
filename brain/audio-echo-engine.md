@@ -26,9 +26,12 @@ nonlinearity, noise, or non-periodic modulation. A future captured convolution m
 color the input or repeat path, but it must remain optional; feedback timing and
 time-varying behavior belong to the echo engine.
 
-The initial models need listening calibration before product use. A JUCE adapter,
-editor, automation contract, preset persistence, production benchmark target, and
-Java/Mechana plugin are follow-up work.
+The initial models need listening calibration before product use. A separate JUCE
+Audio Unit adapter exposes the two colored models, automatable controls, host-state
+persistence, and a functional generic editor. The `Mechana Effects` live-input app
+hosts Reverb and Echo on separate tabs. A standard benchmark target exercises the
+production Echo engine at 44.1, 48, 88.2, and 96 kHz and is packaged for arm64 and
+x86_64. A custom Echo editor and Java/Mechana worker plugin remain follow-up work.
 
 ## Future hardware characterization
 
