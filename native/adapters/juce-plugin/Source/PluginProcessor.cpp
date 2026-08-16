@@ -7,6 +7,9 @@
 #include "PluginEditor.h"
 #include <mechana/reverb/ImpulseResponsePreparation.h>
 
+#include <bit>
+#include <sstream>
+
 namespace {
 constexpr std::array shapingParameters { "early", "late", "attack", "decay" };
 
@@ -34,10 +37,15 @@ MechanaReverbAudioProcessor::MechanaReverbAudioProcessor()
         parameters_.addParameterListener(parameter, this);
     parameters_.state.setProperty("profileIndex", 0, nullptr);
     parameters_.state.setProperty("profileName", factoryProfiles.front().name, nullptr);
+    preparationThread_ = std::jthread([this](const std::stop_token token) { preparationLoop(token); });
 }
 
 MechanaReverbAudioProcessor::~MechanaReverbAudioProcessor() {
     cancelPendingUpdate();
+    preparationThread_.request_stop();
+    preparationCondition_.notify_all();
+    if (preparationThread_.joinable())
+        preparationThread_.join();
     for (const auto* parameter : shapingParameters)
         parameters_.removeParameterListener(parameter, this);
 }
@@ -73,16 +81,30 @@ juce::AudioProcessorValueTreeState::ParameterLayout MechanaReverbAudioProcessor:
 
 void MechanaReverbAudioProcessor::prepareToPlay(const double sampleRate, const int samplesPerBlock) {
     processingSampleRate_ = sampleRate;
-    engine_.prepare(sampleRate, static_cast<std::size_t>(getTotalNumOutputChannels()),
-                    static_cast<std::size_t>(samplesPerBlock));
+    channelCount_ = static_cast<std::size_t>(getTotalNumOutputChannels());
+    maximumBlockSize_ = static_cast<std::size_t>(samplesPerBlock);
+    newRenderBuffer_.setSize(getTotalNumOutputChannels(), samplesPerBlock, false, false, true);
+    oldRenderBuffer_.setSize(getTotalNumOutputChannels(), samplesPerBlock, false, false, true);
+    fadeLength_ = std::max<std::size_t>(1, static_cast<std::size_t>(sampleRate * 0.020));
+    auto fallback = std::make_shared<mechana::reverb::ReverbEngine>();
+    fallback->prepare(sampleRate, channelCount_, maximumBlockSize_);
+    {
+        const std::lock_guard lock(preparationMutex_);
+        engineLifetime_.push_back(fallback);
+    }
+    std::atomic_store(&preparedEngine_, fallback);
+    renderingEngine_ = fallback;
     if (sourceImpulseResponse_.empty())
         loadFactoryImpulseResponse();
     else
-        rebuildPreparedResponse();
-    setLatencySamples(static_cast<int>(engine_.latencySamples()));
+        requestPreparedResponse();
+    setLatencySamples(static_cast<int>(mechana::reverb::ReverbEngine::partitionSize));
 }
 
-void MechanaReverbAudioProcessor::releaseResources() { engine_.reset(); }
+void MechanaReverbAudioProcessor::releaseResources() {
+    if (renderingEngine_ != nullptr)
+        renderingEngine_->reset();
+}
 
 bool MechanaReverbAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
     const auto output = layouts.getMainOutputChannelSet();
@@ -99,8 +121,35 @@ void MechanaReverbAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     values.wetLowCutHertz = parameters_.getRawParameterValue("lowcut")->load();
     values.wetHighCutHertz = parameters_.getRawParameterValue("highcut")->load();
     values.bypass = parameters_.getRawParameterValue("bypass")->load() >= 0.5F;
-    engine_.process(buffer.getArrayOfWritePointers(), static_cast<std::size_t>(buffer.getNumChannels()),
-                    static_cast<std::size_t>(buffer.getNumSamples()), values);
+    const auto candidate = std::atomic_load(&preparedEngine_);
+    if (candidate != nullptr && candidate != renderingEngine_) {
+        fadingEngine_ = renderingEngine_;
+        renderingEngine_ = candidate;
+        fadeRemaining_ = fadeLength_;
+    }
+    if (renderingEngine_ == nullptr)
+        return;
+    if (fadingEngine_ == nullptr || fadeRemaining_ == 0) {
+        renderingEngine_->process(buffer.getArrayOfWritePointers(), static_cast<std::size_t>(buffer.getNumChannels()),
+                                  static_cast<std::size_t>(buffer.getNumSamples()), values);
+        return;
+    }
+    newRenderBuffer_.makeCopyOf(buffer, true);
+    oldRenderBuffer_.makeCopyOf(buffer, true);
+    renderingEngine_->process(newRenderBuffer_.getArrayOfWritePointers(), static_cast<std::size_t>(buffer.getNumChannels()),
+                              static_cast<std::size_t>(buffer.getNumSamples()), values);
+    fadingEngine_->process(oldRenderBuffer_.getArrayOfWritePointers(), static_cast<std::size_t>(buffer.getNumChannels()),
+                           static_cast<std::size_t>(buffer.getNumSamples()), values);
+    for (int frame = 0; frame < buffer.getNumSamples(); ++frame) {
+        const auto newGain = 1.0F - static_cast<float>(fadeRemaining_) / static_cast<float>(fadeLength_);
+        for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+            buffer.setSample(channel, frame, oldRenderBuffer_.getSample(channel, frame) * (1.0F - newGain)
+                                                 + newRenderBuffer_.getSample(channel, frame) * newGain);
+        if (fadeRemaining_ > 0)
+            --fadeRemaining_;
+    }
+    if (fadeRemaining_ == 0)
+        fadingEngine_.reset();
 }
 
 void MechanaReverbAudioProcessor::loadFactoryImpulseResponse() {
@@ -165,15 +214,15 @@ bool MechanaReverbAudioProcessor::loadReader(std::unique_ptr<juce::AudioFormatRe
         sourceImpulseResponse_[static_cast<std::size_t>(channel)].assign(data.getReadPointer(channel),
                                                                          data.getReadPointer(channel) + frames);
     sourceSampleRate_ = reader->sampleRate;
-    tailSeconds_ = static_cast<double>(frames) / reader->sampleRate;
+    tailSeconds_.store(static_cast<double>(frames) / reader->sampleRate);
     parameters_.state.setProperty("profileName", profileName, nullptr);
     if (sourcePath.isNotEmpty())
         parameters_.state.setProperty("profilePath", sourcePath, nullptr);
-    rebuildPreparedResponse();
+    requestPreparedResponse();
     return true;
 }
 
-void MechanaReverbAudioProcessor::rebuildPreparedResponse() {
+void MechanaReverbAudioProcessor::requestPreparedResponse() {
     if (sourceImpulseResponse_.empty())
         return;
     mechana::reverb::ImpulseResponseParameters shaping;
@@ -181,17 +230,71 @@ void MechanaReverbAudioProcessor::rebuildPreparedResponse() {
     shaping.lateLevel = parameters_.getRawParameterValue("late")->load();
     shaping.attackMilliseconds = parameters_.getRawParameterValue("attack")->load();
     shaping.decayLengthPercent = parameters_.getRawParameterValue("decay")->load();
-    const auto prepared = mechana::reverb::prepareImpulseResponse(sourceImpulseResponse_, sourceSampleRate_,
-                                                                   processingSampleRate_, shaping);
-    suspendProcessing(true);
-    engine_.setImpulseResponse(prepared);
-    suspendProcessing(false);
-    tailSeconds_ = static_cast<double>(prepared.front().size()) / processingSampleRate_;
+    std::ostringstream key;
+    key << currentProfileName() << ':' << sourceImpulseResponse_.front().size() << ':' << sourceSampleRate_ << ':'
+        << processingSampleRate_ << ':' << channelCount_ << ':' << shaping.earlyLevel << ':' << shaping.lateLevel << ':'
+        << shaping.attackMilliseconds << ':' << shaping.decayLengthPercent;
+    std::uint64_t contentHash = 1'469'598'103'934'665'603ULL;
+    for (const auto& channel : sourceImpulseResponse_)
+        for (const auto sample : channel) {
+            const auto bits = std::bit_cast<std::uint32_t>(sample);
+            contentHash ^= bits;
+            contentHash *= 1'099'511'628'211ULL;
+        }
+    key << ':' << contentHash;
+    PreparationRequest request { key.str(), sourceImpulseResponse_, sourceSampleRate_, processingSampleRate_,
+                                 channelCount_, maximumBlockSize_, shaping };
+    {
+        const std::lock_guard lock(preparationMutex_);
+        pendingPreparation_ = std::move(request);
+    }
+    preparationCondition_.notify_one();
 }
 
 void MechanaReverbAudioProcessor::parameterChanged(const juce::String&, float) { triggerAsyncUpdate(); }
 
-void MechanaReverbAudioProcessor::handleAsyncUpdate() { rebuildPreparedResponse(); }
+void MechanaReverbAudioProcessor::handleAsyncUpdate() { requestPreparedResponse(); }
+
+void MechanaReverbAudioProcessor::preparationLoop(const std::stop_token stopToken) {
+    while (!stopToken.stop_requested()) {
+        std::optional<PreparationRequest> request;
+        {
+            std::unique_lock lock(preparationMutex_);
+            preparationCondition_.wait(lock, stopToken, [this] { return pendingPreparation_.has_value(); });
+            if (stopToken.stop_requested())
+                return;
+            request = std::move(pendingPreparation_);
+            pendingPreparation_.reset();
+        }
+        if (!request.has_value())
+            continue;
+        std::vector<std::vector<float>> prepared;
+        {
+            const std::lock_guard lock(preparationMutex_);
+            if (const auto found = preparedCache_.find(request->key); found != preparedCache_.end())
+                prepared = found->second;
+        }
+        if (prepared.empty()) {
+            prepared = mechana::reverb::prepareImpulseResponse(
+                request->source, request->sourceSampleRate, request->processingSampleRate, request->shaping);
+            if (prepared.empty())
+                continue;
+            const std::lock_guard lock(preparationMutex_);
+            if (preparedCache_.size() >= 24)
+                preparedCache_.erase(preparedCache_.begin());
+            preparedCache_[request->key] = prepared;
+        }
+        auto engine = std::make_shared<mechana::reverb::ReverbEngine>();
+        engine->prepare(request->processingSampleRate, request->channelCount, request->maximumBlockSize);
+        engine->setImpulseResponse(prepared);
+        tailSeconds_.store(static_cast<double>(prepared.front().size()) / request->processingSampleRate);
+        {
+            const std::lock_guard lock(preparationMutex_);
+            engineLifetime_.push_back(engine);
+        }
+        std::atomic_store(&preparedEngine_, std::move(engine));
+    }
+}
 
 void MechanaReverbAudioProcessor::getStateInformation(juce::MemoryBlock& destination) {
     if (auto xml = parameters_.copyState().createXml())

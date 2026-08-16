@@ -4,8 +4,6 @@
  */
 #include "PartitionedConvolver.h"
 
-#include "FastFourierTransform.h"
-
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -16,57 +14,53 @@ void PartitionedConvolver::prepare(const std::span<const float> ir, const std::s
     blockSize_ = blockSize;
     fftSize_ = blockSize * 2;
     const auto count = std::max<std::size_t>(1, (ir.size() + blockSize - 1) / blockSize);
-    irReal_.assign(count, std::vector<double>(fftSize_));
-    irImaginary_.assign(count, std::vector<double>(fftSize_));
-    inputReal_.assign(count, std::vector<double>(fftSize_));
-    inputImaginary_.assign(count, std::vector<double>(fftSize_));
-    resultReal_.assign(fftSize_, 0.0);
-    resultImaginary_.assign(fftSize_, 0.0);
-    overlap_.assign(blockSize_, 0.0);
+    fft_ = std::make_unique<RealFft>(fftSize_);
+    irSpectra_.clear();
+    inputSpectra_.clear();
+    irSpectra_.reserve(count);
+    inputSpectra_.reserve(count);
+    for (std::size_t partition = 0; partition < count; ++partition) {
+        irSpectra_.push_back(fft_->createSpectrum());
+        inputSpectra_.push_back(fft_->createSpectrum());
+    }
+    result_ = fft_->createSpectrum();
+    transformInput_.assign(fftSize_, 0.0F);
+    transformOutput_.assign(fftSize_, 0.0F);
+    overlap_.assign(blockSize_, 0.0F);
     for (std::size_t partition = 0; partition < count; ++partition) {
         const auto offset = partition * blockSize_;
         const auto frames = offset < ir.size() ? std::min(blockSize_, ir.size() - offset) : 0;
+        std::fill(transformInput_.begin(), transformInput_.end(), 0.0F);
         for (std::size_t frame = 0; frame < frames; ++frame)
-            irReal_[partition][frame] = ir[offset + frame];
-        transform(irReal_[partition], irImaginary_[partition], false);
+            transformInput_[frame] = ir[offset + frame];
+        fft_->forward(transformInput_, irSpectra_[partition]);
     }
     reset();
 }
 
 void PartitionedConvolver::reset() noexcept {
     ringIndex_ = 0;
-    for (auto& values : inputReal_)
-        std::fill(values.begin(), values.end(), 0.0);
-    for (auto& values : inputImaginary_)
-        std::fill(values.begin(), values.end(), 0.0);
-    std::fill(overlap_.begin(), overlap_.end(), 0.0);
+    for (auto& spectrum : inputSpectra_)
+        fft_->clear(spectrum);
+    std::fill(overlap_.begin(), overlap_.end(), 0.0F);
 }
 
 void PartitionedConvolver::process(const std::span<const float> input, const std::span<float> output) noexcept {
     assert(input.size() == blockSize_ && output.size() == blockSize_);
-    auto& currentReal = inputReal_[ringIndex_];
-    auto& currentImaginary = inputImaginary_[ringIndex_];
-    std::fill(currentReal.begin(), currentReal.end(), 0.0);
-    std::fill(currentImaginary.begin(), currentImaginary.end(), 0.0);
-    std::copy(input.begin(), input.end(), currentReal.begin());
-    transform(currentReal, currentImaginary, false);
-    std::fill(resultReal_.begin(), resultReal_.end(), 0.0);
-    std::fill(resultImaginary_.begin(), resultImaginary_.end(), 0.0);
-    for (std::size_t partition = 0; partition < irReal_.size(); ++partition) {
-        const auto inputPartition = (ringIndex_ + irReal_.size() - partition) % irReal_.size();
-        for (std::size_t bin = 0; bin < fftSize_; ++bin) {
-            resultReal_[bin] += inputReal_[inputPartition][bin] * irReal_[partition][bin]
-                                - inputImaginary_[inputPartition][bin] * irImaginary_[partition][bin];
-            resultImaginary_[bin] += inputReal_[inputPartition][bin] * irImaginary_[partition][bin]
-                                     + inputImaginary_[inputPartition][bin] * irReal_[partition][bin];
-        }
+    std::fill(transformInput_.begin(), transformInput_.end(), 0.0F);
+    std::copy(input.begin(), input.end(), transformInput_.begin());
+    fft_->forward(transformInput_, inputSpectra_[ringIndex_]);
+    fft_->clear(result_);
+    for (std::size_t partition = 0; partition < irSpectra_.size(); ++partition) {
+        const auto inputPartition = (ringIndex_ + irSpectra_.size() - partition) % irSpectra_.size();
+        fft_->multiplyAccumulate(inputSpectra_[inputPartition], irSpectra_[partition], result_);
     }
-    transform(resultReal_, resultImaginary_, true);
+    fft_->inverse(result_, transformOutput_);
     for (std::size_t frame = 0; frame < blockSize_; ++frame) {
-        output[frame] = static_cast<float>(resultReal_[frame] + overlap_[frame]);
-        overlap_[frame] = resultReal_[frame + blockSize_];
+        output[frame] = transformOutput_[frame] + overlap_[frame];
+        overlap_[frame] = transformOutput_[frame + blockSize_];
     }
-    ringIndex_ = (ringIndex_ + 1) % irReal_.size();
+    ringIndex_ = (ringIndex_ + 1) % irSpectra_.size();
 }
 
 } // namespace mechana::reverb

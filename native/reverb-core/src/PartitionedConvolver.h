@@ -5,8 +5,11 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 #include <span>
 #include <vector>
+
+#include "RealFft.h"
 
 namespace mechana::reverb {
 
@@ -20,13 +23,13 @@ private:
     std::size_t blockSize_ {};
     std::size_t fftSize_ {};
     std::size_t ringIndex_ {};
-    std::vector<std::vector<double>> irReal_;
-    std::vector<std::vector<double>> irImaginary_;
-    std::vector<std::vector<double>> inputReal_;
-    std::vector<std::vector<double>> inputImaginary_;
-    std::vector<double> resultReal_;
-    std::vector<double> resultImaginary_;
-    std::vector<double> overlap_;
+    std::unique_ptr<RealFft> fft_;
+    std::vector<Spectrum> irSpectra_;
+    std::vector<Spectrum> inputSpectra_;
+    Spectrum result_;
+    std::vector<float> transformInput_;
+    std::vector<float> transformOutput_;
+    std::vector<float> overlap_;
 };
 
 } // namespace mechana::reverb

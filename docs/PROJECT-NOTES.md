@@ -1876,3 +1876,22 @@ cloud providers remain future direction; see `brain/current-state.md` and
   outside the real-time callback. Rebuilt the Apple Silicon component, passed the
   native regression suite, and passed Apple's `auval` with all ten host-visible
   parameters and mono/stereo rendering at its exercised sample rates.
+
+## 2026-08-15 16:45 EDT — Optimize native convolution for long responses
+
+- Converted the native real-time engine to 32-bit float, real/half-spectrum FFT
+  processing and added the Apple Accelerate/vDSP backend used by both Apple
+  Silicon and Intel macOS builds.
+- Replaced a single uniform partition size with non-uniform 128, 512, and 2048
+  sample tiers while preserving the Audio Unit's 128-sample reported latency and
+  numerically matching direct convolution within test tolerance.
+- Moved response resampling, shaping, calibration, FFT preparation, and cache
+  lookup off the audio callback. Prepared responses are cached and published with
+  a short crossfade; published engines are retained so teardown cannot occur on
+  the real-time thread.
+- Added tier-boundary, direct-convolution equivalence, and 5.8-second long-response
+  performance coverage. Separate arm64 and x86_64 Audio Unit builds and native
+  test executables pass on the Apple Silicon development host. Both architecture
+  bundles pass Apple's complete `auval` suite (the Intel build under Rosetta),
+  their extracted ZIPs pass architecture and ad-hoc signature checks, and the
+  repository-wide `mvn verify` reactor succeeds.

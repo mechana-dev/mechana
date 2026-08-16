@@ -7,5 +7,5 @@
 #include <span>
 
 namespace mechana::reverb {
-void transform(std::span<double> real, std::span<double> imaginary, bool inverse) noexcept;
+void transform(std::span<float> real, std::span<float> imaginary, bool inverse) noexcept;
 }
