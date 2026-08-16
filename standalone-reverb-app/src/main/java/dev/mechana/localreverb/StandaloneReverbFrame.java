@@ -108,6 +108,8 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JButton run = new JButton("Apply");
 	private final JButton preview = transportButton("▶", "Play preview", 78, 58, 30);
 	private final JButton stopPreview = transportButton("■", "Stop preview", 78, 58, 44);
+	private final JComboBox<MacAudioOutput.Device> audioOutput = new JComboBox<>();
+	private final JButton refreshAudioOutputs = new JButton("Refresh");
 	private final JCheckBox bypassPreview = new JCheckBox("Bypass (original audio)");
 	private final JCheckBox loopPreview = check("loopPreview", false);
 	private final JSlider previewPosition = new JSlider(0, 1000, 0);
@@ -128,6 +130,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTable jobTable = new JTable(jobs);
 	private boolean outputOverridden;
 	private boolean synchronizingLiveControls;
+	private boolean configuringAudioOutput;
 	private transient Path latestOutput;
 
 	StandaloneReverbFrame() {
@@ -149,6 +152,7 @@ final class StandaloneReverbFrame extends JFrame {
 		split.setResizeWeight(0.62);
 		add(split, BorderLayout.CENTER);
 		add(buildStatus(), BorderLayout.SOUTH);
+		configureAudioOutputs();
 		configureLiveControls();
 		configureActions();
 		configureSuggestedName();
@@ -226,6 +230,14 @@ final class StandaloneReverbFrame extends JFrame {
 
 	private void addActionBar(JPanel panel, GridBagConstraints c) {
 		JPanel previewAndApply = new JPanel(new BorderLayout(0, 4));
+		JPanel outputActions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 10, 2));
+		outputActions.add(new JLabel("Preview output:"));
+		audioOutput.setPreferredSize(new Dimension(310, audioOutput.getPreferredSize().height));
+		audioOutput.setToolTipText("Choose the macOS or AirPlay destination used by Preview");
+		outputActions.add(audioOutput);
+		refreshAudioOutputs.setToolTipText("Refresh available macOS and AirPlay outputs");
+		outputActions.add(refreshAudioOutputs);
+		previewAndApply.add(outputActions, BorderLayout.NORTH);
 		JPanel actions = new JPanel(new BorderLayout(24, 0));
 		JPanel previewActions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 10, 5));
 		previewActions.add(new JLabel("Preview:"));
@@ -250,6 +262,49 @@ final class StandaloneReverbFrame extends JFrame {
 		timeline.add(previewTime, BorderLayout.EAST);
 		previewAndApply.add(timeline, BorderLayout.SOUTH);
 		addRow(panel, c, "", previewAndApply);
+	}
+
+	private void configureAudioOutputs() {
+		String savedName = settings.get("previewAudioOutput", "macOS Selected Output (including AirPlay)");
+		reloadAudioOutputs(savedName);
+		applyAudioOutput(false);
+		audioOutput.addActionListener(event -> {
+			if (!configuringAudioOutput)
+				applyAudioOutput(true);
+		});
+		refreshAudioOutputs.addActionListener(event -> {
+			MacAudioOutput.Device selected = (MacAudioOutput.Device) audioOutput.getSelectedItem();
+			reloadAudioOutputs(selected == null ? "" : selected.name());
+			applyAudioOutput(true);
+		});
+	}
+
+	private void reloadAudioOutputs(String selectedName) {
+		configuringAudioOutput = true;
+		audioOutput.removeAllItems();
+		MacAudioOutput.Device selected = null;
+		for (MacAudioOutput.Device device : MacAudioOutput.devices()) {
+			audioOutput.addItem(device);
+			if (device.name().equals(selectedName))
+				selected = device;
+		}
+		if (selected != null)
+			audioOutput.setSelectedItem(selected);
+		configuringAudioOutput = false;
+	}
+
+	private void applyAudioOutput(boolean restartActivePreview) {
+		MacAudioOutput.Device selected = (MacAudioOutput.Device) audioOutput.getSelectedItem();
+		if (selected == null)
+			return;
+		settings.put("previewAudioOutput", selected.name());
+		previewPlayer.setAudioSinkFactory(MacAudioOutput.sinkFactory(selected));
+		if (restartActivePreview && previewPlayer.isActive()) {
+			previewPlayer.stop();
+			previewFinished();
+			status.setText("Switching Preview to " + selected.name() + "…");
+			startPreview();
+		}
 	}
 
 	private JPanel buildIrCreator() {
@@ -1041,8 +1096,8 @@ final class StandaloneReverbFrame extends JFrame {
 			}
 			case PLAYING -> {
 				status.setText(bypassPreview.isSelected()
-						? "Preview bypassed — playing original audio"
-						: "Playing reverb preview through the default audio output");
+						? "Preview bypassed — playing original audio through " + selectedAudioOutputName()
+						: "Playing reverb preview through " + selectedAudioOutputName());
 				setPreviewButton("⏸", "Pause preview", true);
 			}
 			case PAUSED -> {
@@ -1058,6 +1113,11 @@ final class StandaloneReverbFrame extends JFrame {
 		if (state == ReverbPreviewPlayer.State.PREPARING || state == ReverbPreviewPlayer.State.REGENERATING_IR
 				|| state == ReverbPreviewPlayer.State.PLAYING || state == ReverbPreviewPlayer.State.PAUSED)
 			stopPreview.setEnabled(true);
+	}
+
+	private String selectedAudioOutputName() {
+		MacAudioOutput.Device selected = (MacAudioOutput.Device) audioOutput.getSelectedItem();
+		return selected == null ? "the default audio output" : selected.name();
 	}
 
 	private void previewFinished() {

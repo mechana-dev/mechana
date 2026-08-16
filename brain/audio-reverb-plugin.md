@@ -135,8 +135,12 @@ Reverb.app** opens no network listener and includes its Java runtime. This is an
 explicit application composition, not a second reverb implementation or a new
 general local plugin runtime contract.
 The Apply Reverb tab can also stream the selected recording through the same
-partitioned-convolution primitives to the default system audio output without
-creating a job artifact. Preview supports play, pause/resume, and stop, performs
+partitioned-convolution primitives without creating a job artifact. Packaged
+macOS builds include a small Core Audio output bridge: Preview can follow the
+current macOS selected output, including an active AirPlay route, or explicitly
+select any output device published by Core Audio. A Java Sound compatibility
+route remains available when the native helper is absent. Preview supports play,
+pause/resume, and stop, performs
 the same dry-audio decoding while preserving the recording's native sample rate,
 and plays the complete IR tail. A content-addressed cache beneath the user's macOS
 Library/Caches directory stores 24-bit IR variants resampled to each required dry

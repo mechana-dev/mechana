@@ -52,6 +52,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private final AtomicLong irLoadSequence = new AtomicLong();
 	private final ImpulseResponseCache impulseResponseCache;
 	private final Object pauseLock = new Object();
+	private volatile AudioSinkFactory audioSinkFactory = javaSoundSink();
 	private volatile boolean paused;
 	private volatile boolean bypassed;
 	private volatile boolean looping;
@@ -167,7 +168,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		Thread thread = Thread.ofVirtual().name("mechana-reverb-preview").start(() -> {
 			state.accept(State.PREPARING);
 			try {
-				streamRepeated(settings, systemSink(), state, -1, startFraction);
+				streamRepeated(settings, audioSinkFactory, state, -1, startFraction);
 				if (!stopped.get())
 					state.accept(State.FINISHED);
 			} catch (IOException | RuntimeException playbackFailure) {
@@ -184,6 +185,10 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 
 	void onPosition(Consumer<Position> listener) {
 		positionListener = Objects.requireNonNull(listener, "listener");
+	}
+
+	void setAudioSinkFactory(AudioSinkFactory factory) {
+		audioSinkFactory = Objects.requireNonNull(factory, "factory");
 	}
 
 	void update(double wet, double dry, double preDelayMilliseconds, double lowCutHertz, double highCutHertz,
@@ -548,7 +553,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		return (double) (totalFrames - frame - 1) / (fadeFrames - 1);
 	}
 
-	private static AudioSinkFactory systemSink() {
+	static AudioSinkFactory javaSoundSink() {
 		return (sampleRate, channels) -> {
 			AudioFormat format = new AudioFormat(sampleRate, 16, channels, true, false);
 			try {

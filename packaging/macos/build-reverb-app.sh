@@ -20,7 +20,7 @@ if [[ -z "${JAVA_HOME:-}" || ! -x "${JPACKAGE}" ]]; then
 	print -u2 "Set JAVA_HOME to the Java 25 JDK whose architecture should be packaged."
 	exit 1
 fi
-for tool in mvn /usr/bin/ditto; do
+for tool in mvn /usr/bin/ditto xcrun; do
 	if ! command -v "${tool}" >/dev/null 2>&1; then
 		print -u2 "Required tool is unavailable: ${tool}"
 		exit 1
@@ -43,6 +43,10 @@ mvn -pl standalone-reverb-app -am package
 rm -rf "${TARGET}"
 mkdir -p "${STAGING}/ir-profiles" "${STAGING}/capture" "${APPS}"
 cp "${SCRIPT_DIR}/icons/mechana-reverb.icns" "${ICON}"
+
+xcrun clang -O2 -arch "${PACKAGE_ARCH}" -mmacosx-version-min=12.0 \
+	-framework AudioToolbox -framework CoreAudio -framework CoreFoundation \
+	"${SCRIPT_DIR}/MechanaPreviewAudio.c" -o "${STAGING}/mechana-preview-audio"
 
 cp standalone-reverb-app/target/mechana-standalone-reverb.jar "${STAGING}/"
 cp standalone-reverb-app/src/main/distribution/ir-profiles/* "${STAGING}/ir-profiles/"
