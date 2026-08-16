@@ -1999,3 +1999,14 @@ cloud providers remain future direction; see `brain/current-state.md` and
   finite colored-model output, and shared-history persistence.
 - Renamed the packaged standalone product to **Mechana Effects** so it can coexist
   with older Mechana Reverb builds and cannot be confused with the AU host shell.
+
+## 2026-08-16 14:02 EDT — Stream standalone Echo Preview in real time
+
+- Removed the full-source temporary-WAV preparation step from Echo Preview.
+- Preview now reads, processes, and sends 1,024-frame blocks directly to the shared
+  Core Audio/AirPlay sink while retaining pause, loop, scrub, bypass, and full-tail
+  behavior.
+- Echo parameter edits are adopted at block boundaries without restarting playback;
+  changing the dry source or output device still performs the expected stream restart.
+- Added a direct-sink regression test that verifies dry signal, delayed repeats,
+  feedback decay, and playback beyond the dry source through the complete echo tail.

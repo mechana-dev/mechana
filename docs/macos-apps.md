@@ -35,6 +35,10 @@ Preview/Apply transport, Core Audio/AirPlay destination selection, and History.
 Effect-specific controls remain on separate tabs. Echo includes Echoplex-style Tape
 and Deluxe Memory Man-style Analog development models; these are behavioral
 approximations rather than measured captures or manufacturer-endorsed emulations.
+Echo Preview processes and emits source blocks continuously instead of first
+rendering a temporary WAV. Its controls and bypass are read between blocks, so
+valid edits normally become audible within one 1,024-frame block. Apply remains a
+streaming file render and continues to preserve the calculated repeat tail.
 
 The build also writes `Mechana-Effects-macOS-arm64.zip`, preserving the application
 bundle for transfer to another Apple Silicon Mac. Because development builds are

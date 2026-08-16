@@ -35,7 +35,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.prefs.Preferences;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import javax.swing.BorderFactory;
@@ -77,7 +76,6 @@ final class StandaloneReverbFrame extends JFrame {
 	private final transient IrProfileLibrary profileLibrary = new IrProfileLibrary();
 	private final transient ReverbPreviewPlayer previewPlayer = new ReverbPreviewPlayer(impulseResponseCache);
 	private final transient WavPreviewPlayer echoPreviewPlayer = new WavPreviewPlayer();
-	private final transient EchoFileRenderer echoRenderer = new EchoFileRenderer();
 	private final JTextField dryPath = field("dryPath", "");
 	private final JTextField irPath = field("irPath", "");
 	private final JTextField artifactRoot = field("artifactRoot",
@@ -104,7 +102,6 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField echoDepth = field("echoModulationDepthMilliseconds", "1.6");
 	private final JCheckBox echoPingPong = check("echoPingPong", false);
 	private final JTabbedPane effectTabs = new JTabbedPane();
-	private transient Path echoPreviewFile;
 	private final JSlider wetSlider = new JSlider(0, 200, sliderValue(wet, 100, 35));
 	private final JSlider drySlider = new JSlider(0, 200, sliderValue(dry, 100, 100));
 	private final JSlider preDelaySlider = new JSlider(0, 200, Math.min(200, sliderValue(preDelay, 1, 20)));
@@ -117,7 +114,6 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JComboBox<IrProfileLibrary.Profile> profileSelector = new JComboBox<>();
 	private final Timer irPreviewChangeTimer = new Timer(350, event -> updatePreviewImpulseResponse());
 	private final Timer dryPreviewChangeTimer = new Timer(350, event -> restartPreviewWithSelectedSource());
-	private final AtomicLong echoPreviewGeneration = new AtomicLong();
 	private static final boolean AUTOMATIC_IR_PEAK_SAFETY = true;
 	private static final boolean AUTOMATIC_PEAK_PROTECTION = true;
 	private static final double AUTOMATIC_HEADROOM_DECIBELS = 1.0;
@@ -131,8 +127,6 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JCheckBox bypassPreview = new JCheckBox("Bypass (original audio)");
 	private final JCheckBox loopPreview = check("loopPreview", false);
 	private final JSlider previewPosition = new JSlider(0, 1000, 0);
-	private final Timer echoPreviewChangeTimer = new Timer(350,
-			event -> restartPreviewAt(previewPosition.getValue() / 1000.0));
 	private final JLabel previewTime = new JLabel("0:00 / 0:00");
 	private boolean updatingPreviewPosition;
 	private final JButton generateIr = new JButton("Generate IR Profile");
@@ -166,7 +160,6 @@ final class StandaloneReverbFrame extends JFrame {
 				echoPreviewPlayer.close();
 				engine.close();
 				echoEngine.close();
-				deleteEchoPreview();
 				dispose();
 			}
 		});
@@ -441,7 +434,6 @@ final class StandaloneReverbFrame extends JFrame {
 	private void configureActions() {
 		irPreviewChangeTimer.setRepeats(false);
 		dryPreviewChangeTimer.setRepeats(false);
-		echoPreviewChangeTimer.setRepeats(false);
 		run.addActionListener(event -> submit());
 		preview.addActionListener(event -> {
 			if (isEchoSelected() && echoPreviewPlayer.isActive())
@@ -461,8 +453,11 @@ final class StandaloneReverbFrame extends JFrame {
 		stopPreview.addActionListener(event -> stopPreview());
 		bypassPreview.addActionListener(event -> {
 			previewPlayer.setBypassed(bypassPreview.isSelected());
+			echoPreviewPlayer.setBypassed(bypassPreview.isSelected());
 			if (isEchoSelected() && echoPreviewPlayer.isActive())
-				restartPreviewAt(previewPosition.getValue() / 1000.0);
+				status.setText(bypassPreview.isSelected()
+						? "Preview bypassed — playing original audio"
+						: "Echo preview active");
 			else if (previewPlayer.isActive())
 				status.setText(bypassPreview.isSelected()
 						? "Preview bypassed — playing original audio"
@@ -497,7 +492,7 @@ final class StandaloneReverbFrame extends JFrame {
 				irPreviewChangeTimer.restart();
 		}));
 		dryPath.getDocument().addDocumentListener(listener(() -> {
-			if (previewPlayer.isActive())
+			if (previewActive())
 				dryPreviewChangeTimer.restart();
 		}));
 		artifactRoot.getDocument().addDocumentListener(listener(this::reloadHistory));
@@ -1149,40 +1144,14 @@ final class StandaloneReverbFrame extends JFrame {
 			showError(failure.getMessage());
 			return;
 		}
-		long generation = echoPreviewGeneration.incrementAndGet();
-		echoPreviewPlayer.stop();
-		preview.setEnabled(false);
-		stopPreview.setEnabled(true);
-		status.setText("Preparing Echo preview…");
-		Thread.ofVirtual().name("mechana-echo-preview-render").start(() -> {
-			try {
-				Path rendered = Files.createTempFile("mechana-echo-preview-", ".wav");
-				echoRenderer.render(source, rendered, selected, ignored -> {
-				});
-				if (generation != echoPreviewGeneration.get()) {
-					Files.deleteIfExists(rendered);
-					return;
-				}
-				Path previous = echoPreviewFile;
-				echoPreviewFile = rendered;
-				if (previous != null)
-					Files.deleteIfExists(previous);
-				SwingUtilities.invokeLater(() -> {
-					echoPreviewPlayer.setLooping(loopPreview.isSelected());
-					echoPreviewPlayer.play(rendered, startFraction,
-							state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)),
-							message -> SwingUtilities.invokeLater(() -> {
-								showError(message);
-								previewFinished();
-							}));
-				});
-			} catch (IOException | RuntimeException failure) {
-				SwingUtilities.invokeLater(() -> {
-					showError(failure.getMessage());
+		echoPreviewPlayer.setBypassed(bypassPreview.isSelected());
+		echoPreviewPlayer.setLooping(loopPreview.isSelected());
+		echoPreviewPlayer.play(source, selected, startFraction,
+				state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)),
+				message -> SwingUtilities.invokeLater(() -> {
+					showError(message);
 					previewFinished();
-				});
-			}
-		});
+				}));
 	}
 
 	private void restartPreviewAt(double fraction) {
@@ -1249,16 +1218,14 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void restartPreviewWithSelectedSource() {
-		if (!previewPlayer.isActive())
+		if (!previewActive())
 			return;
-		previewPlayer.stop();
-		previewFinished();
+		stopPreview();
 		status.setText("Switching preview to the selected dry audio…");
 		startPreview();
 	}
 
 	private void stopPreview() {
-		echoPreviewGeneration.incrementAndGet();
 		if (previewPlayer.isActive()) {
 			previewPlayer.stop();
 			status.setText("Preview stopped");
@@ -1328,7 +1295,11 @@ final class StandaloneReverbFrame extends JFrame {
 	private void echoParametersChanged() {
 		updateSuggestedName();
 		if (isEchoSelected() && echoPreviewPlayer.isActive())
-			echoPreviewChangeTimer.restart();
+			try {
+				echoPreviewPlayer.update(echoSettings());
+			} catch (IllegalArgumentException ignored) {
+				// A partially edited numeric field takes effect as soon as it becomes valid.
+			}
 	}
 
 	private void applyEchoModelDefaults() {
@@ -1342,17 +1313,6 @@ final class StandaloneReverbFrame extends JFrame {
 		echoSaturation.setText(Double.toString(defaults.saturation()));
 		echoRate.setText(Double.toString(defaults.modulationRateHertz()));
 		echoDepth.setText(Double.toString(defaults.modulationDepthMilliseconds()));
-	}
-
-	private void deleteEchoPreview() {
-		Path previewFile = echoPreviewFile;
-		echoPreviewFile = null;
-		if (previewFile != null)
-			try {
-				Files.deleteIfExists(previewFile);
-			} catch (IOException ignored) {
-				// Temporary Preview cleanup is best effort.
-			}
 	}
 
 	private String selectedAudioOutputName() {
