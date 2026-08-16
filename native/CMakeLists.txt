@@ -21,12 +21,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(MECHANA_BUILD_JUCE_PLUGIN "Build the temporary JUCE AU adapter" ON)
 option(MECHANA_BUILD_TESTS "Build the JUCE-free core tests" ON)
+option(MECHANA_BUILD_BENCHMARKS "Build the self-contained native DSP benchmark" ON)
 
 add_subdirectory(reverb-core)
 
 if(MECHANA_BUILD_TESTS)
     enable_testing()
     add_subdirectory(reverb-core/tests)
+endif()
+
+if(MECHANA_BUILD_BENCHMARKS)
+    add_subdirectory(reverb-core/benchmarks)
 endif()
 
 if(MECHANA_BUILD_JUCE_PLUGIN)

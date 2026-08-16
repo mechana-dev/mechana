@@ -19,6 +19,15 @@ Accelerate/vDSP supplies architecture-optimized real FFT operations on both Appl
 Silicon and Intel; a portable radix-2 implementation remains available elsewhere.
 The adapter is deliberately not a dependency of the Java plugin.
 
+The native tree also contains a JUCE-free, self-contained real-time benchmark.
+Its embedded deterministic workload uses a 5.8-second stereo response at 48 kHz
+and 128-sample blocks. Each cycle identifies the effect and architecture, reports
+preparation separately, and reports average, 95th-percentile, and maximum
+milliseconds per block together with their percentages of the 2.667 ms callback
+deadline. A packaged suite runs arm64 natively plus x86_64 under Rosetta on Apple
+Silicon, or x86_64 natively on Intel, and discovers future registered effect
+benchmarks using the same reporting contract.
+
 JUCE is pinned through CMake FetchContent and remains outside version control.
 It is AGPLv3/commercial dual-licensed; this internal POC does not establish rights
 to distribute a closed-source JUCE build. The core compiles and tests with JUCE

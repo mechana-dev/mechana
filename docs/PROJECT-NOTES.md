@@ -1916,3 +1916,18 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added output-list refresh to expose an AirPlay route connected after app launch.
   macOS reports the destination generically as `AirPlay` at this API layer even
   when the selected receiver is the Living Room Apple TV.
+
+## 2026-08-16 07:25 EDT — Standardize native effect performance measurements
+
+- Added a self-contained native benchmark using embedded deterministic stereo
+  audio and a 5.8-second captured response at 48 kHz with 128-sample callbacks.
+- Standardized effect identity, preparation time, average/p95/maximum milliseconds
+  per block, callback-deadline percentages, overall real-time load, and repeated
+  median summaries for future Reverb, Leslie, Echo, and other native effects.
+- Added a packaged suite that discovers registered effect benchmarks and runs
+  arm64 plus x86_64 under Rosetta on Apple Silicon, or x86_64 natively on Intel.
+  Native verification prints a short performance sample without imposing a
+  hardware-specific pass/fail threshold.
+- Built a separate temporary before/after comparison from the identical benchmark
+  source against the pre-optimization and current engines for both architectures;
+  no legacy DSP implementation was restored to the maintained source tree.
