@@ -24,6 +24,7 @@ void require(const bool condition, const std::string& message) {
 std::vector<float> render(const std::vector<float>& source, const std::vector<float>& ir) {
     mechana::reverb::ReverbEngine engine;
     engine.prepare(48'000.0, 1, 256);
+    require(engine.latencySamples() == 128, "deadline smoothing changed the fixed convolution latency");
     engine.setImpulseResponse({ ir });
     mechana::reverb::Parameters parameters;
     parameters.dryLevel = 0.0F;

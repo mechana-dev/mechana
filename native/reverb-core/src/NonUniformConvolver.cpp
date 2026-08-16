@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 
 namespace mechana::reverb {
 namespace {
@@ -37,6 +38,8 @@ void NonUniformConvolver::prepare(const std::span<const float> impulseResponse) 
         stage.input.assign(tier.blockSize, 0.0F);
         stage.output.assign(tier.blockSize, 0.0F);
         stage.convolver.prepare(impulseResponse.subspan(tier.offset, end - tier.offset), tier.blockSize);
+        const auto slices = std::max<std::size_t>(1, tier.blockSize / latency);
+        stage.partitionsPerSlice = (stage.convolver.partitionCount() + slices - 1) / slices;
         maximumScheduledDistance = std::max(maximumScheduledDistance, stage.delay + stage.blockSize + 1);
         stages_.push_back(std::move(stage));
     }
@@ -49,6 +52,8 @@ void NonUniformConvolver::reset() noexcept {
     std::fill(outputRing_.begin(), outputRing_.end(), 0.0F);
     for (auto& stage : stages_) {
         stage.position = 0;
+        stage.samplesUntilWork = 0;
+        stage.processing = false;
         std::fill(stage.input.begin(), stage.input.end(), 0.0F);
         std::fill(stage.output.begin(), stage.output.end(), 0.0F);
         stage.convolver.reset();
@@ -59,17 +64,31 @@ float NonUniformConvolver::processSample(const float input) noexcept {
     const auto result = outputRing_[outputPosition_];
     outputRing_[outputPosition_] = 0.0F;
     for (auto& stage : stages_) {
+        if (stage.processing && --stage.samplesUntilWork == 0) {
+            processSlice(stage);
+            stage.samplesUntilWork = latency;
+        }
         stage.input[stage.position++] = input;
         if (stage.position != stage.blockSize)
             continue;
-        stage.convolver.process(stage.input, stage.output);
-        const auto first = (outputPosition_ + 1 + stage.delay) % outputRing_.size();
-        for (std::size_t frame = 0; frame < stage.blockSize; ++frame)
-            outputRing_[(first + frame) % outputRing_.size()] += stage.output[frame];
+        assert(!stage.processing);
+        stage.convolver.beginProcess(stage.input);
+        stage.processing = true;
+        stage.scheduledFirst = (outputPosition_ + 1 + stage.delay) % outputRing_.size();
+        stage.samplesUntilWork = latency;
+        processSlice(stage);
         stage.position = 0;
     }
     outputPosition_ = (outputPosition_ + 1) % outputRing_.size();
     return result;
+}
+
+void NonUniformConvolver::processSlice(Stage& stage) noexcept {
+    if (!stage.convolver.processPartitions(stage.partitionsPerSlice, stage.output))
+        return;
+    for (std::size_t frame = 0; frame < stage.blockSize; ++frame)
+        outputRing_[(stage.scheduledFirst + frame) % outputRing_.size()] += stage.output[frame];
+    stage.processing = false;
 }
 
 } // namespace mechana::reverb

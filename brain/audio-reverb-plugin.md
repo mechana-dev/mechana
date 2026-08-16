@@ -231,3 +231,14 @@ code as the standalone app. It accepts an original sweep WAV plus the hardware
 unit's recorded wet return, requires matching sample rates, and emits a trimmed
 24-bit convolution-ready IR. Both paths use regularized FFT division, preserve
 captured gain, align the impulse, estimate the decay tail, and fade the trim edge.
+
+Native real-time performance uses the shared effect benchmark contract. The
+Reverb benchmark carries a constant-duration deterministic response and reports
+44.1, 48, 88.2, and 96 kHz separately, including each rate's actual callback
+deadline; this prevents higher-rate cost from being inferred solely from 48 kHz.
+
+The native non-uniform convolver retains a fixed 128-sample latency. Its 512- and
+2,048-sample response tiers incrementally accumulate their frequency-domain
+partitions across the intervening 128-sample callbacks, while scheduling completed
+samples at the same original output positions. This smooths callback deadlines
+without changing partition order, convolution output, response timing, or latency.

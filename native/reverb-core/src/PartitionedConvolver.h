@@ -18,6 +18,9 @@ public:
     void prepare(std::span<const float> impulseResponse, std::size_t blockSize);
     void reset() noexcept;
     void process(std::span<const float> input, std::span<float> output) noexcept;
+    void beginProcess(std::span<const float> input) noexcept;
+    [[nodiscard]] bool processPartitions(std::size_t maximumPartitions, std::span<float> output) noexcept;
+    [[nodiscard]] std::size_t partitionCount() const noexcept;
 
 private:
     std::size_t blockSize_ {};
@@ -30,6 +33,8 @@ private:
     std::vector<float> transformInput_;
     std::vector<float> transformOutput_;
     std::vector<float> overlap_;
+    std::size_t pendingPartition_ {};
+    bool processing_ {};
 };
 
 } // namespace mechana::reverb

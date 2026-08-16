@@ -19,9 +19,10 @@ For the JUCE-free correctness suite followed by standardized performance output:
 native/verify.sh
 ```
 
-The performance sample reports preparation separately, then average, 95th-percentile,
-and maximum milliseconds per 128-sample block with each value expressed as a
-percentage of the 2.667 ms deadline. It is informational rather than a
+The performance suite reports preparation separately, then average,
+95th-percentile, and maximum milliseconds per 128-sample block with each value
+expressed as a percentage of the sample rate's callback deadline. Every effect is
+measured at 44.1, 48, 88.2, and 96 kHz. Results are informational rather than a
 machine-specific pass/fail gate. On Apple Silicon, verification also runs the
 x86_64 benchmark under Rosetta; Intel hosts run x86_64 natively. The distributable
 benchmark suite is built with `packaging/macos/build-effect-benchmarks.sh` and

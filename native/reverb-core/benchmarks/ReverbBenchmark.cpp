@@ -20,14 +20,14 @@
 #include <vector>
 
 namespace {
-constexpr std::size_t sampleRate = 48'000;
 constexpr std::size_t channels = 2;
 constexpr std::size_t blockSize = 128;
-constexpr std::size_t irFrames = 278'400;
+constexpr double irSeconds = 5.8;
 
 struct Options final {
     std::size_t cycles { 5 };
     double seconds { 2.0 };
+    std::size_t sampleRate { 48'000 };
 };
 
 struct Measurement final {
@@ -60,8 +60,10 @@ Options parseOptions(const int argc, char** argv) {
             options.cycles = positiveInteger(argv[++index], "cycles");
         else if (argument == "--seconds" && index + 1 < argc)
             options.seconds = positiveDouble(argv[++index], "seconds");
+        else if (argument == "--sample-rate" && index + 1 < argc)
+            options.sampleRate = positiveInteger(argv[++index], "sample rate");
         else if (argument == "--help") {
-            std::cout << "Usage: mechana_reverb_benchmark [--cycles N] [--seconds N]\n";
+            std::cout << "Usage: mechana_reverb_benchmark [--cycles N] [--seconds N] [--sample-rate HZ]\n";
             std::exit(0);
         } else
             throw std::invalid_argument("unknown or incomplete option: " + std::string(argument));
@@ -79,7 +81,8 @@ std::string architecture() {
 #endif
 }
 
-std::vector<float> createImpulseResponse() {
+std::vector<float> createImpulseResponse(const std::size_t sampleRate) {
+    const auto irFrames = static_cast<std::size_t>(std::round(irSeconds * static_cast<double>(sampleRate)));
     std::vector<float> ir(irFrames);
     for (std::size_t frame = 0; frame < ir.size(); ++frame) {
         const auto time = static_cast<double>(frame) / sampleRate;
@@ -132,7 +135,8 @@ Measurement measure(mechana::reverb::ReverbEngine& engine, const std::span<const
     return finishMeasurement(std::move(times), checksum);
 }
 
-void printMeasurement(const std::size_t cycle, const Measurement& measurement, const double audioSeconds) {
+void printMeasurement(const std::size_t cycle, const Measurement& measurement, const double audioSeconds,
+                      const std::size_t sampleRate) {
     const auto deadlineMilliseconds = static_cast<double>(blockSize) * 1'000.0 / sampleRate;
     const auto load = measurement.processingSeconds / audioSeconds * 100.0;
     const auto averageMilliseconds = measurement.averageMicroseconds / 1'000.0;
@@ -152,7 +156,14 @@ void printMeasurement(const std::size_t cycle, const Measurement& measurement, c
 
 double median(std::vector<double> values) {
     std::sort(values.begin(), values.end());
-    return values[values.size() / 2];
+    const auto middle = values.size() / 2;
+    if (values.size() % 2 == 0)
+        return (values[middle - 1] + values[middle]) / 2.0;
+    return values[middle];
+}
+
+double average(const std::span<const double> values) {
+    return std::accumulate(values.begin(), values.end(), 0.0) / static_cast<double>(values.size());
 }
 } // namespace
 
@@ -160,22 +171,22 @@ int main(const int argc, char** argv) {
     try {
         const auto options = parseOptions(argc, argv);
         const auto blocks = std::max<std::size_t>(1, static_cast<std::size_t>(
-                                                         std::ceil(options.seconds * sampleRate / blockSize)));
-        const auto audioSeconds = static_cast<double>(blocks * blockSize) / sampleRate;
-        const auto ir = createImpulseResponse();
+                                                         std::ceil(options.seconds * options.sampleRate / blockSize)));
+        const auto audioSeconds = static_cast<double>(blocks * blockSize) / options.sampleRate;
+        const auto ir = createImpulseResponse(options.sampleRate);
         const auto source = createSource(blocks);
         std::cout << std::fixed << std::setprecision(3);
         std::cout << "Mechana native effect benchmark v1\n"
                   << "effect-name=Convolution Reverb effect-id=audio-convolution-reverb architecture="
-                  << architecture() << " sample-rate=" << sampleRate << " channels=" << channels
+                  << architecture() << " sample-rate=" << options.sampleRate << " channels=" << channels
                   << " block=" << blockSize << " deadline-ms="
-                  << static_cast<double>(blockSize) * 1'000.0 / sampleRate << " ir-frames=" << ir.size()
-                  << " ir-seconds=" << static_cast<double>(ir.size()) / sampleRate << " cycle-audio-seconds="
+                  << static_cast<double>(blockSize) * 1'000.0 / options.sampleRate << " ir-frames=" << ir.size()
+                  << " ir-seconds=" << static_cast<double>(ir.size()) / options.sampleRate << " cycle-audio-seconds="
                   << audioSeconds << " cycles=" << options.cycles << '\n';
 
         mechana::reverb::ReverbEngine engine;
         const auto preparationStarted = std::chrono::steady_clock::now();
-        engine.prepare(sampleRate, channels, blockSize);
+        engine.prepare(options.sampleRate, channels, blockSize);
         engine.setImpulseResponse(std::vector<std::vector<float>>(channels, ir));
         const auto preparation =
             std::chrono::duration<double>(std::chrono::steady_clock::now() - preparationStarted).count();
@@ -186,10 +197,13 @@ int main(const int argc, char** argv) {
         for (std::size_t cycle = 1; cycle <= options.cycles; ++cycle) {
             const auto measurement = measure(engine, source, blocks);
             loads.push_back(measurement.processingSeconds / audioSeconds * 100.0);
-            printMeasurement(cycle, measurement, audioSeconds);
+            printMeasurement(cycle, measurement, audioSeconds, options.sampleRate);
         }
         const auto medianLoad = median(loads);
-        std::cout << "SUMMARY median-load=" << medianLoad << "% realtime=" << 100.0 / medianLoad << "x\n";
+        const auto [minimumLoad, maximumLoad] = std::minmax_element(loads.begin(), loads.end());
+        std::cout << "SUMMARY load-min=" << *minimumLoad << "% load-average=" << average(loads)
+                  << "% load-median=" << medianLoad << "% load-max=" << *maximumLoad
+                  << "% realtime-median=" << 100.0 / medianLoad << "x\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "benchmark error: " << error.what() << '\n';
