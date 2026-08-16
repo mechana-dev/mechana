@@ -37,7 +37,7 @@ final class MacAudioOutput {
 		}
 
 		static Device systemDefault() {
-			return new Device(null, "macOS System Output (AirPlay supported)", false);
+			return new Device(null, "macOS Selected Output (including AirPlay)", false);
 		}
 
 		static Device compatibilityOutput() {

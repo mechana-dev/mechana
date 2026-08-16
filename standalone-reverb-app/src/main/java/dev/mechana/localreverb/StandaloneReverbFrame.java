@@ -109,6 +109,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JButton preview = transportButton("▶", "Play preview", 78, 58, 30);
 	private final JButton stopPreview = transportButton("■", "Stop preview", 78, 58, 44);
 	private final JComboBox<MacAudioOutput.Device> audioOutput = new JComboBox<>();
+	private final JButton refreshAudioOutputs = new JButton("Refresh");
 	private final JCheckBox bypassPreview = new JCheckBox("Bypass (original audio)");
 	private final JCheckBox loopPreview = check("loopPreview", false);
 	private final JSlider previewPosition = new JSlider(0, 1000, 0);
@@ -129,6 +130,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTable jobTable = new JTable(jobs);
 	private boolean outputOverridden;
 	private boolean synchronizingLiveControls;
+	private boolean configuringAudioOutput;
 	private transient Path latestOutput;
 
 	StandaloneReverbFrame() {
@@ -233,6 +235,8 @@ final class StandaloneReverbFrame extends JFrame {
 		audioOutput.setPreferredSize(new Dimension(310, audioOutput.getPreferredSize().height));
 		audioOutput.setToolTipText("Choose the macOS or AirPlay destination used by Preview");
 		outputActions.add(audioOutput);
+		refreshAudioOutputs.setToolTipText("Refresh available macOS and AirPlay outputs");
+		outputActions.add(refreshAudioOutputs);
 		previewAndApply.add(outputActions, BorderLayout.NORTH);
 		JPanel actions = new JPanel(new BorderLayout(24, 0));
 		JPanel previewActions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 10, 5));
@@ -261,17 +265,32 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void configureAudioOutputs() {
-		String savedName = settings.get("previewAudioOutput", "macOS System Output (AirPlay supported)");
+		String savedName = settings.get("previewAudioOutput", "macOS Selected Output (including AirPlay)");
+		reloadAudioOutputs(savedName);
+		applyAudioOutput(false);
+		audioOutput.addActionListener(event -> {
+			if (!configuringAudioOutput)
+				applyAudioOutput(true);
+		});
+		refreshAudioOutputs.addActionListener(event -> {
+			MacAudioOutput.Device selected = (MacAudioOutput.Device) audioOutput.getSelectedItem();
+			reloadAudioOutputs(selected == null ? "" : selected.name());
+			applyAudioOutput(true);
+		});
+	}
+
+	private void reloadAudioOutputs(String selectedName) {
+		configuringAudioOutput = true;
+		audioOutput.removeAllItems();
 		MacAudioOutput.Device selected = null;
 		for (MacAudioOutput.Device device : MacAudioOutput.devices()) {
 			audioOutput.addItem(device);
-			if (device.name().equals(savedName))
+			if (device.name().equals(selectedName))
 				selected = device;
 		}
 		if (selected != null)
 			audioOutput.setSelectedItem(selected);
-		applyAudioOutput(false);
-		audioOutput.addActionListener(event -> applyAudioOutput(true));
+		configuringAudioOutput = false;
 	}
 
 	private void applyAudioOutput(boolean restartActivePreview) {

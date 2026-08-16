@@ -49,6 +49,29 @@ static bool string_property(AudioDeviceID device, AudioObjectPropertySelector se
     return converted;
 }
 
+static CFStringRef default_output_uid(void) {
+    AudioObjectPropertyAddress default_address = {
+        kAudioHardwarePropertyDefaultOutputDevice,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    AudioDeviceID device = kAudioObjectUnknown;
+    UInt32 device_size = sizeof(device);
+    if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &default_address, 0, NULL, &device_size, &device)
+            != noErr || device == kAudioObjectUnknown)
+        return NULL;
+    AudioObjectPropertyAddress uid_address = {
+        kAudioDevicePropertyDeviceUID,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    CFStringRef uid = NULL;
+    UInt32 uid_size = sizeof(uid);
+    if (AudioObjectGetPropertyData(device, &uid_address, 0, NULL, &uid_size, &uid) != noErr)
+        return NULL;
+    return uid;
+}
+
 static int list_outputs(void) {
     AudioObjectPropertyAddress address = {
         kAudioHardwarePropertyDevices,
@@ -113,8 +136,10 @@ static int play(const double sample_rate, const UInt32 channels, const char *dev
     OSStatus status = AudioQueueNewOutput(&format, fill_buffer, NULL, NULL, NULL, 0, &queue);
     if (status != noErr)
         return 3;
-    if (device_uid != NULL && device_uid[0] != '\0') {
-        CFStringRef uid = CFStringCreateWithCString(NULL, device_uid, kCFStringEncodingUTF8);
+    {
+        CFStringRef uid = device_uid != NULL && device_uid[0] != '\0'
+                ? CFStringCreateWithCString(NULL, device_uid, kCFStringEncodingUTF8)
+                : default_output_uid();
         if (uid == NULL) {
             AudioQueueDispose(queue, true);
             return 4;

@@ -1907,3 +1907,12 @@ cloud providers remain future direction; see `brain/current-state.md` and
   active AirPlay system route without changing convolution or rendered artifacts.
 - Compiled the helper for arm64 and x86_64, verified Core Audio enumeration and
   silent playback, and added device-list parsing coverage to the standalone app.
+
+## 2026-08-15 20:42 EDT — Follow the selected macOS AirPlay output
+
+- Corrected Preview's automatic output route to resolve Core Audio's current
+  default output device when playback begins, rather than allowing Audio Queue to
+  fall back to the separate system-output device.
+- Added output-list refresh to expose an AirPlay route connected after app launch.
+  macOS reports the destination generically as `AirPlay` at this API layer even
+  when the selected receiver is the Living Room Apple TV.

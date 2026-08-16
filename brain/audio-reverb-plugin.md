@@ -137,7 +137,7 @@ general local plugin runtime contract.
 The Apply Reverb tab can also stream the selected recording through the same
 partitioned-convolution primitives without creating a job artifact. Packaged
 macOS builds include a small Core Audio output bridge: Preview can follow the
-current macOS system output, including an active AirPlay route, or explicitly
+current macOS selected output, including an active AirPlay route, or explicitly
 select any output device published by Core Audio. A Java Sound compatibility
 route remains available when the native helper is absent. Preview supports play,
 pause/resume, and stop, performs
