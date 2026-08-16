@@ -101,6 +101,16 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField echoRate = field("echoModulationRateHertz", "0.55");
 	private final JTextField echoDepth = field("echoModulationDepthMilliseconds", "1.6");
 	private final JCheckBox echoPingPong = check("echoPingPong", false);
+	private final JSlider echoDelaySlider = new JSlider(1, 1_500, boundedSliderValue(echoDelay, 1, 375, 1, 1_500));
+	private final JSlider echoFeedbackSlider = new JSlider(0, 95, boundedSliderValue(echoFeedback, 100, 38, 0, 95));
+	private final JSlider echoWetSlider = new JSlider(0, 200, boundedSliderValue(echoWet, 100, 35, 0, 200));
+	private final JSlider echoDrySlider = new JSlider(0, 200, boundedSliderValue(echoDry, 100, 100, 0, 200));
+	private final JSlider echoLowCutSlider = new JSlider(0, 1000, frequencySliderValue(echoLowCut));
+	private final JSlider echoHighCutSlider = new JSlider(0, 1000, frequencySliderValue(echoHighCut));
+	private final JSlider echoSaturationSlider = new JSlider(0, 100,
+			boundedSliderValue(echoSaturation, 100, 22, 0, 100));
+	private final JSlider echoRateSlider = new JSlider(0, 1_000, boundedSliderValue(echoRate, 100, 55, 0, 1_000));
+	private final JSlider echoDepthSlider = new JSlider(0, 1_000, boundedSliderValue(echoDepth, 100, 160, 0, 1_000));
 	private final JTabbedPane effectTabs = new JTabbedPane();
 	private final JSlider wetSlider = new JSlider(0, 200, sliderValue(wet, 100, 35));
 	private final JSlider drySlider = new JSlider(0, 200, sliderValue(dry, 100, 100));
@@ -264,17 +274,17 @@ final class StandaloneReverbFrame extends JFrame {
 		c.insets = new Insets(6, 8, 6, 8);
 		c.gridy = 0;
 		addRow(panel, c, "Echo model", echoModel);
-		addRow(panel, c, "Delay (ms)", echoDelay);
-		addRow(panel, c, "Feedback (0–0.99)", echoFeedback);
-		addRow(panel, c, "Wet level (0–2)", echoWet);
-		addRow(panel, c, "Dry level (0–2)", echoDry);
+		addRow(panel, c, "Delay (1–1500 ms slider)", sliderWithOverride(echoDelaySlider, echoDelay));
+		addRow(panel, c, "Feedback (0–0.95 slider)", sliderWithOverride(echoFeedbackSlider, echoFeedback));
+		addRow(panel, c, "Wet level (0–2)", sliderWithOverride(echoWetSlider, echoWet));
+		addRow(panel, c, "Dry level (0–2)", sliderWithOverride(echoDrySlider, echoDry));
 		addSection(panel, c, "Repeat color");
-		addRow(panel, c, "Low-cut (Hz, 0 = off)", echoLowCut);
-		addRow(panel, c, "High-cut (Hz, 0 = off)", echoHighCut);
-		addRow(panel, c, "Saturation (0–1)", echoSaturation);
+		addRow(panel, c, "Low-cut (Hz, 0 = off)", sliderWithOverride(echoLowCutSlider, echoLowCut));
+		addRow(panel, c, "High-cut (Hz, 0 = off)", sliderWithOverride(echoHighCutSlider, echoHighCut));
+		addRow(panel, c, "Saturation (0–1)", sliderWithOverride(echoSaturationSlider, echoSaturation));
 		addSection(panel, c, "Modulation");
-		addRow(panel, c, "Rate (Hz)", echoRate);
-		addRow(panel, c, "Depth (ms)", echoDepth);
+		addRow(panel, c, "Rate (0–10 Hz slider)", sliderWithOverride(echoRateSlider, echoRate));
+		addRow(panel, c, "Depth (0–10 ms slider)", sliderWithOverride(echoDepthSlider, echoDepth));
 		echoPingPong.setText("Stereo ping-pong");
 		addRow(panel, c, "", echoPingPong);
 		return panel;
@@ -525,6 +535,15 @@ final class StandaloneReverbFrame extends JFrame {
 		configureLiveControl(lateSlider, lateLevel, 100);
 		configureLiveControl(attackSlider, attack, 1);
 		configureLiveControl(decaySlider, decayLength, 1);
+		configureLiveControl(echoDelaySlider, echoDelay, 1);
+		configureLiveControl(echoFeedbackSlider, echoFeedback, 100);
+		configureLiveControl(echoWetSlider, echoWet, 100);
+		configureLiveControl(echoDrySlider, echoDry, 100);
+		configureFrequencyControl(echoLowCutSlider, echoLowCut);
+		configureFrequencyControl(echoHighCutSlider, echoHighCut);
+		configureLiveControl(echoSaturationSlider, echoSaturation, 100);
+		configureLiveControl(echoRateSlider, echoRate, 100);
+		configureLiveControl(echoDepthSlider, echoDepth, 100);
 	}
 
 	private void configureFrequencyControl(JSlider slider, JTextField override) {
@@ -601,6 +620,15 @@ final class StandaloneReverbFrame extends JFrame {
 		try {
 			int value = (int) Math.round(Double.parseDouble(field.getText().strip()) * scale);
 			return Math.max(0, Math.min(scale == 1 ? 10_000 : 200, value));
+		} catch (NumberFormatException invalid) {
+			return fallback;
+		}
+	}
+
+	private static int boundedSliderValue(JTextField field, int scale, int fallback, int minimum, int maximum) {
+		try {
+			int value = (int) Math.round(Double.parseDouble(field.getText().strip()) * scale);
+			return Math.max(minimum, Math.min(maximum, value));
 		} catch (NumberFormatException invalid) {
 			return fallback;
 		}

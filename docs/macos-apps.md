@@ -39,6 +39,10 @@ Echo Preview processes and emits source blocks continuously instead of first
 rendering a temporary WAV. Its controls and bypass are read between blocks, so
 valid edits normally become audible within one 1,024-frame block. Apply remains a
 streaming file render and continues to preserve the calculated repeat tail.
+Echo timing, feedback, mix, repeat filtering, saturation, and modulation controls
+use the same slider-plus-numeric-override pattern as Reverb. The sliders emphasize
+practical musical ranges; the adjacent fields retain the engine's wider valid range
+for exact values and less common settings.
 
 The build also writes `Mechana-Effects-macOS-arm64.zip`, preserving the application
 bundle for transfer to another Apple Silicon Mac. Because development builds are

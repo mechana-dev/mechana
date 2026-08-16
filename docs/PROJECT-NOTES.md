@@ -2010,3 +2010,13 @@ cloud providers remain future direction; see `brain/current-state.md` and
   changing the dry source or output device still performs the expected stream restart.
 - Added a direct-sink regression test that verifies dry signal, delayed repeats,
   feedback decay, and playback beyond the dry source through the complete echo tail.
+
+## 2026-08-16 14:08 EDT — Add practical Echo sliders with numeric overrides
+
+- Converted Delay, Feedback, Wet, Dry, repeat Low/High Cut, Saturation, Modulation
+  Rate, and Modulation Depth to paired sliders and editable numeric fields.
+- Chose practical slider spans of 1–1500 ms delay, 0–0.95 feedback, 0–2 mix,
+  logarithmic 20 Hz–20 kHz filtering with an off position, 0–1 saturation, and
+  0–10 Hz/ms modulation. Numeric overrides retain the wider DSP validation ranges.
+- Slider drags and valid typed values continue to update real-time Echo Preview at
+  block boundaries and automatically refresh the suggested output name.
