@@ -2067,3 +2067,18 @@ cloud providers remain future direction; see `brain/current-state.md` and
   plus one delay-cycle safety margin, retaining the 30-second maximum. The standalone
   renderer uses the same threshold and safety policy.
 - Added native and Java regressions for calibrated defaults and conservative tails.
+
+## 2026-08-17 12:22:22 EDT — Add first native Leslie development model
+
+- Added a JUCE-free C++20 moving-speaker core with a two-way crossover, independent
+  horn/drum mechanical inertia, Doppler delay, directional amplitude, stereo
+  microphone geometry, cabinet drive, and smoothed real-time controls.
+- Added a separate Mechana Leslie Audio Unit with Stop/Slow/Fast, Drive, Horn
+  Balance, Mic Distance, Stereo Width, Crossover, Wet, Dry, Bypass, and Reset.
+- Added Leslie to the native Mechana Effects app. The app now processes only the
+  currently selected Reverb, Echo, or Leslie tab rather than chaining every effect.
+- Registered Modeled Leslie in the standard four-sample-rate, cross-architecture
+  benchmark and native macOS packaging/notarization flow.
+- Added core regressions for transparent bypass, finite stereo motion, zero reported
+  latency, and physically distinct horn/drum acceleration. This is a behavioral
+  development model requiring listening calibration, not a measured cabinet clone.

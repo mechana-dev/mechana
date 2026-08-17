@@ -1,4 +1,4 @@
-# Native Reverb development
+# Native effects development
 
 This tree begins the native Audio Unit implementation while preserving an exit
 from JUCE. `reverb-core` contains product DSP and has no JUCE dependency. The
@@ -10,6 +10,12 @@ delay, feedback, repeat filtering, saturation, modulation, stereo routing, and
 neutral plus initial tape/BBD-style behavioral defaults. The temporary Echo
 adapter builds a separate AU; it does not use convolution. `apps/mechana-effects`
 builds a live-input macOS application with separate Reverb and Echo tabs.
+
+`leslie-core` is a separate JUCE-free moving-speaker engine. It models a
+crossed-over treble horn and bass drum with independent mechanical inertia,
+Doppler and directional amplitude motion, stereo microphone geometry, drive,
+and smoothed real-time controls. Its temporary adapter builds a separate AU, and
+the combined application adds a Leslie tab. Only the selected tab processes audio.
 
 ## Build on macOS
 
@@ -39,13 +45,13 @@ benchmark suite is built with `packaging/macos/build-effect-benchmarks.sh` and
 automatically discovers each registered native effect benchmark.
 
 `packaging/macos/package-native-effects.sh` packages architecture-specific ZIPs
-for the combined app, both separate AU components, and the benchmark suite. The
-Echo and Reverb benchmark results remain distinct at all four standard rates.
+for the combined app, the three separate AU components, and the benchmark suite.
+Reverb, Echo, and Leslie results remain distinct at all four standard rates.
 Development packaging uses ad-hoc signatures by default. Release packaging sets
 `MACOS_SIGNING_IDENTITY` to a Developer ID Application identity, which enables
 hardened runtime and secure timestamps, and may limit packaging to `arm64` or
 `x86_64`. After the one-time `notarytool` Keychain profile setup, run
-`packaging/macos/notarize-native-effects.sh <architecture>` to submit all four
+`packaging/macos/notarize-native-effects.sh <architecture>` to submit all five
 archives, staple supported bundles, rebuild their ZIPs, and validate the result.
 
 The build downloads the pinned JUCE 9.0.0 source into the ignored build tree.
