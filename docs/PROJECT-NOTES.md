@@ -2053,3 +2053,17 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added an always-visible **Reset Echo**, which restores the selected model's nominal
   delay, feedback, mix, filtering, drive, and modulation settings while disabling
   Ping-Pong and Bypass.
+
+## 2026-08-17 09:43:13 EDT — Refine Echo level and host-tail behavior
+
+- Changed the Tape and Analog Memory starting Wet value from 35% to 26%, approximately
+  2.6 dB lower, following a level-matched comparison with Scott's EchoBoy reference.
+  Wet remains the user control for first-repeat level; Feedback remains independent
+  and controls subsequent repeat decay.
+- Changed the Echo Audio Unit's Feedback, Wet, Dry, and Modulation Depth presentation
+  to percentages while preserving underlying parameter identities, stored values,
+  automation ranges, and DSP behavior.
+- Replaced the AU's -60 dB tail estimate with a conservative -100 dB amplitude target
+  plus one delay-cycle safety margin, retaining the 30-second maximum. The standalone
+  renderer uses the same threshold and safety policy.
+- Added native and Java regressions for calibrated defaults and conservative tails.

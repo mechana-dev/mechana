@@ -28,10 +28,16 @@ time-varying behavior belong to the echo engine.
 
 The initial models need listening calibration before product use. A separate JUCE
 Audio Unit adapter exposes the two colored models, automatable controls, host-state
-persistence, and a functional generic editor. The `Mechana Effects` live-input app
+persistence, and a custom editor. Feedback, wet, dry, and modulation depth are
+presented as percentages while their stable internal parameter ranges remain
+unchanged. Listening comparison against a reference EchoBoy render lowered the
+starting wet/first-repeat level to 26%. The AU conservatively reports decay through
+-100 dB amplitude plus one safety repeat, capped at 30 seconds, so hosts that honor
+effect tails do not stop an otherwise orderly quiet decay at an audible boundary.
+The `Mechana Effects` live-input app
 hosts Reverb and Echo on separate tabs. A standard benchmark target exercises the
 production Echo engine at 44.1, 48, 88.2, and 96 kHz and is packaged for arm64 and
-x86_64. A custom Echo editor and Java/Mechana worker plugin remain follow-up work.
+x86_64. A Java/Mechana worker plugin remains follow-up work.
 
 ## Future hardware characterization
 

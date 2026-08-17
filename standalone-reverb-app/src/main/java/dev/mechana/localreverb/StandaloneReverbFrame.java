@@ -93,7 +93,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JComboBox<EchoSettings.Model> echoModel = new JComboBox<>(EchoSettings.Model.values());
 	private final JTextField echoDelay = field("echoDelayMilliseconds", "375");
 	private final JTextField echoFeedback = field("echoFeedback", "0.38");
-	private final JTextField echoWet = field("echoWet", "0.35");
+	private final JTextField echoWet = field("echoWet", "0.26");
 	private final JTextField echoDry = field("echoDry", "1.0");
 	private final JTextField echoLowCut = field("echoLowCutHertz", "45");
 	private final JTextField echoHighCut = field("echoHighCutHertz", "6000");
@@ -103,7 +103,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JCheckBox echoPingPong = check("echoPingPong", false);
 	private final JSlider echoDelaySlider = new JSlider(1, 1_500, boundedSliderValue(echoDelay, 1, 375, 1, 1_500));
 	private final JSlider echoFeedbackSlider = new JSlider(0, 95, boundedSliderValue(echoFeedback, 100, 38, 0, 95));
-	private final JSlider echoWetSlider = new JSlider(0, 200, boundedSliderValue(echoWet, 100, 35, 0, 200));
+	private final JSlider echoWetSlider = new JSlider(0, 200, boundedSliderValue(echoWet, 100, 26, 0, 200));
 	private final JSlider echoDrySlider = new JSlider(0, 200, boundedSliderValue(echoDry, 100, 100, 0, 200));
 	private final JSlider echoLowCutSlider = new JSlider(0, 1000, frequencySliderValue(echoLowCut));
 	private final JSlider echoHighCutSlider = new JSlider(0, 1000, frequencySliderValue(echoHighCut));

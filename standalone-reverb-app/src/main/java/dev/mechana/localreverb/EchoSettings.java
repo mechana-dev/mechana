@@ -34,8 +34,8 @@ record EchoSettings(Model model, double delayMilliseconds, double feedback, doub
 
 	static EchoSettings defaults(Model model) {
 		return model == Model.TAPE
-				? new EchoSettings(model, 375, 0.38, 0.35, 1, 45, 6_000, 0.22, 0.55, 1.6, false)
-				: new EchoSettings(model, 330, 0.36, 0.35, 1, 80, 4_500, 0.16, 0.8, 2.8, false);
+				? new EchoSettings(model, 375, 0.38, 0.26, 1, 45, 6_000, 0.22, 0.55, 1.6, false)
+				: new EchoSettings(model, 330, 0.36, 0.26, 1, 80, 4_500, 0.16, 0.8, 2.8, false);
 	}
 
 	private static boolean range(double value, double minimum, double maximum) {
