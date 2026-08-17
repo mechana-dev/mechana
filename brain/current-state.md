@@ -97,7 +97,11 @@ This file reports repository evidence, not desired future status.
   on the audio thread. Separate Apple Silicon and Intel development builds pass
   the core numerical and long-response performance tests. It is not a release:
   durable user-library management, smoothing, automatic peak-protection parity,
-  Universal packaging, signing, and notarization remain future work. JUCE is
+  Universal packaging remains future work. Architecture-specific native release
+  packaging supports Developer ID signing, hardened runtime, secure timestamps,
+  Apple notarization, ticket stapling for the app and AU components, and local
+  validation. Native macOS deliverables declare macOS 12.0 as their minimum
+  deployment target for Intel Monterey compatibility. JUCE is
   fetched only into the ignored build directory and is not part of the core.
   A JUCE-free native benchmark with embedded deterministic audio now reports
   per-effect preparation, average/p95/maximum block milliseconds, deadline use,

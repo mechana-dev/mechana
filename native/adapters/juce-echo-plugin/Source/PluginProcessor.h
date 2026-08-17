@@ -38,6 +38,9 @@ public:
     void getStateInformation(juce::MemoryBlock&) override;
     void setStateInformation(const void*, int) override;
 
+    juce::AudioProcessorValueTreeState& parameters() noexcept { return parameters_; }
+    void resetToCurrentModelDefaults();
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:

@@ -2020,3 +2020,36 @@ cloud providers remain future direction; see `brain/current-state.md` and
   0–10 Hz/ms modulation. Numeric overrides retain the wider DSP validation ranges.
 - Slider drags and valid typed values continue to update real-time Echo Preview at
   block boundaries and automatically refresh the suggested output name.
+
+## 2026-08-16 15:33 EDT — Add native release signing and notarization workflow
+
+- Added optional Developer ID signing with hardened runtime and secure timestamps
+  to architecture-specific native app, AU, and benchmark packaging while retaining
+  ad-hoc signing for development builds.
+- Added a reusable `notarytool` workflow that submits the combined app, both AU
+  plugins, and benchmarks, staples the app and AU tickets, rebuilds the final ZIPs,
+  and validates signatures and Gatekeeper acceptance.
+- Produced the first Intel release set signed by Mark Vita's Developer ID. Apple
+  accepted all four notarization submissions, and local stapler/signature validation
+  passed for the combined app and both AU components.
+- Replaced the quarantined Finder-facing benchmark `.command` file with a native
+  **Run Benchmarks.app** that captures the same suite output in a scrollable window.
+  Its launcher and embedded benchmarks are independently signed before the enclosing
+  app; Apple accepted the corrected Intel archive and Gatekeeper reports Notarized
+  Developer ID.
+- Corrected the native macOS deployment target from the current SDK default to
+  macOS 12.0. Rebuilt and Rosetta-tested the complete Intel suite, verified the
+  Mach-O minimum on the combined app, both AUs, and both benchmarks, then obtained
+  fresh Apple notarization acceptance and stapled tickets for Monterey distribution.
+
+## 2026-08-16 16:20 EDT — Align native Reverb and Echo plugin controls
+
+- Removed the redundant product title from the Reverb Audio Unit editor and aligned
+  the Bypass control at the upper right in both native plugin editors.
+- Replaced Echo's generic parameter editor with a purpose-built editor using the
+  same slider-plus-numeric-control language as Reverb.
+- Changed Echo model selection to a pull-down containing the Tape and Analog Memory
+  models.
+- Added an always-visible **Reset Echo**, which restores the selected model's nominal
+  delay, feedback, mix, filtering, drive, and modulation settings while disabling
+  Ping-Pong and Bypass.

@@ -3,6 +3,7 @@
  * Licensed under the Apache License, Version 2.0. See the repository LICENSE.
  */
 #include "PluginProcessor.h"
+#include "PluginEditor.h"
 
 #include <mechana/echo/Models.h>
 
@@ -139,6 +140,13 @@ void MechanaEchoAudioProcessor::applyModelDefaults(const int model) {
     applyingModel_ = false;
 }
 
+void MechanaEchoAudioProcessor::resetToCurrentModelDefaults() {
+    applyModelDefaults(getCurrentProgram());
+    for (const auto* id : { "pingpong", "bypass" })
+        if (auto* parameter = parameters_.getParameter(id))
+            parameter->setValueNotifyingHost(0.0F);
+}
+
 void MechanaEchoAudioProcessor::getStateInformation(juce::MemoryBlock& destination) {
     if (auto xml = parameters_.copyState().createXml())
         copyXmlToBinary(*xml, destination);
@@ -149,5 +157,5 @@ void MechanaEchoAudioProcessor::setStateInformation(const void* data, const int 
 }
 
 juce::AudioProcessorEditor* MechanaEchoAudioProcessor::createEditor() {
-    return new juce::GenericAudioProcessorEditor(*this);
+    return new MechanaEchoAudioProcessorEditor(*this);
 }

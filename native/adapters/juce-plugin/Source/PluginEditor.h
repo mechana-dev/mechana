@@ -21,7 +21,6 @@ private:
     void setParameter(const juce::String& id, float value);
 
     MechanaReverbAudioProcessor& processor_;
-    juce::Label title_;
     juce::Label profile_;
     juce::ComboBox profileSelector_;
     juce::TextButton addProfile_ { "Add..." };

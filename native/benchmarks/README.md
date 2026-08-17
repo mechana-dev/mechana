@@ -26,3 +26,6 @@ effect and architecture.
 Architecture folders are discovered independently. An Intel-only package runs
 natively on Intel Macs and through Rosetta on Apple Silicon Macs, identifying
 the execution mode in its summary instead of requiring an ARM64 executable.
+Downloaded release packages provide a signed and notarized **Run Benchmarks.app**
+that displays the complete output in a scrollable window. The shell runner remains
+an internal implementation resource rather than a Finder-launched `.command` file.

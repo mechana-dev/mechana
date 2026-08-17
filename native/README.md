@@ -19,6 +19,10 @@ cmake --build native/build --config Release
 ctest --test-dir native/build -C Release --output-on-failure
 ```
 
+Native apps, AU components, and benchmarks target macOS 12.0 or later by default,
+including Intel Monterey systems. Callers may override
+`CMAKE_OSX_DEPLOYMENT_TARGET` explicitly when configuring a specialized build.
+
 For the JUCE-free correctness suite followed by standardized performance output:
 
 ```shell
@@ -37,6 +41,12 @@ automatically discovers each registered native effect benchmark.
 `packaging/macos/package-native-effects.sh` packages architecture-specific ZIPs
 for the combined app, both separate AU components, and the benchmark suite. The
 Echo and Reverb benchmark results remain distinct at all four standard rates.
+Development packaging uses ad-hoc signatures by default. Release packaging sets
+`MACOS_SIGNING_IDENTITY` to a Developer ID Application identity, which enables
+hardened runtime and secure timestamps, and may limit packaging to `arm64` or
+`x86_64`. After the one-time `notarytool` Keychain profile setup, run
+`packaging/macos/notarize-native-effects.sh <architecture>` to submit all four
+archives, staple supported bundles, rebuild their ZIPs, and validate the result.
 
 The build downloads the pinned JUCE 9.0.0 source into the ignored build tree.
 JUCE is not vendored and no JUCE type crosses into `reverb-core`. The AU component

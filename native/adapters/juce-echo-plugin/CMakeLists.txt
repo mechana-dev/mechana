@@ -17,7 +17,12 @@ juce_add_plugin(MechanaEcho
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE)
 
-target_sources(MechanaEcho PRIVATE Source/PluginEntry.cpp Source/PluginProcessor.cpp Source/PluginProcessor.h)
+target_sources(MechanaEcho PRIVATE
+    Source/PluginEditor.cpp
+    Source/PluginEditor.h
+    Source/PluginEntry.cpp
+    Source/PluginProcessor.cpp
+    Source/PluginProcessor.h)
 target_compile_definitions(MechanaEcho PUBLIC JUCE_REPORT_APP_USAGE=0 JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
 target_link_libraries(MechanaEcho PRIVATE
     mechana_echo_core
