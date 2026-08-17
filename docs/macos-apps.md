@@ -5,8 +5,9 @@ Mechana provides four native macOS application bundles for local development:
 - **Mechana Server.app** starts or reveals its dedicated local server dashboard window.
 - **Mechana Worker Control.app** runs Worker Control as an ordinary desktop app.
 - **Mechana Job Launcher.app** runs the Client Job Launcher as an ordinary desktop app.
-- **Mechana Reverb.app** runs the production convolution-reverb plugin entirely
-  on one Mac, with no server, worker, network connection, or separate Java installation.
+- **Mechana Effects.app** provides the original file-oriented local workflow for
+  convolution reverb and modeled echo on one Mac, with no server, worker, network
+  connection, or separate Java installation.
 
 The bundles are unsigned local-development builds. They include a Java runtime,
 so Finder and Dock launches do not depend on a shell, `JAVA_HOME`, Maven, or a
@@ -29,12 +30,26 @@ The preview transport includes an elapsed/total scrub bar. Releasing a dragged
 position restarts preview there after a silent state-building pre-roll, preserving
 the captured reverb rather than starting the effect from an empty convolution.
 
-The build also writes `Mechana-Reverb-macOS-arm64.zip`, preserving the application
+Reverb and Echo share dry-audio selection, output naming and folder selection,
+Preview/Apply transport, Core Audio/AirPlay destination selection, and History.
+Effect-specific controls remain on separate tabs. Echo includes Echoplex-style Tape
+and Deluxe Memory Man-style Analog development models; these are behavioral
+approximations rather than measured captures or manufacturer-endorsed emulations.
+Echo Preview processes and emits source blocks continuously instead of first
+rendering a temporary WAV. Its controls and bypass are read between blocks, so
+valid edits normally become audible within one 1,024-frame block. Apply remains a
+streaming file render and continues to preserve the calculated repeat tail.
+Echo timing, feedback, mix, repeat filtering, saturation, and modulation controls
+use the same slider-plus-numeric-override pattern as Reverb. The sliders emphasize
+practical musical ranges; the adjacent fields retain the engine's wider valid range
+for exact values and less common settings.
+
+The build also writes `Mechana-Effects-macOS-arm64.zip`, preserving the application
 bundle for transfer to another Apple Silicon Mac. Because development builds are
 not notarized, a recipient may need to Control-click the app and choose **Open**.
 Use `packaging/macos/build-reverb-app.sh` with `JAVA_HOME` set to a Java 25 JDK of
 the desired architecture to build only the standalone app. An Intel JDK produces
-`Mechana-Reverb-macOS-x86_64.zip`; Rosetta permits that build on an Apple Silicon
+`Mechana-Effects-macOS-x86_64.zip`; Rosetta permits that build on an Apple Silicon
 development Mac. The JDK architecture determines the bundled runtime and native
 launcher architecture.
 
@@ -168,7 +183,7 @@ After installation, Finder-equivalent launches can be exercised with:
 open "/Applications/Mechana Server.app"
 open "/Applications/Mechana Worker Control.app"
 open "/Applications/Mechana Job Launcher.app"
-open "/Applications/Mechana Reverb.app"
+open "/Applications/Mechana Effects.app"
 ```
 
 Use Activity Monitor or `launchctl print gui/$(id -u)/dev.mechana.server` to

@@ -40,6 +40,7 @@ juce_add_plugin(MechanaReverb
 target_sources(MechanaReverb PRIVATE
     Source/PluginEditor.cpp
     Source/PluginEditor.h
+    Source/PluginEntry.cpp
     Source/PluginProcessor.cpp
     Source/PluginProcessor.h)
 

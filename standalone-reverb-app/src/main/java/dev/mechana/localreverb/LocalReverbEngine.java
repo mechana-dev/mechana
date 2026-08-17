@@ -251,6 +251,8 @@ public final class LocalReverbEngine implements AutoCloseable {
 	}
 
 	private static String parameterSummary(Map<String, Object> values) {
+		if (values.get("parameterSummary") != null)
+			return String.valueOf(values.get("parameterSummary"));
 		return "Wet %s · Dry %s · Pre %s ms · Early %s · Late %s · Attack %s ms · Decay %s%% · EQ %s/%s Hz".formatted(
 				value(values, "wet", "?"), value(values, "dry", "?"), value(values, "preDelayMilliseconds", "?"),
 				value(values, "earlyLevel", "1"), value(values, "lateLevel", "1"),

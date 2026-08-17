@@ -6,10 +6,7 @@
 
 MechanaReverbAudioProcessorEditor::MechanaReverbAudioProcessorEditor(MechanaReverbAudioProcessor& audioProcessor)
     : AudioProcessorEditor(&audioProcessor), processor_(audioProcessor) {
-    title_.setText("Mechana Reverb", juce::dontSendNotification);
-    title_.setFont(juce::FontOptions(26.0F, juce::Font::bold));
     profile_.setText("Captured response", juce::dontSendNotification);
-    addAndMakeVisible(title_);
     addAndMakeVisible(profile_);
     addAndMakeVisible(profileSelector_);
     addAndMakeVisible(addProfile_);
@@ -123,8 +120,8 @@ void MechanaReverbAudioProcessorEditor::paint(juce::Graphics& graphics) {
 
 void MechanaReverbAudioProcessorEditor::resized() {
     auto area = getLocalBounds().reduced(24);
-    title_.setBounds(area.removeFromTop(38));
-    bypass_.setBounds(area.removeFromTop(28).removeFromRight(100));
+    auto topRow = area.removeFromTop(30);
+    bypass_.setBounds(topRow.removeFromRight(100));
     profile_.setBounds(area.removeFromTop(24));
     auto selector = area.removeFromTop(34);
     addProfile_.setBounds(selector.removeFromRight(90).reduced(4, 0));

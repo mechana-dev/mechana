@@ -19,8 +19,13 @@ threshold. Each effect supplies representative embedded input and its normal
 production processing engine. New effects should add a `mechana_*_benchmark`
 target accepting common `--cycles N`, `--seconds N`, and `--sample-rate HZ`
 options. The packaged runner discovers every such executable automatically and
-runs all four standard sample rates.
+runs all four standard sample rates. The current suite reports Convolution
+Reverb and Modeled Echo separately, including separate final tables for each
+effect and architecture.
 
 Architecture folders are discovered independently. An Intel-only package runs
 natively on Intel Macs and through Rosetta on Apple Silicon Macs, identifying
 the execution mode in its summary instead of requiring an ARM64 executable.
+Downloaded release packages provide a signed and notarized **Run Benchmarks.app**
+that displays the complete output in a scrollable window. The shell runner remains
+an internal implementation resource rather than a Finder-launched `.command` file.

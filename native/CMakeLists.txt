@@ -13,6 +13,11 @@
 # limitations under the License.
 
 cmake_minimum_required(VERSION 3.24)
+
+if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum supported macOS version")
+endif()
+
 project(MechanaReverbNative VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -24,16 +29,21 @@ option(MECHANA_BUILD_TESTS "Build the JUCE-free core tests" ON)
 option(MECHANA_BUILD_BENCHMARKS "Build the self-contained native DSP benchmark" ON)
 
 add_subdirectory(reverb-core)
+add_subdirectory(echo-core)
 
 if(MECHANA_BUILD_TESTS)
     enable_testing()
     add_subdirectory(reverb-core/tests)
+    add_subdirectory(echo-core/tests)
 endif()
 
 if(MECHANA_BUILD_BENCHMARKS)
     add_subdirectory(reverb-core/benchmarks)
+    add_subdirectory(echo-core/benchmarks)
 endif()
 
 if(MECHANA_BUILD_JUCE_PLUGIN)
     add_subdirectory(adapters/juce-plugin)
+    add_subdirectory(adapters/juce-echo-plugin)
+    add_subdirectory(apps/mechana-effects)
 endif()

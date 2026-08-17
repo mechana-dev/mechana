@@ -9,7 +9,8 @@
  */
 #pragma once
 
-#include <JuceHeader.h>
+#include <juce_audio_formats/juce_audio_formats.h>
+#include <juce_audio_processors/juce_audio_processors.h>
 #include <mechana/reverb/ReverbEngine.h>
 
 #include <atomic>
@@ -33,7 +34,7 @@ public:
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
-    const juce::String getName() const override { return JucePlugin_Name; }
+    const juce::String getName() const override;
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }

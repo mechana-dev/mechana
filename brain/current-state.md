@@ -71,6 +71,18 @@ This file reports repository evidence, not desired future status.
 
 ## Present in the repository
 
+- A JUCE-free C++20 `echo-core` provides a zero-latency, allocation-free-after-prepare
+  real-time delay loop with fractional delay, feedback, repeat-path low/high cuts,
+  saturation, modulation, stereo ping-pong, wet/dry mix, bypass, and smoothed delay
+  changes. Neutral, Vintage Tape, and Analog Memory starting models are code-owned
+  parameter sets; the latter two are behavioral approximations rather than measured
+  captures or claims of exact hardware reproduction. Native tests cover repeat timing,
+  feedback decay, stereo routing, optional processing stability, model invariants,
+  and reported latency. A separate JUCE Audio Unit exposes the Echo engine, and a
+  live-input `Mechana Effects` macOS app presents Reverb and Echo on separate tabs.
+  The Echo tab supplies Echoplex-style Tape and Deluxe Memory Man-style Analog
+  development presets; these names describe intended character, not measured clones.
+
 - An initial native Audio Unit POC under `native/` separates a JUCE-free C++20
   reverb core from a thin JUCE 9 adapter. The core owns 32-bit float real/half-spectrum
   FFT convolution, IR
@@ -85,11 +97,17 @@ This file reports repository evidence, not desired future status.
   on the audio thread. Separate Apple Silicon and Intel development builds pass
   the core numerical and long-response performance tests. It is not a release:
   durable user-library management, smoothing, automatic peak-protection parity,
-  Universal packaging, signing, and notarization remain future work. JUCE is
+  Universal packaging remains future work. Architecture-specific native release
+  packaging supports Developer ID signing, hardened runtime, secure timestamps,
+  Apple notarization, ticket stapling for the app and AU components, and local
+  validation. Native macOS deliverables declare macOS 12.0 as their minimum
+  deployment target for Intel Monterey compatibility. JUCE is
   fetched only into the ignored build directory and is not part of the core.
   A JUCE-free native benchmark with embedded deterministic audio now reports
   per-effect preparation, average/p95/maximum block milliseconds, deadline use,
-  and median real-time load. Its suite runs both arm64 and x86_64 on Apple Silicon
+  and median real-time load. Convolution Reverb and Modeled Echo are registered as
+  separate effects with separate four-sample-rate summary tables. The suite runs
+  both arm64 and x86_64 on Apple Silicon
   and x86_64 on Intel; timings are informational rather than machine-independent
   pass/fail thresholds.
 

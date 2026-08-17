@@ -26,6 +26,7 @@ loaded through the root `AGENTS.md` and does not affect other repositories.
 - [OCR plugin](ocr-plugin.md): PDF rasterization, distributed Tesseract, and Markdown assembly
 - [Blender plugin](blender-plugin.md): distributed animation-frame rendering and movie assembly
 - [Audio reverb plugin](audio-reverb-plugin.md): pure-Java partitioned convolution and WAV artifact workflow
+- [Native echo engine](audio-echo-engine.md): reusable delay-loop DSP and behavioral device models
 - [Glossary](glossary.md): shared terminology
 
 ## Maintenance

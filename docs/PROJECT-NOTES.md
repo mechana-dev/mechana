@@ -1960,3 +1960,96 @@ cloud providers remain future direction; see `brain/current-state.md` and
   folders independently. The Intel-only ZIP now runs x86_64 benchmarks natively
   on Intel Macs or through Rosetta on Apple Silicon and labels the execution mode
   accurately, without failing because an ARM64 executable is absent.
+## 2026-08-16 10:15 EDT — Start reusable native echo engine
+
+- Added a JUCE-free C++20 echo core with fractional delay, feedback, repeat-path
+  low/high cuts, saturation, modulation, stereo ping-pong, wet/dry mix, bypass,
+  smoothed delay changes, zero reported latency, and no audio-callback allocation.
+- Added neutral, Vintage Tape, and Analog Memory behavioral starting models. The
+  latter two deliberately use generic names and are documented as hand-tuned
+  approximations, not measured captures of trademarked hardware.
+- Added an initial separate Echo AU/standalone adapter with two development model
+  presets and native timing, feedback, routing, processing, model, and latency tests.
+- Documented a future multi-recording hardware characterization procedure; the
+  initial device styles rely on public manufacturer behavior descriptions.
+
+## 2026-08-16 10:50 EDT — Package Reverb and Echo native effects
+
+- Added a separate Echo Audio Unit with Echoplex-style Tape and Deluxe Memory
+  Man-style Analog development presets backed by the JUCE-free Echo engine.
+- Added a live-input `Mechana Effects` macOS app with separate Reverb and Echo
+  tabs while retaining separately installable Reverb and Echo Audio Units.
+- Registered Modeled Echo in the standard native benchmark suite. Packaged
+  runners now report Reverb and Echo independently at 44.1, 48, 88.2, and 96 kHz.
+- Built and ad-hoc signed architecture-specific app, Audio Unit, and benchmark
+  ZIPs for Apple Silicon and Intel. Both native DSP test suites pass for arm64
+  and for x86_64 under Rosetta.
+
+## 2026-08-16 13:40 EDT — Restore file-oriented standalone Effects workflow
+
+- Replaced the native plug-in-editor standalone shell with the established local
+  file workflow: shared source/output selection, AirPlay-aware Preview transport,
+  Apply, scrub/loop/bypass controls, and a common effect-labeled History table.
+- Added separate Reverb and Echo settings tabs while retaining the local sweep-to-IR
+  creation tab and the original convolution-reverb controls.
+- Added streaming Java Echo rendering and preview support for the same Tape and
+  Analog Memory behavioral models exposed by the separate native Echo Audio Unit.
+- Echo job folders now contain reloadable JSON metadata and a human-readable report;
+  renderer and DSP tests verify repeat timing, feedback decay, tail preservation,
+  finite colored-model output, and shared-history persistence.
+- Renamed the packaged standalone product to **Mechana Effects** so it can coexist
+  with older Mechana Reverb builds and cannot be confused with the AU host shell.
+
+## 2026-08-16 14:02 EDT — Stream standalone Echo Preview in real time
+
+- Removed the full-source temporary-WAV preparation step from Echo Preview.
+- Preview now reads, processes, and sends 1,024-frame blocks directly to the shared
+  Core Audio/AirPlay sink while retaining pause, loop, scrub, bypass, and full-tail
+  behavior.
+- Echo parameter edits are adopted at block boundaries without restarting playback;
+  changing the dry source or output device still performs the expected stream restart.
+- Added a direct-sink regression test that verifies dry signal, delayed repeats,
+  feedback decay, and playback beyond the dry source through the complete echo tail.
+
+## 2026-08-16 14:08 EDT — Add practical Echo sliders with numeric overrides
+
+- Converted Delay, Feedback, Wet, Dry, repeat Low/High Cut, Saturation, Modulation
+  Rate, and Modulation Depth to paired sliders and editable numeric fields.
+- Chose practical slider spans of 1–1500 ms delay, 0–0.95 feedback, 0–2 mix,
+  logarithmic 20 Hz–20 kHz filtering with an off position, 0–1 saturation, and
+  0–10 Hz/ms modulation. Numeric overrides retain the wider DSP validation ranges.
+- Slider drags and valid typed values continue to update real-time Echo Preview at
+  block boundaries and automatically refresh the suggested output name.
+
+## 2026-08-16 15:33 EDT — Add native release signing and notarization workflow
+
+- Added optional Developer ID signing with hardened runtime and secure timestamps
+  to architecture-specific native app, AU, and benchmark packaging while retaining
+  ad-hoc signing for development builds.
+- Added a reusable `notarytool` workflow that submits the combined app, both AU
+  plugins, and benchmarks, staples the app and AU tickets, rebuilds the final ZIPs,
+  and validates signatures and Gatekeeper acceptance.
+- Produced the first Intel release set signed by Mark Vita's Developer ID. Apple
+  accepted all four notarization submissions, and local stapler/signature validation
+  passed for the combined app and both AU components.
+- Replaced the quarantined Finder-facing benchmark `.command` file with a native
+  **Run Benchmarks.app** that captures the same suite output in a scrollable window.
+  Its launcher and embedded benchmarks are independently signed before the enclosing
+  app; Apple accepted the corrected Intel archive and Gatekeeper reports Notarized
+  Developer ID.
+- Corrected the native macOS deployment target from the current SDK default to
+  macOS 12.0. Rebuilt and Rosetta-tested the complete Intel suite, verified the
+  Mach-O minimum on the combined app, both AUs, and both benchmarks, then obtained
+  fresh Apple notarization acceptance and stapled tickets for Monterey distribution.
+
+## 2026-08-16 16:20 EDT — Align native Reverb and Echo plugin controls
+
+- Removed the redundant product title from the Reverb Audio Unit editor and aligned
+  the Bypass control at the upper right in both native plugin editors.
+- Replaced Echo's generic parameter editor with a purpose-built editor using the
+  same slider-plus-numeric-control language as Reverb.
+- Changed Echo model selection to a pull-down containing the Tape and Analog Memory
+  models.
+- Added an always-visible **Reset Echo**, which restores the selected model's nominal
+  delay, feedback, mix, filtering, drive, and modulation settings while disabling
+  Ping-Pong and Bypass.

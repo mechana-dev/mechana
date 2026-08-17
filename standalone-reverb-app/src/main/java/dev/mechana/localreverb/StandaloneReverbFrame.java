@@ -71,9 +71,11 @@ final class StandaloneReverbFrame extends JFrame {
 	private static final long serialVersionUID = 1L;
 	private final transient Preferences settings = Preferences.userNodeForPackage(StandaloneReverbFrame.class);
 	private final transient LocalReverbEngine engine = new LocalReverbEngine();
+	private final transient LocalEchoEngine echoEngine = new LocalEchoEngine();
 	private final transient ImpulseResponseCache impulseResponseCache = new ImpulseResponseCache();
 	private final transient IrProfileLibrary profileLibrary = new IrProfileLibrary();
 	private final transient ReverbPreviewPlayer previewPlayer = new ReverbPreviewPlayer(impulseResponseCache);
+	private final transient WavPreviewPlayer echoPreviewPlayer = new WavPreviewPlayer();
 	private final JTextField dryPath = field("dryPath", "");
 	private final JTextField irPath = field("irPath", "");
 	private final JTextField artifactRoot = field("artifactRoot",
@@ -88,6 +90,28 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField lateLevel = field("lateLevel", "1.0");
 	private final JTextField attack = field("attackMilliseconds", "0");
 	private final JTextField decayLength = field("decayLengthPercent", "100");
+	private final JComboBox<EchoSettings.Model> echoModel = new JComboBox<>(EchoSettings.Model.values());
+	private final JTextField echoDelay = field("echoDelayMilliseconds", "375");
+	private final JTextField echoFeedback = field("echoFeedback", "0.38");
+	private final JTextField echoWet = field("echoWet", "0.35");
+	private final JTextField echoDry = field("echoDry", "1.0");
+	private final JTextField echoLowCut = field("echoLowCutHertz", "45");
+	private final JTextField echoHighCut = field("echoHighCutHertz", "6000");
+	private final JTextField echoSaturation = field("echoSaturation", "0.22");
+	private final JTextField echoRate = field("echoModulationRateHertz", "0.55");
+	private final JTextField echoDepth = field("echoModulationDepthMilliseconds", "1.6");
+	private final JCheckBox echoPingPong = check("echoPingPong", false);
+	private final JSlider echoDelaySlider = new JSlider(1, 1_500, boundedSliderValue(echoDelay, 1, 375, 1, 1_500));
+	private final JSlider echoFeedbackSlider = new JSlider(0, 95, boundedSliderValue(echoFeedback, 100, 38, 0, 95));
+	private final JSlider echoWetSlider = new JSlider(0, 200, boundedSliderValue(echoWet, 100, 35, 0, 200));
+	private final JSlider echoDrySlider = new JSlider(0, 200, boundedSliderValue(echoDry, 100, 100, 0, 200));
+	private final JSlider echoLowCutSlider = new JSlider(0, 1000, frequencySliderValue(echoLowCut));
+	private final JSlider echoHighCutSlider = new JSlider(0, 1000, frequencySliderValue(echoHighCut));
+	private final JSlider echoSaturationSlider = new JSlider(0, 100,
+			boundedSliderValue(echoSaturation, 100, 22, 0, 100));
+	private final JSlider echoRateSlider = new JSlider(0, 1_000, boundedSliderValue(echoRate, 100, 55, 0, 1_000));
+	private final JSlider echoDepthSlider = new JSlider(0, 1_000, boundedSliderValue(echoDepth, 100, 160, 0, 1_000));
+	private final JTabbedPane effectTabs = new JTabbedPane();
 	private final JSlider wetSlider = new JSlider(0, 200, sliderValue(wet, 100, 35));
 	private final JSlider drySlider = new JSlider(0, 200, sliderValue(dry, 100, 100));
 	private final JSlider preDelaySlider = new JSlider(0, 200, Math.min(200, sliderValue(preDelay, 1, 20)));
@@ -134,7 +158,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private transient Path latestOutput;
 
 	StandaloneReverbFrame() {
-		super("Mechana Reverb");
+		super("Mechana Effects");
 		setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
 		setMinimumSize(new Dimension(850, 650));
 		setSize(980, 760);
@@ -143,7 +167,9 @@ final class StandaloneReverbFrame extends JFrame {
 			@Override
 			public void windowClosing(WindowEvent event) {
 				previewPlayer.close();
+				echoPreviewPlayer.close();
 				engine.close();
+				echoEngine.close();
 				dispose();
 			}
 		});
@@ -160,14 +186,30 @@ final class StandaloneReverbFrame extends JFrame {
 		reloadHistory();
 	}
 
-	private JTabbedPane buildTools() {
-		JTabbedPane tabs = new JTabbedPane();
+	private JPanel buildTools() {
+		JPanel workspace = new JPanel(new BorderLayout(0, 6));
+		workspace.add(buildSharedInputs(), BorderLayout.NORTH);
 		JScrollPane form = new JScrollPane(buildForm());
 		form.setBorder(BorderFactory.createEmptyBorder());
 		form.getVerticalScrollBar().setUnitIncrement(18);
-		tabs.addTab("Apply Reverb", form);
-		tabs.addTab("Create IR from Sweep", buildIrCreator());
-		return tabs;
+		effectTabs.addTab("Reverb", form);
+		effectTabs.addTab("Echo", new JScrollPane(buildEchoForm()));
+		effectTabs.addTab("Create IR from Sweep", buildIrCreator());
+		workspace.add(effectTabs, BorderLayout.CENTER);
+		workspace.add(buildSharedActions(), BorderLayout.SOUTH);
+		return workspace;
+	}
+
+	private JPanel buildSharedInputs() {
+		JPanel panel = new JPanel(new GridBagLayout());
+		panel.setBorder(BorderFactory.createTitledBorder("New audio job"));
+		GridBagConstraints c = new GridBagConstraints();
+		c.insets = new Insets(4, 8, 4, 8);
+		c.gridy = 0;
+		addPath(panel, c, "Dry audio", dryPath, false);
+		addPath(panel, c, "Output folder", artifactRoot, true);
+		addRow(panel, c, "Output WAV name", outputName);
+		return panel;
 	}
 
 	private JPanel buildHeader() {
@@ -175,8 +217,8 @@ final class StandaloneReverbFrame extends JFrame {
 		panel.setBorder(BorderFactory.createEmptyBorder(14, 16, 8, 16));
 		panel.add(headerIcon(), BorderLayout.WEST);
 		panel.add(
-				new JLabel("<html><h2 style='margin:0'>Mechana Reverb</h2>"
-						+ "<div>Apply captured impulse-response reverbs to your audio.</div></html>"),
+				new JLabel("<html><h2 style='margin:0'>Mechana Effects</h2>"
+						+ "<div>Apply captured reverbs or modeled echoes to your audio.</div></html>"),
 				BorderLayout.CENTER);
 		return panel;
 	}
@@ -193,12 +235,11 @@ final class StandaloneReverbFrame extends JFrame {
 
 	private JPanel buildForm() {
 		JPanel panel = new JPanel(new GridBagLayout());
-		panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createTitledBorder("New reverb job"),
+		panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createTitledBorder("Reverb settings"),
 				BorderFactory.createEmptyBorder(10, 8, 8, 8)));
 		GridBagConstraints c = new GridBagConstraints();
 		c.insets = new Insets(5, 8, 5, 8);
 		c.gridy = 0;
-		addPath(panel, c, "Dry audio", dryPath, false);
 		JPanel profileRow = new JPanel(new BorderLayout(8, 0));
 		profileRow.add(profileSelector, BorderLayout.CENTER);
 		JPanel profileActions = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 4, 0));
@@ -206,9 +247,6 @@ final class StandaloneReverbFrame extends JFrame {
 		profileActions.add(manageProfiles);
 		profileRow.add(profileActions, BorderLayout.EAST);
 		addRow(panel, c, "Impulse response", profileRow);
-		addPath(panel, c, "Output folder", artifactRoot, true);
-		addRow(panel, c, "Output WAV name", outputName);
-		addActionBar(panel, c);
 		addSection(panel, c, "Mix and timing");
 		addRow(panel, c, "Wet level (0–2)", sliderWithOverride(wetSlider, wet));
 		addRow(panel, c, "Dry level (0–2)", sliderWithOverride(drySlider, dry));
@@ -226,6 +264,39 @@ final class StandaloneReverbFrame extends JFrame {
 		addRow(panel, c, "", resetEq);
 		stopPreview.setEnabled(false);
 		return panel;
+	}
+
+	private JPanel buildEchoForm() {
+		JPanel panel = new JPanel(new GridBagLayout());
+		panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createTitledBorder("Echo settings"),
+				BorderFactory.createEmptyBorder(10, 8, 8, 8)));
+		GridBagConstraints c = new GridBagConstraints();
+		c.insets = new Insets(6, 8, 6, 8);
+		c.gridy = 0;
+		addRow(panel, c, "Echo model", echoModel);
+		addRow(panel, c, "Delay (1–1500 ms slider)", sliderWithOverride(echoDelaySlider, echoDelay));
+		addRow(panel, c, "Feedback (0–0.95 slider)", sliderWithOverride(echoFeedbackSlider, echoFeedback));
+		addRow(panel, c, "Wet level (0–2)", sliderWithOverride(echoWetSlider, echoWet));
+		addRow(panel, c, "Dry level (0–2)", sliderWithOverride(echoDrySlider, echoDry));
+		addSection(panel, c, "Repeat color");
+		addRow(panel, c, "Low-cut (Hz, 0 = off)", sliderWithOverride(echoLowCutSlider, echoLowCut));
+		addRow(panel, c, "High-cut (Hz, 0 = off)", sliderWithOverride(echoHighCutSlider, echoHighCut));
+		addRow(panel, c, "Saturation (0–1)", sliderWithOverride(echoSaturationSlider, echoSaturation));
+		addSection(panel, c, "Modulation");
+		addRow(panel, c, "Rate (0–10 Hz slider)", sliderWithOverride(echoRateSlider, echoRate));
+		addRow(panel, c, "Depth (0–10 ms slider)", sliderWithOverride(echoDepthSlider, echoDepth));
+		echoPingPong.setText("Stereo ping-pong");
+		addRow(panel, c, "", echoPingPong);
+		return panel;
+	}
+
+	private JPanel buildSharedActions() {
+		JPanel wrapper = new JPanel(new GridBagLayout());
+		GridBagConstraints c = new GridBagConstraints();
+		c.insets = new Insets(2, 8, 2, 8);
+		c.gridy = 0;
+		addActionBar(wrapper, c);
+		return wrapper;
 	}
 
 	private void addActionBar(JPanel panel, GridBagConstraints c) {
@@ -299,8 +370,10 @@ final class StandaloneReverbFrame extends JFrame {
 			return;
 		settings.put("previewAudioOutput", selected.name());
 		previewPlayer.setAudioSinkFactory(MacAudioOutput.sinkFactory(selected));
-		if (restartActivePreview && previewPlayer.isActive()) {
+		echoPreviewPlayer.setAudioSinkFactory(MacAudioOutput.sinkFactory(selected));
+		if (restartActivePreview && previewActive()) {
 			previewPlayer.stop();
+			echoPreviewPlayer.stop();
 			previewFinished();
 			status.setText("Switching Preview to " + selected.name() + "…");
 			startPreview();
@@ -336,8 +409,9 @@ final class StandaloneReverbFrame extends JFrame {
 		jobTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		jobTable.setFillsViewportHeight(true);
 		jobTable.getColumnModel().getColumn(0).setPreferredWidth(150);
-		jobTable.getColumnModel().getColumn(1).setPreferredWidth(280);
-		jobTable.getColumnModel().getColumn(2).setPreferredWidth(620);
+		jobTable.getColumnModel().getColumn(1).setPreferredWidth(80);
+		jobTable.getColumnModel().getColumn(2).setPreferredWidth(280);
+		jobTable.getColumnModel().getColumn(3).setPreferredWidth(620);
 		jobTable.getSelectionModel().addListSelectionListener(event -> {
 			if (!event.getValueIsAdjusting())
 				selectHistoryOutput();
@@ -372,28 +446,37 @@ final class StandaloneReverbFrame extends JFrame {
 		dryPreviewChangeTimer.setRepeats(false);
 		run.addActionListener(event -> submit());
 		preview.addActionListener(event -> {
-			if (previewPlayer.isActive())
+			if (isEchoSelected() && echoPreviewPlayer.isActive())
+				echoPreviewPlayer.togglePause(state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)));
+			else if (previewPlayer.isActive())
 				previewPlayer.togglePause(state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)));
 			else
 				startPreview();
 		});
 		previewPlayer.onPosition(position -> SwingUtilities.invokeLater(() -> updatePreviewPosition(position)));
+		echoPreviewPlayer.onPosition(position -> SwingUtilities.invokeLater(() -> updatePreviewPosition(position)));
 		previewPosition.addChangeListener(event -> {
-			if (updatingPreviewPosition || previewPosition.getValueIsAdjusting() || !previewPlayer.isActive())
+			if (updatingPreviewPosition || previewPosition.getValueIsAdjusting() || !previewActive())
 				return;
 			restartPreviewAt(previewPosition.getValue() / 1000.0);
 		});
 		stopPreview.addActionListener(event -> stopPreview());
 		bypassPreview.addActionListener(event -> {
 			previewPlayer.setBypassed(bypassPreview.isSelected());
-			if (previewPlayer.isActive())
+			echoPreviewPlayer.setBypassed(bypassPreview.isSelected());
+			if (isEchoSelected() && echoPreviewPlayer.isActive())
+				status.setText(bypassPreview.isSelected()
+						? "Preview bypassed — playing original audio"
+						: "Echo preview active");
+			else if (previewPlayer.isActive())
 				status.setText(bypassPreview.isSelected()
 						? "Preview bypassed — playing original audio"
 						: "Reverb preview active");
 		});
 		loopPreview.addActionListener(event -> {
 			previewPlayer.setLooping(loopPreview.isSelected());
-			if (previewPlayer.isActive())
+			echoPreviewPlayer.setLooping(loopPreview.isSelected());
+			if (previewActive())
 				status.setText(loopPreview.isSelected() ? "Preview will loop until stopped" : "Preview loop disabled");
 		});
 		generateIr.addActionListener(event -> generateImpulseResponse());
@@ -419,10 +502,27 @@ final class StandaloneReverbFrame extends JFrame {
 				irPreviewChangeTimer.restart();
 		}));
 		dryPath.getDocument().addDocumentListener(listener(() -> {
-			if (previewPlayer.isActive())
+			if (previewActive())
 				dryPreviewChangeTimer.restart();
 		}));
 		artifactRoot.getDocument().addDocumentListener(listener(this::reloadHistory));
+		effectTabs.addChangeListener(event -> {
+			boolean wasActive = previewActive();
+			double position = previewPosition.getValue() / 1000.0;
+			stopPreview();
+			run.setEnabled(effectTabs.getSelectedIndex() < 2);
+			if (effectTabs.getSelectedIndex() < 2) {
+				outputOverridden = false;
+				updateSuggestedName();
+				if (wasActive)
+					startPreview(position);
+			}
+		});
+		for (JTextField field : List.of(echoDelay, echoFeedback, echoWet, echoDry, echoLowCut, echoHighCut,
+				echoSaturation, echoRate, echoDepth))
+			field.getDocument().addDocumentListener(listener(this::echoParametersChanged));
+		echoModel.addActionListener(event -> applyEchoModelDefaults());
+		echoPingPong.addActionListener(event -> echoParametersChanged());
 	}
 
 	private void configureLiveControls() {
@@ -435,6 +535,15 @@ final class StandaloneReverbFrame extends JFrame {
 		configureLiveControl(lateSlider, lateLevel, 100);
 		configureLiveControl(attackSlider, attack, 1);
 		configureLiveControl(decaySlider, decayLength, 1);
+		configureLiveControl(echoDelaySlider, echoDelay, 1);
+		configureLiveControl(echoFeedbackSlider, echoFeedback, 100);
+		configureLiveControl(echoWetSlider, echoWet, 100);
+		configureLiveControl(echoDrySlider, echoDry, 100);
+		configureFrequencyControl(echoLowCutSlider, echoLowCut);
+		configureFrequencyControl(echoHighCutSlider, echoHighCut);
+		configureLiveControl(echoSaturationSlider, echoSaturation, 100);
+		configureLiveControl(echoRateSlider, echoRate, 100);
+		configureLiveControl(echoDepthSlider, echoDepth, 100);
 	}
 
 	private void configureFrequencyControl(JSlider slider, JTextField override) {
@@ -511,6 +620,15 @@ final class StandaloneReverbFrame extends JFrame {
 		try {
 			int value = (int) Math.round(Double.parseDouble(field.getText().strip()) * scale);
 			return Math.max(0, Math.min(scale == 1 ? 10_000 : 200, value));
+		} catch (NumberFormatException invalid) {
+			return fallback;
+		}
+	}
+
+	private static int boundedSliderValue(JTextField field, int scale, int fallback, int minimum, int maximum) {
+		try {
+			int value = (int) Math.round(Double.parseDouble(field.getText().strip()) * scale);
+			return Math.max(minimum, Math.min(maximum, value));
 		} catch (NumberFormatException invalid) {
 			return fallback;
 		}
@@ -938,26 +1056,46 @@ final class StandaloneReverbFrame extends JFrame {
 	private void configureSuggestedName() {
 		outputOverridden = !"reverberated.wav".equals(outputName.getText());
 		outputName.getDocument().addDocumentListener(listener(() -> outputOverridden = true));
-		Runnable update = () -> {
-			if (outputOverridden || dryPath.getText().isBlank() || irPath.getText().isBlank())
-				return;
-			String suggested = suggestedOutputName(dryPath.getText(), irPath.getText(), wet.getText(), dry.getText(),
-					preDelay.getText());
-			outputName.setText(suggested);
-			outputOverridden = false;
-		};
 		for (JTextField field : List.of(dryPath, irPath))
 			field.getDocument().addDocumentListener(listener(() -> {
 				outputOverridden = false;
-				update.run();
+				updateSuggestedName();
 			}));
 		for (JTextField field : List.of(wet, dry, preDelay))
-			field.getDocument().addDocumentListener(listener(update));
-		update.run();
+			field.getDocument().addDocumentListener(listener(this::updateSuggestedName));
+		for (JTextField field : List.of(echoDelay, echoFeedback, echoWet, echoDry))
+			field.getDocument().addDocumentListener(listener(this::updateSuggestedName));
+		updateSuggestedName();
+	}
+
+	private void updateSuggestedName() {
+		if (outputOverridden || dryPath.getText().isBlank())
+			return;
+		String suggested;
+		if (isEchoSelected())
+			suggested = stem(dryPath.getText(), "audio") + "-echo-" + echoModelToken() + "-delay"
+					+ token(echoDelay.getText()) + "ms-fb" + token(echoFeedback.getText()) + "-wet"
+					+ token(echoWet.getText()) + "-dry" + token(echoDry.getText()) + ".wav";
+		else {
+			if (irPath.getText().isBlank())
+				return;
+			suggested = suggestedOutputName(dryPath.getText(), irPath.getText(), wet.getText(), dry.getText(),
+					preDelay.getText());
+		}
+		outputName.setText(suggested);
+		outputOverridden = false;
+	}
+
+	private String echoModelToken() {
+		return echoModel.getSelectedItem() == EchoSettings.Model.ANALOG ? "analog-memory" : "vintage-tape";
 	}
 
 	private void submit() {
 		stopPreview();
+		if (isEchoSelected()) {
+			submitEcho();
+			return;
+		}
 		try {
 			ReverbRequest request = new ReverbRequest(path(dryPath), path(irPath), path(artifactRoot),
 					outputName.getText().strip(), decimal(wet, "Wet level"), decimal(dry, "Dry level"),
@@ -972,11 +1110,28 @@ final class StandaloneReverbFrame extends JFrame {
 		}
 	}
 
+	private void submitEcho() {
+		try {
+			Path source = path(dryPath);
+			if (source == null || !Files.isRegularFile(source))
+				throw new IllegalArgumentException("Choose a readable dry audio file.");
+			echoEngine.submit(source, path(artifactRoot), outputName.getText().strip(), echoSettings(),
+					job -> SwingUtilities.invokeLater(() -> update(job)));
+			run.setEnabled(false);
+		} catch (IOException | RuntimeException failure) {
+			showError(failure.getMessage());
+		}
+	}
+
 	private void startPreview() {
 		startPreview(0);
 	}
 
 	private void startPreview(double startFraction) {
+		if (isEchoSelected()) {
+			startEchoPreview(startFraction);
+			return;
+		}
 		try {
 			Path selectedDry = path(dryPath);
 			Path selectedIr = path(irPath);
@@ -1004,6 +1159,29 @@ final class StandaloneReverbFrame extends JFrame {
 		}
 	}
 
+	private void startEchoPreview(double startFraction) {
+		Path source = path(dryPath);
+		if (source == null || !Files.isRegularFile(source)) {
+			showError("Choose a readable dry audio file.");
+			return;
+		}
+		EchoSettings selected;
+		try {
+			selected = bypassPreview.isSelected() ? bypassedEchoSettings() : echoSettings();
+		} catch (IllegalArgumentException failure) {
+			showError(failure.getMessage());
+			return;
+		}
+		echoPreviewPlayer.setBypassed(bypassPreview.isSelected());
+		echoPreviewPlayer.setLooping(loopPreview.isSelected());
+		echoPreviewPlayer.play(source, selected, startFraction,
+				state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)),
+				message -> SwingUtilities.invokeLater(() -> {
+					showError(message);
+					previewFinished();
+				}));
+	}
+
 	private void restartPreviewAt(double fraction) {
 		status.setText("Seeking preview…");
 		startPreview(fraction);
@@ -1028,7 +1206,7 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void updatePreviewParameters() {
-		if (!previewPlayer.isActive())
+		if (isEchoSelected() || !previewPlayer.isActive())
 			return;
 		try {
 			previewPlayer.update(decimal(wet, "Wet level"), decimal(dry, "Dry level"), decimal(preDelay, "Pre-delay"),
@@ -1068,10 +1246,9 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void restartPreviewWithSelectedSource() {
-		if (!previewPlayer.isActive())
+		if (!previewActive())
 			return;
-		previewPlayer.stop();
-		previewFinished();
+		stopPreview();
 		status.setText("Switching preview to the selected dry audio…");
 		startPreview();
 	}
@@ -1079,6 +1256,10 @@ final class StandaloneReverbFrame extends JFrame {
 	private void stopPreview() {
 		if (previewPlayer.isActive()) {
 			previewPlayer.stop();
+			status.setText("Preview stopped");
+		}
+		if (echoPreviewPlayer.isActive()) {
+			echoPreviewPlayer.stop();
 			status.setText("Preview stopped");
 		}
 		previewFinished();
@@ -1097,22 +1278,69 @@ final class StandaloneReverbFrame extends JFrame {
 			case PLAYING -> {
 				status.setText(bypassPreview.isSelected()
 						? "Preview bypassed — playing original audio through " + selectedAudioOutputName()
-						: "Playing reverb preview through " + selectedAudioOutputName());
+						: "Playing " + (isEchoSelected() ? "Echo" : "Reverb") + " preview through "
+								+ selectedAudioOutputName());
 				setPreviewButton("⏸", "Pause preview", true);
 			}
 			case PAUSED -> {
-				status.setText("Reverb preview paused");
+				status.setText((isEchoSelected() ? "Echo" : "Reverb") + " preview paused");
 				setPreviewButton("▶", "Resume preview", true);
 			}
 			case STOPPED -> status.setText("Preview stopped");
 			case FINISHED -> {
-				status.setText("Preview finished — full reverb tail played");
+				status.setText("Preview finished — full effect tail played");
 				previewFinished();
 			}
 		}
 		if (state == ReverbPreviewPlayer.State.PREPARING || state == ReverbPreviewPlayer.State.REGENERATING_IR
 				|| state == ReverbPreviewPlayer.State.PLAYING || state == ReverbPreviewPlayer.State.PAUSED)
 			stopPreview.setEnabled(true);
+	}
+
+	private boolean previewActive() {
+		return previewPlayer.isActive() || echoPreviewPlayer.isActive();
+	}
+
+	private boolean isEchoSelected() {
+		return effectTabs.getSelectedIndex() == 1;
+	}
+
+	private EchoSettings echoSettings() {
+		return new EchoSettings((EchoSettings.Model) echoModel.getSelectedItem(), decimal(echoDelay, "Delay"),
+				decimal(echoFeedback, "Feedback"), decimal(echoWet, "Wet level"), decimal(echoDry, "Dry level"),
+				decimal(echoLowCut, "Repeat low-cut"), decimal(echoHighCut, "Repeat high-cut"),
+				decimal(echoSaturation, "Saturation"), decimal(echoRate, "Modulation rate"),
+				decimal(echoDepth, "Modulation depth"), echoPingPong.isSelected());
+	}
+
+	private EchoSettings bypassedEchoSettings() {
+		EchoSettings value = echoSettings();
+		return new EchoSettings(value.model(), value.delayMilliseconds(), value.feedback(), 0, 1, value.lowCutHertz(),
+				value.highCutHertz(), value.saturation(), value.modulationRateHertz(),
+				value.modulationDepthMilliseconds(), value.pingPong());
+	}
+
+	private void echoParametersChanged() {
+		updateSuggestedName();
+		if (isEchoSelected() && echoPreviewPlayer.isActive())
+			try {
+				echoPreviewPlayer.update(echoSettings());
+			} catch (IllegalArgumentException ignored) {
+				// A partially edited numeric field takes effect as soon as it becomes valid.
+			}
+	}
+
+	private void applyEchoModelDefaults() {
+		EchoSettings defaults = EchoSettings.defaults((EchoSettings.Model) echoModel.getSelectedItem());
+		echoDelay.setText(Double.toString(defaults.delayMilliseconds()));
+		echoFeedback.setText(Double.toString(defaults.feedback()));
+		echoWet.setText(Double.toString(defaults.wet()));
+		echoDry.setText(Double.toString(defaults.dry()));
+		echoLowCut.setText(Double.toString(defaults.lowCutHertz()));
+		echoHighCut.setText(Double.toString(defaults.highCutHertz()));
+		echoSaturation.setText(Double.toString(defaults.saturation()));
+		echoRate.setText(Double.toString(defaults.modulationRateHertz()));
+		echoDepth.setText(Double.toString(defaults.modulationDepthMilliseconds()));
 	}
 
 	private String selectedAudioOutputName() {
@@ -1292,7 +1520,7 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void showError(String message) {
-		JOptionPane.showMessageDialog(this, message, "Mechana Reverb", JOptionPane.ERROR_MESSAGE);
+		JOptionPane.showMessageDialog(this, message, "Mechana Effects", JOptionPane.ERROR_MESSAGE);
 	}
 
 	static String suggestedOutputName(String dry, String ir, String wet, String dryLevel, String preDelay) {
@@ -1348,7 +1576,7 @@ final class StandaloneReverbFrame extends JFrame {
 		private final List<ReverbJob> items = new ArrayList<>();
 		private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm:ss a")
 				.withZone(ZoneId.systemDefault());
-		private final String[] columns = {"Date", "Output file", "Settings"};
+		private final String[] columns = {"Date", "Effect", "Output file", "Settings"};
 
 		void replace(List<ReverbJob> values) {
 			items.clear();
@@ -1384,7 +1612,10 @@ final class StandaloneReverbFrame extends JFrame {
 			ReverbJob job = items.get(row);
 			return switch (column) {
 				case 0 -> DATE_TIME.format(job.submittedAt());
-				case 1 -> job.outputName();
+				case 1 -> job.parameterSummary().startsWith("Echoplex") || job.parameterSummary().startsWith("Deluxe")
+						? "Echo"
+						: "Reverb";
+				case 2 -> job.outputName();
 				default -> job.parameterSummary();
 			};
 		}

@@ -20,8 +20,15 @@ run_architecture() {
 	local found=0
 	for benchmark in "${ROOT}/${architecture}"/mechana_*_benchmark(N); do
 		found=1
+		local effect="${${benchmark:t}:r}"
+		effect="${effect#mechana_}"
+		effect="${effect%_benchmark}"
+		case "${effect}" in
+			reverb) effect="Convolution Reverb" ;;
+			echo) effect="Modeled Echo" ;;
+		esac
 		for sample_rate in "${SAMPLE_RATES[@]}"; do
-			print "\n--- sample rate: ${sample_rate} Hz ---"
+			print "\n--- effect: ${effect}; sample rate: ${sample_rate} Hz ---"
 			local output=""
 			output="$("${execution_prefix[@]}" "${benchmark}" --cycles "${CYCLES}" --seconds "${DURATION}" \
 				--sample-rate "${sample_rate}")"
@@ -36,7 +43,7 @@ run_architecture() {
 					load-max=*) maximum="${statistic#load-max=}"; maximum="${maximum%%%}" ;;
 				esac
 			done
-			SUMMARY_LINES+=("${architecture}|${sample_rate}|${minimum}|${maximum}|${average}|${median}")
+			SUMMARY_LINES+=("${effect}|${architecture}|${sample_rate}|${minimum}|${maximum}|${average}|${median}")
 		done
 	done
 	if (( found == 0 )); then
@@ -67,31 +74,34 @@ print "======================================================================"
 print "DETAILED BENCHMARK SUMMARY"
 print "Real-time deadline load across ${CYCLES} cycles (lower is better)"
 print "======================================================================"
-for report_architecture in arm64 x86_64; do
-	has_summary=0
-	for summary_line in "${SUMMARY_LINES[@]}"; do
-		fields=("${(@s:|:)summary_line}")
-		if [[ "${fields[1]}" == "${report_architecture}" ]]; then
-			has_summary=1
-			break
-		fi
-	done
-	(( has_summary == 1 )) || continue
-	if [[ "${report_architecture}" == "arm64" ]]; then
-		print "\nAPPLE SILICON — NATIVE ARM64"
-	else
-		if [[ "$(uname -m)" == "arm64" ]]; then
-			print "\nINTEL — X86_64 THROUGH ROSETTA"
+for report_effect in "Convolution Reverb" "Modeled Echo"; do
+	for report_architecture in arm64 x86_64; do
+		has_summary=0
+		for summary_line in "${SUMMARY_LINES[@]}"; do
+			fields=("${(@s:|:)summary_line}")
+			if [[ "${fields[1]}" == "${report_effect}" && "${fields[2]}" == "${report_architecture}" ]]; then
+				has_summary=1
+				break
+			fi
+		done
+		(( has_summary == 1 )) || continue
+		print "\nEFFECT — ${report_effect:u}"
+		if [[ "${report_architecture}" == "arm64" ]]; then
+			print "APPLE SILICON — NATIVE ARM64"
 		else
-			print "\nINTEL — NATIVE X86_64"
+			if [[ "$(uname -m)" == "arm64" ]]; then
+				print "INTEL — X86_64 THROUGH ROSETTA"
+			else
+				print "INTEL — NATIVE X86_64"
+			fi
 		fi
-	fi
-	printf "%-14s %12s %12s %12s %12s\n" "Sample rate" "Minimum" "Maximum" "Average" "Median"
-	printf "%-14s %12s %12s %12s %12s\n" "-----------" "-------" "-------" "-------" "------"
-	for summary_line in "${SUMMARY_LINES[@]}"; do
-		fields=("${(@s:|:)summary_line}")
-		[[ "${fields[1]}" == "${report_architecture}" ]] || continue
-		printf "%-14s %11s%% %11s%% %11s%% %11s%%\n" "${fields[2]} Hz" "${fields[3]}" "${fields[4]}" \
-			"${fields[5]}" "${fields[6]}"
+		printf "%-14s %12s %12s %12s %12s\n" "Sample rate" "Minimum" "Maximum" "Average" "Median"
+		printf "%-14s %12s %12s %12s %12s\n" "-----------" "-------" "-------" "-------" "------"
+		for summary_line in "${SUMMARY_LINES[@]}"; do
+			fields=("${(@s:|:)summary_line}")
+			[[ "${fields[1]}" == "${report_effect}" && "${fields[2]}" == "${report_architecture}" ]] || continue
+			printf "%-14s %11s%% %11s%% %11s%% %11s%%\n" "${fields[3]} Hz" "${fields[4]}" "${fields[5]}" \
+				"${fields[6]}" "${fields[7]}"
+		done
 	done
 done

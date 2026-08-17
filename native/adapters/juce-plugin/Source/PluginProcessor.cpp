@@ -5,6 +5,7 @@
 #include "PluginProcessor.h"
 
 #include "PluginEditor.h"
+#include <BinaryData.h>
 #include <mechana/reverb/ImpulseResponsePreparation.h>
 
 #include <bit>
@@ -28,6 +29,8 @@ const std::array factoryProfiles {
     FactoryProfile { "Scott RVB First Pass", FactoryIrData::scottrvbfirstpassir_wav, FactoryIrData::scottrvbfirstpassir_wavSize }
 };
 } // namespace
+
+const juce::String MechanaReverbAudioProcessor::getName() const { return "Mechana Reverb"; }
 
 MechanaReverbAudioProcessor::MechanaReverbAudioProcessor()
     : AudioProcessor(BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true)
@@ -311,5 +314,3 @@ void MechanaReverbAudioProcessor::setStateInformation(const void* data, const in
 juce::AudioProcessorEditor* MechanaReverbAudioProcessor::createEditor() {
     return new MechanaReverbAudioProcessorEditor(*this);
 }
-
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new MechanaReverbAudioProcessor(); }
