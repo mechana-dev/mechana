@@ -60,9 +60,9 @@ final class EchoFileRenderer {
 	}
 
 	static long tailFrames(int sampleRate, EchoSettings settings) {
-		double feedback = Math.max(0.0001, settings.feedback());
-		double repeats = feedback <= 0.0001 ? 1 : Math.ceil(Math.log(0.0001) / Math.log(feedback));
-		double seconds = Math.min(30, settings.delayMilliseconds() / 1_000 * Math.max(1, repeats) + 0.1);
+		double feedback = Math.max(0.00001, settings.feedback());
+		double repeats = feedback <= 0.00001 ? 1 : Math.ceil(Math.log(0.00001) / Math.log(feedback));
+		double seconds = Math.min(30, settings.delayMilliseconds() / 1_000 * (Math.max(1, repeats) + 1));
 		return Math.round(seconds * sampleRate);
 	}
 }

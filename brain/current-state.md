@@ -82,6 +82,10 @@ This file reports repository evidence, not desired future status.
   live-input `Mechana Effects` macOS app presents Reverb and Echo on separate tabs.
   The Echo tab supplies Echoplex-style Tape and Deluxe Memory Man-style Analog
   development presets; these names describe intended character, not measured clones.
+  Their listening-calibrated starting wet level is 26%. The Echo Audio Unit displays
+  feedback, wet, dry, and modulation depth as percentages without changing their
+  stored values, and reports a conservative host tail through -100 dB amplitude plus
+  one safety repeat, capped at 30 seconds.
 
 - An initial native Audio Unit POC under `native/` separates a JUCE-free C++20
   reverb core from a thin JUCE 9 adapter. The core owns 32-bit float real/half-spectrum

@@ -4,6 +4,7 @@
  */
 #include <mechana/echo/EchoEngine.h>
 #include <mechana/echo/Models.h>
+#include <mechana/echo/Tail.h>
 
 #include <algorithm>
 #include <cmath>
@@ -73,6 +74,21 @@ int main() {
                 "analog-memory model should roll off more high end than vintage tape");
         require(tape.modulationDepthMilliseconds > 0.0F && memory.modulationDepthMilliseconds > 0.0F,
                 "modeled echoes must include subtle modulation");
+        require(std::abs(tape.wetLevel - 0.26F) < 1.0e-6F && std::abs(memory.wetLevel - 0.26F) < 1.0e-6F,
+                "modeled first-repeat level should match the listening-calibrated default");
+
+        auto tailParameters = tape;
+        tailParameters.delayMilliseconds = 750.0F;
+        tailParameters.feedback = 0.48F;
+        const auto conservativeTail = mechana::echo::reportedTailSeconds(tailParameters);
+        require(conservativeTail >= 12.0 && conservativeTail <= 14.0,
+                "reported Echo tail should reach -100 dB plus one safety repeat");
+        tailParameters.feedback = 0.98F;
+        require(mechana::echo::reportedTailSeconds(tailParameters) == 30.0,
+                "reported Echo tail should retain its maximum bound");
+        tailParameters.bypass = true;
+        require(mechana::echo::reportedTailSeconds(tailParameters) == 0.0,
+                "bypassed Echo should not report a tail");
 
         mechana::echo::EchoEngine engine;
         require(engine.latencySamples() == 0, "echo engine introduced latency");

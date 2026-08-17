@@ -6,11 +6,21 @@
 #include "PluginEditor.h"
 
 #include <mechana/echo/Models.h>
-
-#include <cmath>
+#include <mechana/echo/Tail.h>
 
 namespace {
 constexpr std::array modelNames { "Echoplex-style Tape", "Deluxe Memory Man-style Analog" };
+
+juce::AudioParameterFloatAttributes percentageAttributes(const float multiplier) {
+    return juce::AudioParameterFloatAttributes()
+        .withLabel("%")
+        .withStringFromValueFunction([multiplier](const float value, int) {
+            return juce::String(value * multiplier, 1);
+        })
+        .withValueFromStringFunction([multiplier](const juce::String& text) {
+            return text.getFloatValue() / multiplier;
+        });
+}
 }
 
 const juce::String MechanaEchoAudioProcessor::getName() const { return "Mechana Echo"; }
@@ -37,13 +47,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout MechanaEchoAudioProcessor::c
                                                             tape.delayMilliseconds, "ms"));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "feedback", 1 }, "Feedback",
                                                             juce::NormalisableRange<float> { 0.0F, 0.98F, 0.001F },
-                                                            tape.feedback));
+                                                            tape.feedback, percentageAttributes(100.0F)));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "wet", 1 }, "Wet Level",
                                                             juce::NormalisableRange<float> { 0.0F, 1.5F, 0.001F },
-                                                            tape.wetLevel));
+                                                            tape.wetLevel, percentageAttributes(100.0F)));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "dry", 1 }, "Dry Level",
                                                             juce::NormalisableRange<float> { 0.0F, 1.5F, 0.001F },
-                                                            tape.dryLevel));
+                                                            tape.dryLevel, percentageAttributes(100.0F)));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "lowcut", 1 }, "Repeat Low-Cut",
                                                             juce::NormalisableRange<float> { 0.0F, 1000.0F, 1.0F },
                                                             tape.feedbackLowCutHertz, "Hz"));
@@ -58,7 +68,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout MechanaEchoAudioProcessor::c
                                                             tape.modulationRateHertz, "Hz"));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "depth", 1 }, "Modulation Depth",
                                                             juce::NormalisableRange<float> { 0.0F, 12.0F, 0.01F, 0.5F },
-                                                            tape.modulationDepthMilliseconds, "ms"));
+                                                            tape.modulationDepthMilliseconds,
+                                                            percentageAttributes(100.0F / 12.0F)));
     layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID { "pingpong", 1 }, "Ping-Pong", false));
     layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID { "bypass", 1 }, "Bypass", false));
     return layout;
@@ -103,10 +114,7 @@ void MechanaEchoAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 }
 
 double MechanaEchoAudioProcessor::getTailLengthSeconds() const {
-    const auto values = currentParameters();
-    if (values.feedback <= 0.001F)
-        return values.delayMilliseconds / 1000.0;
-    return std::min(30.0, values.delayMilliseconds / 1000.0 * std::log(0.001) / std::log(values.feedback));
+    return mechana::echo::reportedTailSeconds(currentParameters());
 }
 
 int MechanaEchoAudioProcessor::getCurrentProgram() { return static_cast<int>(parameters_.getRawParameterValue("model")->load()); }

@@ -16,6 +16,7 @@ public:
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     static void configure(juce::Slider&, const juce::String& suffix);
+    static void configurePercentage(juce::Slider&, double multiplier);
     void addControl(juce::Label&, juce::Slider&, const juce::String& label, const juce::String& suffix);
 
     MechanaEchoAudioProcessor& processor_;

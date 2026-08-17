@@ -22,6 +22,13 @@ class EchoFileRendererTest {
 	Path temporary;
 
 	@Test
+	void usesConservativeTailThresholdAndSafetyRepeat() {
+		EchoSettings settings = new EchoSettings(EchoSettings.Model.TAPE, 750, 0.48, 1, 1, 0, 0, 0, 0, 0, false);
+		long frames = EchoFileRenderer.tailFrames(1_000, settings);
+		assertTrue(frames >= 12_000 && frames <= 14_000);
+	}
+
+	@Test
 	void rendersRequestedDelayAndIncludesTheEchoTail() throws Exception {
 		Path source = impulse("source.wav", 1_000, 100);
 		Path output = temporary.resolve("echo.wav");

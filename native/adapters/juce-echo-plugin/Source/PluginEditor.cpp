@@ -24,7 +24,11 @@ MechanaEchoAudioProcessorEditor::MechanaEchoAudioProcessorEditor(MechanaEchoAudi
     addControl(highCutLabel_, highCut_, "Repeat High-Cut", " Hz");
     addControl(saturationLabel_, saturation_, "Age / Drive", "");
     addControl(rateLabel_, rate_, "Modulation Rate", " Hz");
-    addControl(depthLabel_, depth_, "Modulation Depth", " ms");
+    addControl(depthLabel_, depth_, "Modulation Depth", "");
+    configurePercentage(feedback_, 100.0);
+    configurePercentage(wet_, 100.0);
+    configurePercentage(dry_, 100.0);
+    configurePercentage(depth_, 100.0 / 12.0);
 
     auto& parameters = processor_.parameters();
     modelAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(parameters, "model", model_);
@@ -48,6 +52,14 @@ void MechanaEchoAudioProcessorEditor::configure(juce::Slider& slider, const juce
     slider.setSliderStyle(juce::Slider::LinearHorizontal);
     slider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 86, 24);
     slider.setTextValueSuffix(suffix);
+}
+
+void MechanaEchoAudioProcessorEditor::configurePercentage(juce::Slider& slider, const double multiplier) {
+    slider.setTextValueSuffix(" %");
+    slider.textFromValueFunction = [multiplier](const double value) { return juce::String(value * multiplier, 1); };
+    slider.valueFromTextFunction = [multiplier](const juce::String& text) {
+        return text.getDoubleValue() / multiplier;
+    };
 }
 
 void MechanaEchoAudioProcessorEditor::addControl(juce::Label& label, juce::Slider& slider,
