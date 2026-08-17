@@ -83,7 +83,7 @@ package_architecture() {
 	sign_path "${staging}/benchmarks/Run Benchmarks.app/Contents/Resources/${architecture}/mechana_reverb_benchmark"
 	sign_path "${staging}/benchmarks/Run Benchmarks.app"
 	/usr/bin/ditto -c -k --keepParent "${staging}/app/Mechana Effects.app" \
-		"${SCRIPT_DIR}/target/Mechana-Effects-macOS-${suffix}.zip"
+		"${SCRIPT_DIR}/target/Mechana-Effects-Live-Host-macOS-${suffix}.zip"
 	/usr/bin/ditto -c -k --keepParent "${staging}/echo-au/Mechana Echo.component" \
 		"${SCRIPT_DIR}/target/Mechana-Echo-AU-macOS-${suffix}.zip"
 	/usr/bin/ditto -c -k --keepParent "${staging}/leslie-au/Mechana Leslie.component" \

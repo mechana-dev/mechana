@@ -44,12 +44,17 @@ use the same slider-plus-numeric-override pattern as Reverb. The sliders emphasi
 practical musical ranges; the adjacent fields retain the engine's wider valid range
 for exact values and less common settings.
 
-The separate native Mechana Effects development app and Audio Units also include
-a Leslie tab/component. Its first Classic Cabinet model provides Stop/Slow/Fast
+The full file-oriented Mechana Effects application includes a Leslie tab alongside
+Reverb, Echo, and Create IR from Sweep. It retains the shared dry-audio picker,
+macOS/AirPlay Preview controls, Apply workflow, output folder, scrubber, and
+History. Its first Classic Cabinet model provides Stop/Slow/Fast
 rotor modes, independent horn/drum inertia, Drive, Horn Balance, Mic Distance,
 Stereo Width, Crossover, Wet, Dry, Bypass, and Reset. It is a behavioral model
-awaiting controlled listening calibration against a real cabinet. In the native
-three-tab app, only the selected Reverb, Echo, or Leslie tab processes live input.
+awaiting controlled listening calibration against a real cabinet.
+
+The compact native live-input development host embeds the three AU editors. It is
+packaged separately as `Mechana-Effects-Live-Host-macOS-<architecture>.zip` and
+must not replace the full `Mechana-Effects-macOS-<architecture>.zip` application.
 
 The build also writes `Mechana-Effects-macOS-arm64.zip`, preserving the application
 bundle for transfer to another Apple Silicon Mac. Because development builds are

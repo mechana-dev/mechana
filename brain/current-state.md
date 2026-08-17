@@ -76,9 +76,12 @@ This file reports repository evidence, not desired future status.
   Doppler and amplitude modulation, stereo microphone geometry, drive, smoothed
   continuous parameters, and zero reported host latency. A separate JUCE Audio
   Unit exposes Stop/Slow/Fast, Drive, Horn Balance, Mic Distance, Stereo Width,
-  Crossover, Wet, Dry, Bypass, and Reset. The combined native Mechana Effects app
-  adds a Leslie tab and processes only the selected effect. Leslie is registered
-  separately in the four-rate native benchmark. This is an initial behavioral
+  Crossover, Wet, Dry, Bypass, and Reset. The compact native live-input host adds
+  a Leslie tab and processes only the selected effect. Its package is explicitly
+  named as a live host so it cannot replace the full file-oriented application.
+  The full application retains its shared file, Preview/AirPlay, Apply, output,
+  History, and IR-creation workflow and now includes a functional Leslie tab.
+  Leslie is registered separately in the four-rate native benchmark. This is an initial behavioral
   model requiring listening calibration against a real cabinet, not a measured
   clone or manufacturer-endorsed emulation. See `brain/audio-leslie-engine.md`.
 

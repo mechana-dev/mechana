@@ -2082,3 +2082,17 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added core regressions for transparent bypass, finite stereo motion, zero reported
   latency, and physically distinct horn/drum acceleration. This is a behavioral
   development model requiring listening calibration, not a measured cabinet clone.
+
+## 2026-08-17 13:42:10 EDT — Restore full Effects application and add Leslie workflow
+
+- Restored the file-oriented Mechana Effects application as the canonical app
+  package instead of allowing the compact native AU development host to overwrite
+  it under the same ZIP name.
+- Added a functional Leslie tab to the full application with Stop/Slow/Fast rotor
+  speed, drive, horn balance, mic distance, stereo width, crossover, wet/dry, and
+  reset controls.
+- Integrated Leslie with streaming Preview, live control changes, bypass, looping,
+  scrub position, macOS/AirPlay output selection, Apply rendering, suggested output
+  names, job reports, and shared History.
+- Renamed the compact AU-editor host package to `Mechana-Effects-Live-Host` so the
+  two applications cannot be confused again.

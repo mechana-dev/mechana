@@ -19,7 +19,7 @@ case "${ARCHITECTURE}" in
 esac
 
 archives=(
-	"${TARGET}/Mechana-Effects-macOS-${ARCHITECTURE}.zip"
+	"${TARGET}/Mechana-Effects-Live-Host-macOS-${ARCHITECTURE}.zip"
 	"${TARGET}/Mechana-Echo-AU-macOS-${ARCHITECTURE}.zip"
 	"${TARGET}/Mechana-Leslie-AU-macOS-${ARCHITECTURE}.zip"
 	"${TARGET}/Mechana-Reverb-AU-macOS-${ARCHITECTURE}.zip"
