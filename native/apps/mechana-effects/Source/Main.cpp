@@ -11,15 +11,30 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 
 #include "../../../adapters/juce-echo-plugin/Source/PluginProcessor.h"
+#include "../../../adapters/juce-leslie-plugin/Source/PluginProcessor.h"
 #include "../../../adapters/juce-plugin/Source/PluginProcessor.h"
 
+#include <atomic>
+
 namespace {
+class EffectTabs final : public juce::TabbedComponent {
+public:
+    explicit EffectTabs(std::atomic<int>& selection)
+        : juce::TabbedComponent(juce::TabbedButtonBar::TabsAtTop), selection_(selection) {}
+
+    void currentTabChanged(const int newIndex, const juce::String&) override { selection_.store(newIndex); }
+
+private:
+    std::atomic<int>& selection_;
+};
+
 class EffectsComponent final : public juce::AudioAppComponent {
 public:
-    EffectsComponent() : tabs(juce::TabbedButtonBar::TabsAtTop) {
+    EffectsComponent() : tabs(selectedEffect) {
         addAndMakeVisible(tabs);
         tabs.addTab("Reverb", juce::Colour(0xff24333a), reverb.createEditor(), true);
         tabs.addTab("Echo", juce::Colour(0xff3a3024), echo.createEditor(), true);
+        tabs.addTab("Leslie", juce::Colour(0xff262d24), leslie.createEditor(), true);
         setSize(1'080, 820);
         setAudioChannels(2, 2);
     }
@@ -29,13 +44,16 @@ public:
     void prepareToPlay(const int samplesPerBlockExpected, const double sampleRate) override {
         reverb.setPlayConfigDetails(2, 2, sampleRate, samplesPerBlockExpected);
         echo.setPlayConfigDetails(2, 2, sampleRate, samplesPerBlockExpected);
+        leslie.setPlayConfigDetails(2, 2, sampleRate, samplesPerBlockExpected);
         reverb.prepareToPlay(sampleRate, samplesPerBlockExpected);
         echo.prepareToPlay(sampleRate, samplesPerBlockExpected);
+        leslie.prepareToPlay(sampleRate, samplesPerBlockExpected);
     }
 
     void releaseResources() override {
         reverb.releaseResources();
         echo.releaseResources();
+        leslie.releaseResources();
     }
 
     void getNextAudioBlock(const juce::AudioSourceChannelInfo& info) override {
@@ -44,8 +62,11 @@ public:
         juce::MidiBuffer midi;
         auto block = juce::AudioBuffer<float>(info.buffer->getArrayOfWritePointers(), info.buffer->getNumChannels(),
                                               info.startSample, info.numSamples);
-        reverb.processBlock(block, midi);
-        echo.processBlock(block, midi);
+        switch (selectedEffect.load()) {
+            case 1: echo.processBlock(block, midi); break;
+            case 2: leslie.processBlock(block, midi); break;
+            default: reverb.processBlock(block, midi); break;
+        }
     }
 
     void resized() override { tabs.setBounds(getLocalBounds()); }
@@ -53,7 +74,9 @@ public:
 private:
     MechanaReverbAudioProcessor reverb;
     MechanaEchoAudioProcessor echo;
-    juce::TabbedComponent tabs;
+    MechanaLeslieAudioProcessor leslie;
+    std::atomic<int> selectedEffect {};
+    EffectTabs tabs;
 };
 
 class MainWindow final : public juce::DocumentWindow {

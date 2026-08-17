@@ -30,20 +30,24 @@ option(MECHANA_BUILD_BENCHMARKS "Build the self-contained native DSP benchmark" 
 
 add_subdirectory(reverb-core)
 add_subdirectory(echo-core)
+add_subdirectory(leslie-core)
 
 if(MECHANA_BUILD_TESTS)
     enable_testing()
     add_subdirectory(reverb-core/tests)
     add_subdirectory(echo-core/tests)
+    add_subdirectory(leslie-core/tests)
 endif()
 
 if(MECHANA_BUILD_BENCHMARKS)
     add_subdirectory(reverb-core/benchmarks)
     add_subdirectory(echo-core/benchmarks)
+    add_subdirectory(leslie-core/benchmarks)
 endif()
 
 if(MECHANA_BUILD_JUCE_PLUGIN)
     add_subdirectory(adapters/juce-plugin)
     add_subdirectory(adapters/juce-echo-plugin)
+    add_subdirectory(adapters/juce-leslie-plugin)
     add_subdirectory(apps/mechana-effects)
 endif()

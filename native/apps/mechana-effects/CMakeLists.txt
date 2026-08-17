@@ -10,13 +10,16 @@ juce_add_gui_app(MechanaEffects
 target_sources(MechanaEffects PRIVATE Source/Main.cpp)
 target_include_directories(MechanaEffects PRIVATE
     ${CMAKE_SOURCE_DIR}/adapters/juce-plugin/Source
-    ${CMAKE_SOURCE_DIR}/adapters/juce-echo-plugin/Source)
+    ${CMAKE_SOURCE_DIR}/adapters/juce-echo-plugin/Source
+    ${CMAKE_SOURCE_DIR}/adapters/juce-leslie-plugin/Source)
 target_compile_definitions(MechanaEffects PRIVATE JUCE_REPORT_APP_USAGE=0 JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
 target_link_libraries(MechanaEffects PRIVATE
     MechanaReverb
     MechanaEcho
+    MechanaLeslie
     mechana_reverb_core
     mechana_echo_core
+    mechana_leslie_core
     juce::juce_audio_utils
     juce::juce_gui_extra
     PUBLIC
