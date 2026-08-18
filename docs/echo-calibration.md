@@ -25,11 +25,12 @@ ratio only when a window is sufficiently tone-dominated. Windowed program-materi
 calibration evidence, while deterministic impulse/burst tests remain authoritative for
 DSP invariants.
 
-Analog Memory is BBD-inspired rather than component-exact. Its repeat path performs a
-modulated fractional-delay read, user high-cut, a companion reconstruction pole tied to
-that same control, user low-cut, unity-slope asymmetric soft limiting, calibrated
-feedback gain, and delay write. Every listed degradation therefore accumulates once
-per feedback generation; Mix is applied afterward. A deterministic slow oscillator,
+Analog Memory is BBD-inspired rather than component-exact. Its recursive path performs a
+modulated fractional-delay read, user high-cut, user low-cut, unity-slope asymmetric
+soft limiting, calibrated feedback gain, and delay write. A stronger two-pole output
+reconstruction filter voices each audible repeat without over-darkening the recursive
+tail; both bandwidth stages remain tied to High Cut. The normal wet path is mono-centered
+while stereo dry and explicit ping-pong remain available. A deterministic slow oscillator,
 subtle flutter, and smoothed seeded wander move the read head continuously. The model
 does not currently add hiss or clock feedthrough because the private tail floor has not
 been characterized reliably.

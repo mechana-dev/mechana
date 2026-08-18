@@ -59,7 +59,8 @@ public:
         delayed.assign(channelCount, 0.0F);
         colored.assign(channelCount, 0.0F);
         lowPassState.assign(channelCount, 0.0F);
-        bbdLowPassState.assign(channelCount, 0.0F);
+        reconstructionStateOne.assign(channelCount, 0.0F);
+        reconstructionStateTwo.assign(channelCount, 0.0F);
         highPassInput.assign(channelCount, 0.0F);
         highPassOutput.assign(channelCount, 0.0F);
         smoothingCoefficient = static_cast<float>(1.0 - std::exp(-1.0 / (sampleRate * 0.020)));
@@ -73,7 +74,8 @@ public:
         std::fill(delayed.begin(), delayed.end(), 0.0F);
         std::fill(colored.begin(), colored.end(), 0.0F);
         std::fill(lowPassState.begin(), lowPassState.end(), 0.0F);
-        std::fill(bbdLowPassState.begin(), bbdLowPassState.end(), 0.0F);
+        std::fill(reconstructionStateOne.begin(), reconstructionStateOne.end(), 0.0F);
+        std::fill(reconstructionStateTwo.begin(), reconstructionStateTwo.end(), 0.0F);
         std::fill(highPassInput.begin(), highPassInput.end(), 0.0F);
         std::fill(highPassOutput.begin(), highPassOutput.end(), 0.0F);
         writePosition = 0;
@@ -108,8 +110,8 @@ public:
                                                  * static_cast<float>(sampleRate) / 1000.0F,
                                              0.0F, maximumDelaySamples * 0.25F);
         const auto lowPassCoefficient = cutoffCoefficient(parameters.feedbackHighCutHertz);
-        const auto bbdLowPassCoefficient = cutoffCoefficient(
-            std::min(parameters.feedbackHighCutHertz * 1.75F, 12'000.0F));
+        const auto reconstructionCoefficient = cutoffCoefficient(
+            std::min(parameters.feedbackHighCutHertz * 0.55F, 3'200.0F));
         const auto highPassCoefficient = highPassCutoffCoefficient(parameters.feedbackLowCutHertz);
         for (std::size_t frame = 0; frame < frames; ++frame) {
             smoothedDelaySamples += (targetDelay - smoothedDelaySamples) * smoothingCoefficient;
@@ -149,16 +151,14 @@ public:
                                                static_cast<double>(writePosition) - modulatedDelay);
             for (std::size_t channel = 0; channel < channelCount; ++channel) {
                 const auto sourceChannel = parameters.pingPong && channelCount == 2 ? 1 - channel : channel;
-                auto repeat = delayed[sourceChannel];
+                auto repeat = parameters.character == Character::analogMemory && channelCount == 2
+                                      && !parameters.pingPong
+                                  ? 0.5F * (delayed[0] + delayed[1])
+                                  : delayed[sourceChannel];
                 if (parameters.feedbackHighCutHertz > 0.0F) {
                     lowPassState[channel] = (1.0F - lowPassCoefficient) * repeat
                                             + lowPassCoefficient * lowPassState[channel];
                     repeat = lowPassState[channel];
-                    if (parameters.character == Character::analogMemory) {
-                        bbdLowPassState[channel] = (1.0F - bbdLowPassCoefficient) * repeat
-                                                   + bbdLowPassCoefficient * bbdLowPassState[channel];
-                        repeat = bbdLowPassState[channel];
-                    }
                 }
                 if (parameters.feedbackLowCutHertz > 0.0F) {
                     const auto filtered = highPassCoefficient
@@ -179,9 +179,18 @@ public:
                     }
                 }
                 colored[channel] = repeat;
+                auto wetOutput = repeat;
+                if (parameters.character == Character::analogMemory && parameters.feedbackHighCutHertz > 0.0F) {
+                    reconstructionStateOne[channel] = (1.0F - reconstructionCoefficient) * wetOutput
+                                                       + reconstructionCoefficient * reconstructionStateOne[channel];
+                    reconstructionStateTwo[channel] = (1.0F - reconstructionCoefficient)
+                                                           * reconstructionStateOne[channel]
+                                                       + reconstructionCoefficient * reconstructionStateTwo[channel];
+                    wetOutput = reconstructionStateTwo[channel];
+                }
                 const auto input = channels[channel][frame];
                 delayBuffers[channel][writePosition] = input + feedback * repeat;
-                channels[channel][frame] = parameters.bypass ? input : input * mix.dry + repeat * mix.wet;
+                channels[channel][frame] = parameters.bypass ? input : input * mix.dry + wetOutput * mix.wet;
             }
             writePosition = (writePosition + 1) % delayBuffers.front().size();
         }
@@ -220,7 +229,8 @@ private:
     std::vector<float> delayed;
     std::vector<float> colored;
     std::vector<float> lowPassState;
-    std::vector<float> bbdLowPassState;
+    std::vector<float> reconstructionStateOne;
+    std::vector<float> reconstructionStateTwo;
     std::vector<float> highPassInput;
     std::vector<float> highPassOutput;
 };

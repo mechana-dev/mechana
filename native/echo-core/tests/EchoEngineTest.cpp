@@ -158,6 +158,15 @@ int main() {
         const auto deterministicB = render(1, deterministicParameters);
         require(deterministicA == deterministicB, "Analog Memory clock wander was not deterministic after reset");
 
+        auto centered = memory;
+        centered.delayMilliseconds = 100.0F;
+        centered.feedback = 0.0F;
+        centered.mix = 1.0F;
+        centered.modulationDepthMilliseconds = 0.0F;
+        output = render(2, centered);
+        require(std::abs(output[0][100] - output[1][100]) < 1.0e-6F,
+                "Analog Memory wet path should be mono-centered unless ping-pong is enabled");
+
         constexpr std::size_t continuityFrames = 4'096;
         std::vector<float> continuity(continuityFrames);
         continuity.front() = 0.5F;
