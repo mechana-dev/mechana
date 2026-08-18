@@ -104,7 +104,10 @@ commercial/proprietary license has been chosen.
   Their listening-calibrated starting Mix is 26%. Echo uses a shared, smoothed linear
   dry/wet mixer and a shaped, strictly sub-unity feedback mapping. Its repeat filtering
   and unity-small-signal-gain coloration are inside the feedback loop, producing
-  progressive degradation without the former quiet-signal gain error. The Echo Audio
+  progressive degradation without the former quiet-signal gain error. Analog Memory
+  adds a second gentle, control-relative reconstruction pole and deterministic
+  low-frequency clock motion with subtle flutter and smoothed wander. Modulation rate
+  and depth changes are smoothed. The file renderer mirrors this exact order. The Echo Audio
   Unit displays Feedback, Mix, and modulation depth as percentages, migrates legacy
   Wet/Dry state to the closest normalized Mix ratio, and reports a conservative host tail through -100 dB amplitude plus
   one safety repeat, capped at 30 seconds.

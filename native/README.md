@@ -10,6 +10,9 @@ delay, feedback, repeat filtering, saturation, modulation, stereo routing, and
 neutral plus initial tape/BBD-style behavioral defaults. The temporary Echo
 adapter builds a separate AU; it does not use convolution. `apps/mechana-effects`
 builds a live-input macOS application with separate Reverb and Echo tabs.
+Analog Memory applies control-relative two-pole bandwidth loss, asymmetric soft
+limiting, and deterministic composite clock motion once per feedback generation;
+modulation rate and depth changes are smoothed.
 
 `audio-core` is the shared, JUCE-free foundation for real-time effects. It
 provides parameter smoothing, gain/equal-power mix and peak helpers, reusable

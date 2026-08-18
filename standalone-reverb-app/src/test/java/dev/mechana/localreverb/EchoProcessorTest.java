@@ -66,4 +66,35 @@ class EchoProcessorTest {
 			for (double sample : channel)
 				assertTrue(Double.isFinite(sample));
 	}
+
+	@Test
+	void analogMemoryProgressivelyDarkensAndClockWanderIsDeterministic() {
+		EchoSettings settings = new EchoSettings(EchoSettings.Model.ANALOG, 20, 0.72, 1, 80, 4_500, 0.16, 0.8, 0,
+				false);
+		double[][] first = alternatingBurst(8_000, 512);
+		double[][] second = alternatingBurst(8_000, 512);
+		new EchoProcessor(48_000, 1).process(first, first[0].length, settings);
+		new EchoProcessor(48_000, 1).process(second, second[0].length, settings);
+		assertTrue(java.util.Arrays.equals(first[0], second[0]), "seeded clock motion must be repeatable");
+		assertTrue(highFrequencyProxy(first[0], 2_880, 512) < highFrequencyProxy(first[0], 960, 512) * 0.75,
+				"later repeat generations should be darker");
+	}
+
+	private static double[][] alternatingBurst(int frames, int burstFrames) {
+		double[][] audio = new double[1][frames];
+		for (int index = 0; index < burstFrames; index++)
+			audio[0][index] = index % 2 == 0 ? 0.2 : -0.2;
+		return audio;
+	}
+
+	private static double highFrequencyProxy(double[] audio, int start, int count) {
+		double signalEnergy = 0;
+		double differenceEnergy = 0;
+		for (int index = start + 1; index < start + count; index++) {
+			signalEnergy += audio[index] * audio[index];
+			double difference = audio[index] - audio[index - 1];
+			differenceEnergy += difference * difference;
+		}
+		return differenceEnergy / Math.max(signalEnergy, 1.0e-20);
+	}
 }

@@ -17,8 +17,8 @@
 #include <vector>
 
 int main(int argc, char** argv) {
-    if (argc != 6) {
-        std::cerr << "usage: render INPUT.f32 OUTPUT.f32 SAMPLE_RATE CHANNELS SOURCE_FRAMES\n";
+    if (argc != 6 && argc != 7) {
+        std::cerr << "usage: render INPUT.f32 OUTPUT.f32 SAMPLE_RATE CHANNELS SOURCE_FRAMES [MIX]\n";
         return 2;
     }
     const auto rate = std::atof(argv[3]);
@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
     auto parameters = mechana::echo::modelDefaults(mechana::echo::Model::analogMemory);
     parameters.delayMilliseconds = 350.0F;
     parameters.feedback = 0.36F;
-    parameters.mix = 0.26F;
+    parameters.mix = argc == 7 ? std::clamp(static_cast<float>(std::atof(argv[6])), 0.0F, 1.0F) : 0.26F;
     mechana::echo::EchoEngine engine;
     engine.prepare(rate, channels, block);
     for (std::size_t offset = 0; offset < planar.front().size(); offset += block) {

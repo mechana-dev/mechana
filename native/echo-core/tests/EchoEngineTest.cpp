@@ -38,6 +38,17 @@ std::vector<std::vector<float>> render(const std::size_t channels, const mechana
     }
     return audio;
 }
+
+float highFrequencyProxy(const std::vector<float>& audio, const std::size_t start, const std::size_t count) {
+    auto signalEnergy = 0.0F;
+    auto differenceEnergy = 0.0F;
+    for (std::size_t index = start + 1; index < start + count; ++index) {
+        signalEnergy += audio[index] * audio[index];
+        const auto difference = audio[index] - audio[index - 1];
+        differenceEnergy += difference * difference;
+    }
+    return differenceEnergy / std::max(signalEnergy, 1.0e-20F);
+}
 } // namespace
 
 int main() {
@@ -116,6 +127,58 @@ int main() {
                 "analog feedback generation did not become softer");
         require(std::ranges::all_of(output[0], [](const float sample) { return std::isfinite(sample) && std::abs(sample) <= 2.0F; }),
                 "analog feedback became unstable");
+
+        constexpr std::size_t darkeningFrames = 8'000;
+        constexpr std::size_t darkeningDelay = 960;
+        constexpr std::size_t burstFrames = 512;
+        std::vector<float> darkening(darkeningFrames);
+        for (std::size_t index = 0; index < burstFrames; ++index)
+            darkening[index] = index % 2 == 0 ? 0.2F : -0.2F;
+        auto darkeningParameters = memory;
+        darkeningParameters.delayMilliseconds = 20.0F;
+        darkeningParameters.feedback = 0.72F;
+        darkeningParameters.mix = 1.0F;
+        darkeningParameters.modulationDepthMilliseconds = 0.0F;
+        mechana::echo::EchoEngine darkeningEngine;
+        darkeningEngine.prepare(48'000.0, 1, 128, 1.0);
+        for (std::size_t offset = 0; offset < darkeningFrames; offset += 128) {
+            const auto count = std::min<std::size_t>(128, darkeningFrames - offset);
+            auto* pointer = darkening.data() + offset;
+            darkeningEngine.process(&pointer, 1, count, darkeningParameters);
+        }
+        const auto firstHighFrequency = highFrequencyProxy(darkening, darkeningDelay, burstFrames);
+        const auto thirdHighFrequency = highFrequencyProxy(darkening, darkeningDelay * 3, burstFrames);
+        require(thirdHighFrequency < firstHighFrequency * 0.75F,
+                "Analog Memory repeat generations did not progressively darken");
+
+        auto deterministicParameters = memory;
+        deterministicParameters.delayMilliseconds = 100.0F;
+        deterministicParameters.mix = 1.0F;
+        const auto deterministicA = render(1, deterministicParameters);
+        const auto deterministicB = render(1, deterministicParameters);
+        require(deterministicA == deterministicB, "Analog Memory clock wander was not deterministic after reset");
+
+        constexpr std::size_t continuityFrames = 4'096;
+        std::vector<float> continuity(continuityFrames);
+        continuity.front() = 0.5F;
+        mechana::echo::EchoEngine continuityEngine;
+        continuityEngine.prepare(48'000.0, 1, 128, 1.0);
+        auto continuityParameters = memory;
+        continuityParameters.delayMilliseconds = 20.0F;
+        continuityParameters.mix = 1.0F;
+        continuityParameters.modulationDepthMilliseconds = 0.0F;
+        for (std::size_t offset = 0; offset < continuityFrames; offset += 128) {
+            if (offset == continuityFrames / 2) {
+                continuityParameters.modulationDepthMilliseconds = 8.0F;
+                continuityParameters.modulationRateHertz = 6.0F;
+            }
+            auto* pointer = continuity.data() + offset;
+            continuityEngine.process(&pointer, 1, 128, continuityParameters);
+        }
+        auto maximumStep = 0.0F;
+        for (std::size_t index = continuityFrames / 2 - 16; index < continuityFrames / 2 + 512; ++index)
+            maximumStep = std::max(maximumStep, std::abs(continuity[index] - continuity[index - 1]));
+        require(maximumStep < 0.5F, "modulation parameter change introduced a click-sized discontinuity");
 
         auto tailParameters = tape;
         tailParameters.delayMilliseconds = 750.0F;

@@ -2190,3 +2190,28 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added standalone parity regressions for the 36% coefficient, decay behavior, Mix
   endpoints, automation smoothing, and legacy migration. Shipping app builds run
   this test suite before packaging.
+
+## 2026-08-18 19:15 EDT — Refine Analog Memory repeat character
+
+- Added a gentle companion reconstruction pole tied to the user's High Cut, preserving
+  the off state while making bandwidth and transient softening accumulate naturally
+  through each feedback generation.
+- Replaced Analog Memory's lone sinusoidal read motion with smoothed low-frequency
+  modulation, subtle flutter, and fixed-seed interpolated wander. Rate and depth
+  automation are now smoothed and reset renders remain deterministic.
+- Normalized the asymmetric soft limiter at its biased operating point so quiet
+  repeats retain unity small-signal gain while louder generations compress softly.
+- Ported the same processing order to the shipping file renderer and added native
+  and Java regressions for progressive darkening, deterministic clock motion,
+  continuity, calibrated decay, and bounded output.
+- Extended the private calibration report with HF/LF energy, crest-factor smear,
+  stereo correlation, lag-drift, and tone-gated harmonic metrics. No private audio
+  or derived render is stored in the repository.
+- Native packaging now rebuilds the Echo AU before staging, embeds commit/source/
+  binary identity in the signed component, and emits a ZIP checksum sidecar.
+- Private 350 ms Watchtower tail measurements kept mean decay near the approved
+  reference (`-7.84 dB/window`): corrected prior Mechana was `-8.18`, and the new
+  character render was `-8.19`. First/tenth spectral centroid changed from
+  `1478/1159 Hz` to `1428/902 Hz` (reference `1100/958 Hz`); HF energy ratio changed
+  from `-29.0/-47.2 dB` to `-30.7/-60.2 dB` (reference `-45.7/-58.2 dB`). These are
+  program-material diagnostics, not hard conformance targets or repository assets.

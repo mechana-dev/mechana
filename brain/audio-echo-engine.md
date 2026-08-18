@@ -6,7 +6,9 @@ Last verified: 2026-08-18
 
 `native/echo-core` is a product-owned C++20 DSP library with no JUCE or convolution
 dependency. It uses a cubic-interpolated delay line and a feedback path containing
-optional low-cut, high-cut, saturation, and sinusoidal delay modulation. The engine
+optional low-cut, high-cut, saturation, and delay-time modulation. Analog Memory uses
+a deterministic composite clock-motion model: a smoothed low-frequency oscillator,
+subtle flutter, and interpolated pseudo-random wander. The engine
 supports mono/stereo processing, optional ping-pong routing, wet/dry gain, bypass,
 and click-smoothed delay-time changes. It allocates its buffers during `prepare`,
 performs no allocation in `process`, and reports zero added latency.
@@ -32,7 +34,12 @@ not as a Soundtoys, EchoBoy, or hardware clone. Feedback is a shaped musical con
 36% maps to an internal loop coefficient near 0.419 (about -7.6 dB per unfiltered
 generation), with a strict sub-unity ceiling. Filtering and unity-small-signal-gain
 nonlinearity are inside the loop, so every generation becomes progressively darker
-and softer. A shared linear Mix primitive supplies `dry = 1 - mix`, `wet = mix` with
+and softer. Its per-generation order is modulated delay read, user high-cut, a companion
+BBD reconstruction pole, user low-cut, unity-slope asymmetric soft limiting, feedback
+gain, and delay write. Both high-cut poles remain tied to the user control; disabling
+High Cut disables both. Noise and clock feedthrough are not currently synthesized.
+Modulation depth and rate are smoothed, and the fixed seed makes reset renders
+repeatable. A shared linear Mix primitive supplies `dry = 1 - mix`, `wet = mix` with
 10 ms smoothing; output peak protection remains a separate concern.
 
 A separate JUCE
