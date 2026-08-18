@@ -2153,3 +2153,14 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Recorded the required ownership, JUCE, third-party DSP, impulse-response/sample,
   and Apache notice audit before commercialization. The full accepted future
   direction and migration checkpoint live in `brain/mechana-audio.md`.
+## 2026-08-18 16:20:00 EDT — Calibrate Analog Memory Echo and unify Mix
+
+- Corrected an unintended 2.18x quiet-signal gain in the Analog Memory nonlinear
+  feedback stage, added a shaped sub-unity Feedback mapping, and verified progressive
+  repeat darkening against deterministic tests and Scott-approved private references.
+- Added a shared 10 ms-smoothed linear dry/wet mixer and replaced Echo's visible Wet
+  and Dry controls with percentage-based Mix. Legacy AU state migrates to the closest
+  normalized Mix ratio without changing old parameter indices.
+- Added a local path-based WAV analyzer and native calibration renderer. External
+  Hendrix/Watchtower files remain private development material and are not committed.
+- See `brain/audio-echo-engine.md` and `docs/echo-calibration.md`.
