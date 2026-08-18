@@ -2153,3 +2153,65 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Recorded the required ownership, JUCE, third-party DSP, impulse-response/sample,
   and Apache notice audit before commercialization. The full accepted future
   direction and migration checkpoint live in `brain/mechana-audio.md`.
+## 2026-08-18 16:20:00 EDT — Calibrate Analog Memory Echo and unify Mix
+
+- Corrected an unintended 2.18x quiet-signal gain in the Analog Memory nonlinear
+  feedback stage, added a shaped sub-unity Feedback mapping, and verified progressive
+  repeat darkening against deterministic tests and Scott-approved private references.
+- Added a shared 10 ms-smoothed linear dry/wet mixer and replaced Echo's visible Wet
+  and Dry controls with percentage-based Mix. Legacy AU state migrates to the closest
+  normalized Mix ratio without changing old parameter indices.
+- Added a local path-based WAV analyzer and native calibration renderer. External
+  Hendrix/Watchtower files remain private development material and are not committed.
+- See `brain/audio-echo-engine.md` and `docs/echo-calibration.md`.
+
+## 2026-08-18 17:55 EDT — Correct Effects release packaging
+
+- Confirmed that the supported standalone deliverables are
+  `Mechana-Effects-macOS-arm64.zip` and `Mechana-Effects-macOS-x86_64.zip`.
+  The compact native Live Host remains a development target and is no longer
+  created or notarized by the release packaging workflow.
+- Kept app builds, Developer ID signing, and notarization on the development Mac.
+  Intel packaging uses the local x86_64 Java 25 JDK under Rosetta; `rocinante` is
+  restricted to deployment and testing of completed artifacts.
+- Put standalone staging and archives in architecture-specific directories and
+  added a dedicated Effects-app notarization/stapling command.
+- Corrected the post-stapling archive step to suppress AppleDouble metadata and
+  verify the signature and Gatekeeper result again after extracting the final ZIP.
+
+## 2026-08-18 18:55 EDT — Keep the shipping Effects app aligned with Echo core
+
+- Ported the calibrated Feedback curve and unity-small-signal Analog Memory
+  coloration into the file-oriented Java Effects app after a new Watchtower render
+  proved it was still using the former raw-feedback path.
+- Replaced the app's independent Echo Wet and Dry controls with one 0–100% Mix
+  control, including 10 ms smoothing and migration of saved preferences using
+  `Mix = Wet / (Wet + Dry)`.
+- Added standalone parity regressions for the 36% coefficient, decay behavior, Mix
+  endpoints, automation smoothing, and legacy migration. Shipping app builds run
+  this test suite before packaging.
+
+## 2026-08-18 19:15 EDT — Refine Analog Memory repeat character
+
+- Added a gentle companion reconstruction pole tied to the user's High Cut, preserving
+  the off state while making bandwidth and transient softening accumulate naturally
+  through each feedback generation.
+- Replaced Analog Memory's lone sinusoidal read motion with smoothed low-frequency
+  modulation, subtle flutter, and fixed-seed interpolated wander. Rate and depth
+  automation are now smoothed and reset renders remain deterministic.
+- Normalized the asymmetric soft limiter at its biased operating point so quiet
+  repeats retain unity small-signal gain while louder generations compress softly.
+- Ported the same processing order to the shipping file renderer and added native
+  and Java regressions for progressive darkening, deterministic clock motion,
+  continuity, calibrated decay, and bounded output.
+- Extended the private calibration report with HF/LF energy, crest-factor smear,
+  stereo correlation, lag-drift, and tone-gated harmonic metrics. No private audio
+  or derived render is stored in the repository.
+- Native packaging now rebuilds the Echo AU before staging, embeds commit/source/
+  binary identity in the signed component, and emits a ZIP checksum sidecar.
+- Private 350 ms Watchtower tail measurements kept mean decay near the approved
+  reference (`-7.84 dB/window`): corrected prior Mechana was `-8.18`, and the new
+  character render was `-8.19`. First/tenth spectral centroid changed from
+  `1478/1159 Hz` to `1428/902 Hz` (reference `1100/958 Hz`); HF energy ratio changed
+  from `-29.0/-47.2 dB` to `-30.7/-60.2 dB` (reference `-45.7/-58.2 dB`). These are
+  program-material diagnostics, not hard conformance targets or repository assets.

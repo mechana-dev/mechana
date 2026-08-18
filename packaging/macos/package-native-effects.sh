@@ -56,19 +56,31 @@ package_architecture() {
 	local build="$2"
 	local suffix="$3"
 	local staging="${TARGET}/${architecture}"
-	local app_source="${build}/apps/mechana-effects/MechanaEffects_artefacts/Release/Mechana Effects.app"
+	local archives="${SCRIPT_DIR}/target/${architecture}"
 	local echo_source="${build}/adapters/juce-echo-plugin/MechanaEcho_artefacts/Release/AU/Mechana Echo.component"
 	local leslie_source="${build}/adapters/juce-leslie-plugin/MechanaLeslie_artefacts/Release/AU/Mechana Leslie.component"
 	local reverb_source="${build}/adapters/juce-plugin/MechanaReverb_artefacts/Release/AU/Mechana Reverb.component"
 	local fuzz_source="${build}/adapters/juce-octave-fuzz-plugin/MechanaOctaveFuzz_artefacts/Release/AU/Mechana Octave Fuzz.component"
+	local echo_marker="${staging}/echo-au/Mechana Echo.component/Contents/Resources/MechanaBuild.txt"
 
-	mkdir -p "${staging}/app" "${staging}/echo-au" "${staging}/leslie-au" "${staging}/reverb-au" \
+	# Rebuild the AU from this checkout immediately before copying it. This prevents a
+	# newer packaging run from silently reusing an older component from the build tree.
+	cmake --build "${build}" --config Release --target MechanaEcho_AU
+
+	mkdir -p "${archives}" "${staging}/echo-au" "${staging}/leslie-au" "${staging}/reverb-au" \
 		"${staging}/octave-fuzz-au" "${staging}/benchmarks/${architecture}"
-	/usr/bin/ditto "${app_source}" "${staging}/app/Mechana Effects.app"
 	/usr/bin/ditto "${echo_source}" "${staging}/echo-au/Mechana Echo.component"
 	/usr/bin/ditto "${leslie_source}" "${staging}/leslie-au/Mechana Leslie.component"
 	/usr/bin/ditto "${reverb_source}" "${staging}/reverb-au/Mechana Reverb.component"
 	/usr/bin/ditto "${fuzz_source}" "${staging}/octave-fuzz-au/Mechana Octave Fuzz.component"
+	mkdir -p "${echo_marker:h}"
+	{
+		print "git-commit=$(git -C "${REPOSITORY}" rev-parse HEAD)"
+		print "echo-dsp-sha256=$(shasum -a 256 "${REPOSITORY}/native/echo-core/src/EchoEngine.cpp" | awk '{print $1}')"
+		print "component-sha256-before-signing=$(shasum -a 256 "${staging}/echo-au/Mechana Echo.component/Contents/MacOS/Mechana Echo" | awk '{print $1}')"
+		print "architecture=${architecture}"
+	} >"${echo_marker}"
+	grep -q "echo-dsp-sha256=" "${echo_marker}"
 	cp "${build}/echo-core/benchmarks/mechana_echo_benchmark" "${staging}/benchmarks/${architecture}/"
 	cp "${build}/leslie-core/benchmarks/mechana_leslie_benchmark" "${staging}/benchmarks/${architecture}/"
 	cp "${build}/reverb-core/benchmarks/mechana_reverb_benchmark" "${staging}/benchmarks/${architecture}/"
@@ -77,7 +89,6 @@ package_architecture() {
 	cp "${REPOSITORY}/LICENSE" "${staging}/benchmarks/LICENSE"
 	create_benchmark_app "${architecture}" "${staging}/benchmarks"
 
-	sign_path "${staging}/app/Mechana Effects.app"
 	sign_path "${staging}/echo-au/Mechana Echo.component"
 	sign_path "${staging}/leslie-au/Mechana Leslie.component"
 	sign_path "${staging}/reverb-au/Mechana Reverb.component"
@@ -91,18 +102,18 @@ package_architecture() {
 	sign_path "${staging}/benchmarks/Run Benchmarks.app/Contents/Resources/${architecture}/mechana_reverb_benchmark"
 	sign_path "${staging}/benchmarks/Run Benchmarks.app/Contents/Resources/${architecture}/mechana_octave_fuzz_benchmark"
 	sign_path "${staging}/benchmarks/Run Benchmarks.app"
-	/usr/bin/ditto -c -k --keepParent "${staging}/app/Mechana Effects.app" \
-		"${SCRIPT_DIR}/target/Mechana-Effects-Live-Host-macOS-${suffix}.zip"
 	/usr/bin/ditto -c -k --keepParent "${staging}/echo-au/Mechana Echo.component" \
-		"${SCRIPT_DIR}/target/Mechana-Echo-AU-macOS-${suffix}.zip"
+		"${archives}/Mechana-Echo-AU-macOS-${suffix}.zip"
+	shasum -a 256 "${archives}/Mechana-Echo-AU-macOS-${suffix}.zip" \
+		>"${archives}/Mechana-Echo-AU-macOS-${suffix}.zip.sha256"
 	/usr/bin/ditto -c -k --keepParent "${staging}/leslie-au/Mechana Leslie.component" \
-		"${SCRIPT_DIR}/target/Mechana-Leslie-AU-macOS-${suffix}.zip"
+		"${archives}/Mechana-Leslie-AU-macOS-${suffix}.zip"
 	/usr/bin/ditto -c -k --keepParent "${staging}/reverb-au/Mechana Reverb.component" \
-		"${SCRIPT_DIR}/target/Mechana-Reverb-AU-macOS-${suffix}.zip"
+		"${archives}/Mechana-Reverb-AU-macOS-${suffix}.zip"
 	/usr/bin/ditto -c -k --keepParent "${staging}/octave-fuzz-au/Mechana Octave Fuzz.component" \
-		"${SCRIPT_DIR}/target/Mechana-Octave-Fuzz-AU-macOS-${suffix}.zip"
+		"${archives}/Mechana-Octave-Fuzz-AU-macOS-${suffix}.zip"
 	/usr/bin/ditto -c -k --keepParent "${staging}/benchmarks" \
-		"${SCRIPT_DIR}/target/Mechana-Effect-Benchmarks-macOS-${suffix}.zip"
+		"${archives}/Mechana-Effect-Benchmarks-macOS-${suffix}.zip"
 }
 
 cmake -E remove_directory "${TARGET}"

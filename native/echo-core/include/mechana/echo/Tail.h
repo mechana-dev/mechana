@@ -11,6 +11,7 @@
 #pragma once
 
 #include "Parameters.h"
+#include "Feedback.h"
 
 #include <algorithm>
 #include <cmath>
@@ -20,11 +21,11 @@ namespace mechana::echo {
 [[nodiscard]] inline double reportedTailSeconds(const Parameters& parameters) noexcept {
     constexpr auto inaudibleAmplitude = 0.00001;
     constexpr auto maximumTailSeconds = 30.0;
-    if (parameters.bypass || parameters.wetLevel <= 0.0F)
+    if (parameters.bypass || parameters.mix <= 0.0F)
         return 0.0;
 
     const auto delay = std::max(0.0, static_cast<double>(parameters.delayMilliseconds) / 1000.0);
-    const auto feedback = std::clamp(std::abs(static_cast<double>(parameters.feedback)), 0.0, 0.999);
+    const auto feedback = std::abs(static_cast<double>(feedbackCoefficient(parameters.feedback)));
     if (feedback <= inaudibleAmplitude)
         return std::min(maximumTailSeconds, delay * 2.0);
 

@@ -10,6 +10,9 @@ delay, feedback, repeat filtering, saturation, modulation, stereo routing, and
 neutral plus initial tape/BBD-style behavioral defaults. The temporary Echo
 adapter builds a separate AU; it does not use convolution. `apps/mechana-effects`
 builds a live-input macOS application with separate Reverb and Echo tabs.
+Analog Memory applies control-relative two-pole bandwidth loss, asymmetric soft
+limiting, and deterministic composite clock motion once per feedback generation;
+modulation rate and depth changes are smoothed.
 
 `audio-core` is the shared, JUCE-free foundation for real-time effects. It
 provides parameter smoothing, gain/equal-power mix and peak helpers, reusable
@@ -60,13 +63,17 @@ benchmark suite is built with `packaging/macos/build-effect-benchmarks.sh` and
 automatically discovers each registered native effect benchmark.
 
 `packaging/macos/package-native-effects.sh` packages architecture-specific ZIPs
-for the combined app, all four separate AU components, and the benchmark suite.
+under `packaging/macos/target/arm64/` and `packaging/macos/target/x86_64/`
+for all four separate AU components and the benchmark suite. The native live-input
+host remains a development target and is not a release artifact. The full
+file-oriented Effects app is built separately with
+`packaging/macos/build-reverb-app.sh` and uses the same architecture folders.
 Reverb, Echo, Leslie, and Octave Fuzz results remain distinct at all four standard rates.
 Development packaging uses ad-hoc signatures by default. Release packaging sets
 `MACOS_SIGNING_IDENTITY` to a Developer ID Application identity, which enables
 hardened runtime and secure timestamps, and may limit packaging to `arm64` or
 `x86_64`. After the one-time `notarytool` Keychain profile setup, run
-`packaging/macos/notarize-native-effects.sh <architecture>` to submit all six
+`packaging/macos/notarize-native-effects.sh <architecture>` to submit all five
 archives, staple supported bundles, rebuild their ZIPs, and validate the result.
 
 The build downloads the pinned JUCE 9.0.0 source into the ignored build tree.

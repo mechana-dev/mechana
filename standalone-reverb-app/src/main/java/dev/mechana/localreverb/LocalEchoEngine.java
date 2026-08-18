@@ -73,8 +73,7 @@ final class LocalEchoEngine implements AutoCloseable {
 		values.put("model", settings.model().toString());
 		values.put("delayMilliseconds", settings.delayMilliseconds());
 		values.put("feedback", settings.feedback());
-		values.put("wet", settings.wet());
-		values.put("dry", settings.dry());
+		values.put("mix", settings.mix());
 		values.put("lowCutHertz", settings.lowCutHertz());
 		values.put("highCutHertz", settings.highCutHertz());
 		values.put("saturation", settings.saturation());
@@ -90,11 +89,10 @@ final class LocalEchoEngine implements AutoCloseable {
 	}
 
 	private static String summary(EchoSettings value) {
-		return "%s · Delay %s ms · Feedback %s · Wet %s · Dry %s · EQ %s/%s Hz · Mod %s Hz/%s ms%s".formatted(
-				value.model(), compact(value.delayMilliseconds()), compact(value.feedback()), compact(value.wet()),
-				compact(value.dry()), compact(value.lowCutHertz()), compact(value.highCutHertz()),
-				compact(value.modulationRateHertz()), compact(value.modulationDepthMilliseconds()),
-				value.pingPong() ? " · Ping-pong" : "");
+		return "%s · Delay %s ms · Feedback %s · Mix %s%% · EQ %s/%s Hz · Mod %s Hz/%s ms%s".formatted(value.model(),
+				compact(value.delayMilliseconds()), compact(value.feedback()), compact(value.mix() * 100),
+				compact(value.lowCutHertz()), compact(value.highCutHertz()), compact(value.modulationRateHertz()),
+				compact(value.modulationDepthMilliseconds()), value.pingPong() ? " · Ping-pong" : "");
 	}
 
 	private static String report(Path source, String outputName, EchoSettings settings) {

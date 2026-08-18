@@ -60,9 +60,10 @@ awaiting controlled listening calibration against a real cabinet.
 Octave Fuzz provides Drive, Tone, Output Level, Octave Blend, Bypass, and Reset,
 with the same Preview, scrub, Apply, output-selection, and History workflow.
 
-The compact native live-input development host embeds the three AU editors. It is
-packaged separately as `Mechana-Effects-Live-Host-macOS-<architecture>.zip` and
-must not replace the full `Mechana-Effects-macOS-<architecture>.zip` application.
+The compact native live-input host is a development target only. Release packaging
+does not create or distribute a `Mechana-Effects-Live-Host` archive. The supported
+application deliverable is the full file-oriented
+`Mechana-Effects-macOS-<architecture>.zip` application.
 
 The build writes architecture-specific `Mechana-Effects-macOS-<architecture>.zip`
 archives. When `MACOS_SIGNING_IDENTITY` is supplied, jpackage signs the embedded
@@ -72,6 +73,10 @@ the desired architecture to build only the standalone app. An Intel JDK produces
 `Mechana-Effects-macOS-x86_64.zip`; Rosetta permits that build on an Apple Silicon
 development Mac. The JDK architecture determines the bundled runtime and native
 launcher architecture.
+Build and sign both architectures on the development Mac. Use
+`packaging/macos/notarize-effects-app.sh <architecture>` afterward. Deployment
+machines such as `rocinante` are for installing and testing finished artifacts only;
+do not stage source or run builds there.
 
 ## Build and install
 

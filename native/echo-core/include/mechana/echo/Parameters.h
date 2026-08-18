@@ -17,8 +17,7 @@ struct Parameters final {
     Character character { Character::neutral };
     float delayMilliseconds { 350.0F };
     float feedback { 0.35F };
-    float wetLevel { 0.35F };
-    float dryLevel { 1.0F };
+    float mix { 0.35F };
     float feedbackLowCutHertz { 0.0F };
     float feedbackHighCutHertz { 0.0F };
     float saturation { 0.0F };

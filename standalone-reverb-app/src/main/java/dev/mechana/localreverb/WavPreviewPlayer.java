@@ -132,7 +132,7 @@ final class WavPreviewPlayer implements AutoCloseable {
 	}
 
 	private static EchoSettings bypassed(EchoSettings value) {
-		return new EchoSettings(value.model(), value.delayMilliseconds(), value.feedback(), 0, 1, value.lowCutHertz(),
+		return new EchoSettings(value.model(), value.delayMilliseconds(), value.feedback(), 0, value.lowCutHertz(),
 				value.highCutHertz(), value.saturation(), value.modulationRateHertz(),
 				value.modulationDepthMilliseconds(), value.pingPong());
 	}

@@ -18,16 +18,14 @@ MechanaEchoAudioProcessorEditor::MechanaEchoAudioProcessorEditor(MechanaEchoAudi
 
     addControl(delayLabel_, delay_, "Delay", " ms");
     addControl(feedbackLabel_, feedback_, "Feedback", "");
-    addControl(wetLabel_, wet_, "Wet Level", "");
-    addControl(dryLabel_, dry_, "Dry Level", "");
+    addControl(mixLabel_, mix_, "Mix", "");
     addControl(lowCutLabel_, lowCut_, "Repeat Low-Cut", " Hz");
     addControl(highCutLabel_, highCut_, "Repeat High-Cut", " Hz");
     addControl(saturationLabel_, saturation_, "Age / Drive", "");
     addControl(rateLabel_, rate_, "Modulation Rate", " Hz");
     addControl(depthLabel_, depth_, "Modulation Depth", "");
     configurePercentage(feedback_, 100.0);
-    configurePercentage(wet_, 100.0);
-    configurePercentage(dry_, 100.0);
+    configurePercentage(mix_, 100.0);
     configurePercentage(depth_, 100.0 / 12.0);
 
     auto& parameters = processor_.parameters();
@@ -38,14 +36,13 @@ MechanaEchoAudioProcessorEditor::MechanaEchoAudioProcessorEditor(MechanaEchoAudi
         std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(parameters, "pingpong", pingPong_);
     delayAttachment_ = std::make_unique<SliderAttachment>(parameters, "delay", delay_);
     feedbackAttachment_ = std::make_unique<SliderAttachment>(parameters, "feedback", feedback_);
-    wetAttachment_ = std::make_unique<SliderAttachment>(parameters, "wet", wet_);
-    dryAttachment_ = std::make_unique<SliderAttachment>(parameters, "dry", dry_);
+    mixAttachment_ = std::make_unique<SliderAttachment>(parameters, "mix", mix_);
     lowCutAttachment_ = std::make_unique<SliderAttachment>(parameters, "lowcut", lowCut_);
     highCutAttachment_ = std::make_unique<SliderAttachment>(parameters, "highcut", highCut_);
     saturationAttachment_ = std::make_unique<SliderAttachment>(parameters, "saturation", saturation_);
     rateAttachment_ = std::make_unique<SliderAttachment>(parameters, "rate", rate_);
     depthAttachment_ = std::make_unique<SliderAttachment>(parameters, "depth", depth_);
-    setSize(620, 610);
+    setSize(620, 562);
 }
 
 void MechanaEchoAudioProcessorEditor::configure(juce::Slider& slider, const juce::String& suffix) {
@@ -93,8 +90,7 @@ void MechanaEchoAudioProcessorEditor::resized() {
     };
     row(delayLabel_, delay_);
     row(feedbackLabel_, feedback_);
-    row(wetLabel_, wet_);
-    row(dryLabel_, dry_);
+    row(mixLabel_, mix_);
     row(lowCutLabel_, lowCut_);
     row(highCutLabel_, highCut_);
     row(saturationLabel_, saturation_);

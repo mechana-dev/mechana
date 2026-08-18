@@ -48,12 +48,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout MechanaEchoAudioProcessor::c
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "feedback", 1 }, "Feedback",
                                                             juce::NormalisableRange<float> { 0.0F, 0.98F, 0.001F },
                                                             tape.feedback, percentageAttributes(100.0F)));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "wet", 1 }, "Wet Level",
+    const auto legacyAttributes = juce::AudioParameterFloatAttributes().withAutomatable(false).withMeta(true);
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "wet", 1 }, "Legacy Wet Level",
                                                             juce::NormalisableRange<float> { 0.0F, 1.5F, 0.001F },
-                                                            tape.wetLevel, percentageAttributes(100.0F)));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "dry", 1 }, "Dry Level",
+                                                            tape.mix, legacyAttributes));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "dry", 1 }, "Legacy Dry Level",
                                                             juce::NormalisableRange<float> { 0.0F, 1.5F, 0.001F },
-                                                            tape.dryLevel, percentageAttributes(100.0F)));
+                                                            1.0F, legacyAttributes));
     layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "lowcut", 1 }, "Repeat Low-Cut",
                                                             juce::NormalisableRange<float> { 0.0F, 1000.0F, 1.0F },
                                                             tape.feedbackLowCutHertz, "Hz"));
@@ -72,6 +73,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout MechanaEchoAudioProcessor::c
                                                             percentageAttributes(100.0F / 12.0F)));
     layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID { "pingpong", 1 }, "Ping-Pong", false));
     layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID { "bypass", 1 }, "Bypass", false));
+    // Appended to preserve the indices and IDs of every parameter shipped before Mix.
+    layout.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { "mix", 1 }, "Mix",
+                                                            juce::NormalisableRange<float> { 0.0F, 1.0F, 0.001F },
+                                                            tape.mix, percentageAttributes(100.0F)));
     return layout;
 }
 
@@ -95,8 +100,7 @@ mechana::echo::Parameters MechanaEchoAudioProcessor::currentParameters() const n
     result.character = model == 0 ? mechana::echo::Character::vintageTape : mechana::echo::Character::analogMemory;
     result.delayMilliseconds = parameters_.getRawParameterValue("delay")->load();
     result.feedback = parameters_.getRawParameterValue("feedback")->load();
-    result.wetLevel = parameters_.getRawParameterValue("wet")->load();
-    result.dryLevel = parameters_.getRawParameterValue("dry")->load();
+    result.mix = parameters_.getRawParameterValue("mix")->load();
     result.feedbackLowCutHertz = parameters_.getRawParameterValue("lowcut")->load();
     result.feedbackHighCutHertz = parameters_.getRawParameterValue("highcut")->load();
     result.saturation = parameters_.getRawParameterValue("saturation")->load();
@@ -135,8 +139,7 @@ void MechanaEchoAudioProcessor::applyModelDefaults(const int model) {
     applyingModel_ = true;
     const std::array values { std::pair { "model", static_cast<float>(model) },
                               std::pair { "delay", defaults.delayMilliseconds },
-                              std::pair { "feedback", defaults.feedback }, std::pair { "wet", defaults.wetLevel },
-                              std::pair { "dry", defaults.dryLevel },
+                              std::pair { "feedback", defaults.feedback }, std::pair { "mix", defaults.mix },
                               std::pair { "lowcut", defaults.feedbackLowCutHertz },
                               std::pair { "highcut", defaults.feedbackHighCutHertz },
                               std::pair { "saturation", defaults.saturation },
@@ -160,8 +163,25 @@ void MechanaEchoAudioProcessor::getStateInformation(juce::MemoryBlock& destinati
         copyXmlToBinary(*xml, destination);
 }
 void MechanaEchoAudioProcessor::setStateInformation(const void* data, const int size) {
-    if (auto xml = getXmlFromBinary(data, size); xml != nullptr && xml->hasTagName(parameters_.state.getType()))
-        parameters_.replaceState(juce::ValueTree::fromXml(*xml));
+    if (auto xml = getXmlFromBinary(data, size); xml != nullptr && xml->hasTagName(parameters_.state.getType())) {
+        auto restored = juce::ValueTree::fromXml(*xml);
+        const auto mixNode = restored.getChildWithProperty("id", "mix");
+        float migratedMix = -1.0F;
+        if (!mixNode.isValid()) {
+            const auto wetNode = restored.getChildWithProperty("id", "wet");
+            const auto dryNode = restored.getChildWithProperty("id", "dry");
+            if (wetNode.isValid() && dryNode.isValid()) {
+                const auto wet = static_cast<float>(wetNode.getProperty("value", 0.0F));
+                const auto dry = static_cast<float>(dryNode.getProperty("value", 1.0F));
+                const auto sum = wet + dry;
+                migratedMix = sum > 0.0F ? wet / sum : 0.0F;
+            }
+        }
+        parameters_.replaceState(restored);
+        if (migratedMix >= 0.0F)
+            if (auto* parameter = parameters_.getParameter("mix"))
+                parameter->setValueNotifyingHost(parameter->convertTo0to1(migratedMix));
+    }
 }
 
 juce::AudioProcessorEditor* MechanaEchoAudioProcessor::createEditor() {

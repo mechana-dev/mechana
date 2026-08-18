@@ -9,6 +9,7 @@ ARCHITECTURE="${1:-x86_64}"
 KEYCHAIN_PROFILE="${MACOS_NOTARY_PROFILE:-mechana-notary}"
 TARGET="${SCRIPT_DIR}/target"
 STAGING="${TARGET}/native-effects/${ARCHITECTURE}"
+ARCHIVES="${TARGET}/${ARCHITECTURE}"
 
 case "${ARCHITECTURE}" in
 	arm64 | x86_64) ;;
@@ -19,12 +20,11 @@ case "${ARCHITECTURE}" in
 esac
 
 archives=(
-	"${TARGET}/Mechana-Effects-Live-Host-macOS-${ARCHITECTURE}.zip"
-	"${TARGET}/Mechana-Echo-AU-macOS-${ARCHITECTURE}.zip"
-	"${TARGET}/Mechana-Leslie-AU-macOS-${ARCHITECTURE}.zip"
-	"${TARGET}/Mechana-Reverb-AU-macOS-${ARCHITECTURE}.zip"
-	"${TARGET}/Mechana-Octave-Fuzz-AU-macOS-${ARCHITECTURE}.zip"
-	"${TARGET}/Mechana-Effect-Benchmarks-macOS-${ARCHITECTURE}.zip"
+	"${ARCHIVES}/Mechana-Echo-AU-macOS-${ARCHITECTURE}.zip"
+	"${ARCHIVES}/Mechana-Leslie-AU-macOS-${ARCHITECTURE}.zip"
+	"${ARCHIVES}/Mechana-Reverb-AU-macOS-${ARCHITECTURE}.zip"
+	"${ARCHIVES}/Mechana-Octave-Fuzz-AU-macOS-${ARCHITECTURE}.zip"
+	"${ARCHIVES}/Mechana-Effect-Benchmarks-macOS-${ARCHITECTURE}.zip"
 )
 
 for archive in "${archives[@]}"; do
@@ -35,26 +35,24 @@ for archive in "${archives[@]}"; do
 	xcrun notarytool submit "${archive}" --keychain-profile "${KEYCHAIN_PROFILE}" --wait
 done
 
-app="${STAGING}/app/Mechana Effects.app"
 echo_component="${STAGING}/echo-au/Mechana Echo.component"
 leslie_component="${STAGING}/leslie-au/Mechana Leslie.component"
 reverb_component="${STAGING}/reverb-au/Mechana Reverb.component"
 fuzz_component="${STAGING}/octave-fuzz-au/Mechana Octave Fuzz.component"
 benchmark_app="${STAGING}/benchmarks/Run Benchmarks.app"
 
-for bundle in "${app}" "${echo_component}" "${leslie_component}" "${reverb_component}" "${fuzz_component}" "${benchmark_app}"; do
+for bundle in "${echo_component}" "${leslie_component}" "${reverb_component}" "${fuzz_component}" "${benchmark_app}"; do
 	xcrun stapler staple "${bundle}"
 	xcrun stapler validate "${bundle}"
 	/usr/bin/codesign --verify --deep --strict --verbose=2 "${bundle}"
 done
 
-/usr/bin/ditto -c -k --keepParent "${app}" "${archives[1]}"
-/usr/bin/ditto -c -k --keepParent "${echo_component}" "${archives[2]}"
-/usr/bin/ditto -c -k --keepParent "${leslie_component}" "${archives[3]}"
-/usr/bin/ditto -c -k --keepParent "${reverb_component}" "${archives[4]}"
-/usr/bin/ditto -c -k --keepParent "${fuzz_component}" "${archives[5]}"
-/usr/bin/ditto -c -k --keepParent "${STAGING}/benchmarks" "${archives[6]}"
+rm -f "${archives[@]}"
+(cd "${echo_component:h}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archives[1]}" "${echo_component:t}")
+(cd "${leslie_component:h}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archives[2]}" "${leslie_component:t}")
+(cd "${reverb_component:h}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archives[3]}" "${reverb_component:t}")
+(cd "${fuzz_component:h}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archives[4]}" "${fuzz_component:t}")
+(cd "${STAGING}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archives[5]}" benchmarks)
 
-/usr/sbin/spctl --assess --type execute --verbose=4 "${app}"
 /usr/sbin/spctl --assess --type execute --verbose=4 "${benchmark_app}"
 print "Notarized native effects in ${TARGET}"

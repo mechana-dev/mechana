@@ -156,8 +156,7 @@ int main(const int argc, char** argv) {
         const auto audioSeconds = static_cast<double>(blocks * blockSize) / options.sampleRate;
         const auto source = createSource(blocks);
         auto parameters = mechana::echo::modelDefaults(mechana::echo::Model::analogMemory);
-        parameters.wetLevel = 1.0F;
-        parameters.dryLevel = 0.0F;
+        parameters.mix = 1.0F;
         parameters.pingPong = true;
         std::cout << std::fixed << std::setprecision(3)
                   << "Mechana native effect benchmark v1\n"

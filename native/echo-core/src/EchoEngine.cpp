@@ -8,11 +8,14 @@
  * CONDITIONS OF ANY KIND, either express or implied.
  */
 #include <mechana/echo/EchoEngine.h>
+#include <mechana/echo/Feedback.h>
+#include <mechana/audio/DryWetMixer.h>
 
 #include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <numbers>
+#include <cstdint>
 #include <vector>
 
 namespace mechana::echo {
@@ -56,9 +59,11 @@ public:
         delayed.assign(channelCount, 0.0F);
         colored.assign(channelCount, 0.0F);
         lowPassState.assign(channelCount, 0.0F);
+        bbdLowPassState.assign(channelCount, 0.0F);
         highPassInput.assign(channelCount, 0.0F);
         highPassOutput.assign(channelCount, 0.0F);
         smoothingCoefficient = static_cast<float>(1.0 - std::exp(-1.0 / (sampleRate * 0.020)));
+        mixer.prepare(sampleRate);
         reset();
     }
 
@@ -68,10 +73,16 @@ public:
         std::fill(delayed.begin(), delayed.end(), 0.0F);
         std::fill(colored.begin(), colored.end(), 0.0F);
         std::fill(lowPassState.begin(), lowPassState.end(), 0.0F);
+        std::fill(bbdLowPassState.begin(), bbdLowPassState.end(), 0.0F);
         std::fill(highPassInput.begin(), highPassInput.end(), 0.0F);
         std::fill(highPassOutput.begin(), highPassOutput.end(), 0.0F);
         writePosition = 0;
         modulationPhase = 0.0;
+        flutterPhase = 0.0;
+        wander = 0.0F;
+        wanderTarget = 0.0F;
+        wanderCountdown = 0;
+        randomState = initialRandomState;
         controlsInitialized = false;
     }
 
@@ -83,30 +94,56 @@ public:
                                             minimumDelaySamples, maximumDelaySamples);
         if (!controlsInitialized) {
             smoothedDelaySamples = targetDelay;
+            mixer.reset(std::clamp(parameters.mix, 0.0F, 1.0F));
+            smoothedModulationDepthSamples = std::clamp(parameters.modulationDepthMilliseconds
+                                                            * static_cast<float>(sampleRate) / 1000.0F,
+                                                        0.0F, maximumDelaySamples * 0.25F);
+            smoothedModulationRateHertz = std::clamp(parameters.modulationRateHertz, 0.0F, 20.0F);
             controlsInitialized = true;
         }
-        const auto feedback = std::clamp(parameters.feedback, -0.99F, 0.99F);
-        const auto wet = std::max(0.0F, parameters.wetLevel);
-        const auto dry = std::max(0.0F, parameters.dryLevel);
+        const auto feedback = feedbackCoefficient(parameters.feedback);
+        const auto targetMix = std::clamp(parameters.mix, 0.0F, 1.0F);
+        mixer.setMix(targetMix);
         const auto depthSamples = std::clamp(parameters.modulationDepthMilliseconds
                                                  * static_cast<float>(sampleRate) / 1000.0F,
                                              0.0F, maximumDelaySamples * 0.25F);
-        const auto phaseIncrement = 2.0 * std::numbers::pi * std::clamp(parameters.modulationRateHertz, 0.0F, 20.0F)
-                                    / sampleRate;
         const auto lowPassCoefficient = cutoffCoefficient(parameters.feedbackHighCutHertz);
+        const auto bbdLowPassCoefficient = cutoffCoefficient(
+            std::min(parameters.feedbackHighCutHertz * 1.75F, 12'000.0F));
         const auto highPassCoefficient = highPassCutoffCoefficient(parameters.feedbackLowCutHertz);
         for (std::size_t frame = 0; frame < frames; ++frame) {
             smoothedDelaySamples += (targetDelay - smoothedDelaySamples) * smoothingCoefficient;
+            smoothedModulationDepthSamples +=
+                (depthSamples - smoothedModulationDepthSamples) * smoothingCoefficient;
+            smoothedModulationRateHertz +=
+                (std::clamp(parameters.modulationRateHertz, 0.0F, 20.0F) - smoothedModulationRateHertz)
+                * smoothingCoefficient;
+            const auto mix = mixer.next();
             auto modulation = static_cast<float>(std::sin(modulationPhase));
-            if (parameters.character == Character::vintageTape)
+            if (parameters.character == Character::vintageTape) {
                 modulation = modulation * 0.78F
                              + static_cast<float>(std::sin(modulationPhase * 7.13 + 0.7)) * 0.15F
                              + static_cast<float>(std::sin(modulationPhase * 13.71 + 2.1)) * 0.07F;
-            const auto modulatedDelay = std::clamp(smoothedDelaySamples + depthSamples * modulation,
+            } else if (parameters.character == Character::analogMemory) {
+                if (wanderCountdown == 0) {
+                    randomState = randomState * 1'664'525U + 1'013'904'223U;
+                    wanderTarget = static_cast<float>((randomState >> 8) * (2.0 / 16'777'215.0) - 1.0);
+                    wanderCountdown = std::max<std::size_t>(1, static_cast<std::size_t>(sampleRate * 0.037));
+                }
+                --wanderCountdown;
+                wander += (wanderTarget - wander) * static_cast<float>(1.0 - std::exp(-1.0 / (sampleRate * 0.18)));
+                const auto flutter = static_cast<float>(std::sin(flutterPhase));
+                modulation = modulation * 0.91F + flutter * 0.055F + wander * 0.035F;
+            }
+            const auto modulatedDelay = std::clamp(smoothedDelaySamples + smoothedModulationDepthSamples * modulation,
                                                    minimumDelaySamples, maximumDelaySamples);
+            const auto phaseIncrement = 2.0 * std::numbers::pi * smoothedModulationRateHertz / sampleRate;
             modulationPhase += phaseIncrement;
+            flutterPhase += phaseIncrement * 6.83;
             if (modulationPhase >= 2.0 * std::numbers::pi)
                 modulationPhase -= 2.0 * std::numbers::pi;
+            if (flutterPhase >= 2.0 * std::numbers::pi)
+                flutterPhase -= 2.0 * std::numbers::pi;
             for (std::size_t channel = 0; channel < channelCount; ++channel)
                 delayed[channel] = interpolate(delayBuffers[channel],
                                                static_cast<double>(writePosition) - modulatedDelay);
@@ -117,6 +154,11 @@ public:
                     lowPassState[channel] = (1.0F - lowPassCoefficient) * repeat
                                             + lowPassCoefficient * lowPassState[channel];
                     repeat = lowPassState[channel];
+                    if (parameters.character == Character::analogMemory) {
+                        bbdLowPassState[channel] = (1.0F - bbdLowPassCoefficient) * repeat
+                                                   + bbdLowPassCoefficient * bbdLowPassState[channel];
+                        repeat = bbdLowPassState[channel];
+                    }
                 }
                 if (parameters.feedbackLowCutHertz > 0.0F) {
                     const auto filtered = highPassCoefficient
@@ -128,16 +170,18 @@ public:
                 if (parameters.saturation > 0.0F) {
                     const auto drive = 1.0F + std::clamp(parameters.saturation, 0.0F, 1.0F) * 7.0F;
                     if (parameters.character == Character::analogMemory) {
-                        const auto biased = repeat * drive + 0.035F;
-                        repeat = (std::tanh(biased) - std::tanh(0.035F)) / std::tanh(drive);
+                        constexpr float bias = 0.045F;
+                        const auto biased = repeat * drive + bias;
+                        const auto smallSignalGain = 1.0F - std::tanh(bias) * std::tanh(bias);
+                        repeat = (std::tanh(biased) - std::tanh(bias)) / (drive * smallSignalGain);
                     } else {
-                        repeat = std::tanh(repeat * drive) / std::tanh(drive);
+                        repeat = std::tanh(repeat * drive) / drive;
                     }
                 }
                 colored[channel] = repeat;
                 const auto input = channels[channel][frame];
                 delayBuffers[channel][writePosition] = input + feedback * repeat;
-                channels[channel][frame] = parameters.bypass ? input : input * dry + repeat * wet;
+                channels[channel][frame] = parameters.bypass ? input : input * mix.dry + repeat * mix.wet;
             }
             writePosition = (writePosition + 1) % delayBuffers.front().size();
         }
@@ -160,13 +204,23 @@ private:
     float maximumDelaySamples {};
     float smoothingCoefficient {};
     float smoothedDelaySamples {};
+    float smoothedModulationDepthSamples {};
+    float smoothedModulationRateHertz {};
+    mechana::audio::DryWetMixer mixer;
     std::size_t writePosition {};
     double modulationPhase {};
+    double flutterPhase {};
+    float wander {};
+    float wanderTarget {};
+    std::size_t wanderCountdown {};
+    static constexpr std::uint32_t initialRandomState = 0x4d656368U;
+    std::uint32_t randomState { initialRandomState };
     bool controlsInitialized {};
     std::vector<std::vector<float>> delayBuffers;
     std::vector<float> delayed;
     std::vector<float> colored;
     std::vector<float> lowPassState;
+    std::vector<float> bbdLowPassState;
     std::vector<float> highPassInput;
     std::vector<float> highPassOutput;
 };

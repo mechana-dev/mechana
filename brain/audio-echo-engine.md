@@ -1,12 +1,14 @@
 # Native echo engine
 
-Last verified: 2026-08-16
+Last verified: 2026-08-18
 
 ## Implemented core
 
 `native/echo-core` is a product-owned C++20 DSP library with no JUCE or convolution
 dependency. It uses a cubic-interpolated delay line and a feedback path containing
-optional low-cut, high-cut, saturation, and sinusoidal delay modulation. The engine
+optional low-cut, high-cut, saturation, and delay-time modulation. Analog Memory uses
+a deterministic composite clock-motion model: a smoothed low-frequency oscillator,
+subtle flutter, and interpolated pseudo-random wander. The engine
 supports mono/stereo processing, optional ping-pong routing, wet/dry gain, bypass,
 and click-smoothed delay-time changes. It allocates its buffers during `prepare`,
 performs no allocation in `process`, and reports zero added latency.
@@ -26,18 +28,39 @@ nonlinearity, noise, or non-periodic modulation. A future captured convolution m
 color the input or repeat path, but it must remain optional; feedback timing and
 time-varying behavior belong to the echo engine.
 
-The initial models need listening calibration before product use. A separate JUCE
+The Analog Memory feedback path is calibrated as Mechana's own analog-delay model,
+using professional listening and private reference renders as qualitative evidence,
+not as a Soundtoys, EchoBoy, or hardware clone. Feedback is a shaped musical control:
+36% maps to an internal loop coefficient near 0.419 (about -7.6 dB per unfiltered
+generation), with a strict sub-unity ceiling. Filtering and unity-small-signal-gain
+nonlinearity are inside the loop, so every generation becomes progressively darker
+and softer. Its per-generation order is modulated delay read, user high-cut, a companion
+BBD reconstruction pole, user low-cut, unity-slope asymmetric soft limiting, feedback
+gain, and delay write. Both high-cut poles remain tied to the user control; disabling
+High Cut disables both. Noise and clock feedthrough are not currently synthesized.
+Modulation depth and rate are smoothed, and the fixed seed makes reset renders
+repeatable. A shared linear Mix primitive supplies `dry = 1 - mix`, `wet = mix` with
+10 ms smoothing; output peak protection remains a separate concern.
+
+A separate JUCE
 Audio Unit adapter exposes the two colored models, automatable controls, host-state
-persistence, and a custom editor. Feedback, wet, dry, and modulation depth are
-presented as percentages while their stable internal parameter ranges remain
-unchanged. Listening comparison against a reference EchoBoy render lowered the
-starting wet/first-repeat level to 26%. The AU conservatively reports decay through
+persistence, and a custom editor. Feedback, Mix, and modulation depth are presented
+as percentages. Legacy Wet/Dry IDs remain non-automatable metadata parameters so old
+Logic state can migrate to `mix = wet / (wet + dry)` without shifting prior parameter
+indices. A single linear control cannot preserve legacy makeup gain exactly. The AU
+conservatively reports decay through
 -100 dB amplitude plus one safety repeat, capped at 30 seconds, so hosts that honor
 effect tails do not stop an otherwise orderly quiet decay at an audible boundary.
-The `Mechana Effects` live-input app
-hosts Reverb and Echo on separate tabs. A standard benchmark target exercises the
+The shipping file-oriented `Mechana Effects` app mirrors the calibrated feedback,
+repeat-path coloration, tail calculation, and single percentage-based Mix semantics.
+Legacy standalone Wet/Dry preferences migrate to their normalized ratio. Its Java
+regression tests lock the shared calibration constants to prevent silent release
+drift. A standard benchmark target exercises the
 production Echo engine at 44.1, 48, 88.2, and 96 kHz and is packaged for arm64 and
 x86_64. A Java/Mechana worker plugin remains follow-up work.
+
+Private Scott-approved Hendrix/Watchtower files are local calibration material only
+and are never committed or redistributed. See `docs/echo-calibration.md`.
 
 ## Future hardware characterization
 
