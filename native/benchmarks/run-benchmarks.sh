@@ -26,6 +26,7 @@ run_architecture() {
 		case "${effect}" in
 			reverb) effect="Convolution Reverb" ;;
 			echo) effect="Modeled Echo" ;;
+			octave_fuzz) effect="Octave Fuzz" ;;
 		esac
 		for sample_rate in "${SAMPLE_RATES[@]}"; do
 			print "\n--- effect: ${effect}; sample rate: ${sample_rate} Hz ---"
@@ -74,7 +75,7 @@ print "======================================================================"
 print "DETAILED BENCHMARK SUMMARY"
 print "Real-time deadline load across ${CYCLES} cycles (lower is better)"
 print "======================================================================"
-for report_effect in "Convolution Reverb" "Modeled Echo"; do
+for report_effect in "Convolution Reverb" "Modeled Echo" "Octave Fuzz"; do
 	for report_architecture in arm64 x86_64; do
 		has_summary=0
 		for summary_line in "${SUMMARY_LINES[@]}"; do

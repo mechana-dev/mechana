@@ -17,6 +17,10 @@ public:
         return current_;
     }
     [[nodiscard]] float current() const noexcept { return current_; }
+    [[nodiscard]] float target() const noexcept { return target_; }
+    [[nodiscard]] bool isSmoothing(float tolerance = 1.0e-5F) const noexcept {
+        return std::abs(current_ - target_) > tolerance;
+    }
 private:
     float current_{};
     float target_{};

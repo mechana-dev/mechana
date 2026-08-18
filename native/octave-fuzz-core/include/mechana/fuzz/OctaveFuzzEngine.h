@@ -1,6 +1,9 @@
 /* Copyright (c) 2026 Mark Vita. Licensed under Apache-2.0. */
 #pragma once
 #include <cstddef>
+#include <vector>
+#include "mechana/audio/Filters.h"
+#include "mechana/audio/Oversampling.h"
 #include "mechana/audio/ParameterSmoother.h"
 
 namespace mechana::fuzz {
@@ -18,12 +21,15 @@ public:
     void reset() noexcept;
     void setParameters(const Parameters& parameters) noexcept;
     void process(float* const* channels, std::size_t channelCount, std::size_t frames) noexcept;
+    [[nodiscard]] static constexpr std::size_t latencySamples() noexcept {
+        return mechana::audio::TwoTimesOversampler::latencySamples;
+    }
 
 private:
     struct ChannelState {
-        float dcIn{};
-        float dcOut{};
-        float toneState{};
+        mechana::audio::TwoTimesOversampler oversampler;
+        mechana::audio::DcBlocker dcBlocker;
+        mechana::audio::OnePoleLowPass toneFilter;
     };
     double sampleRate_ = 48000.0;
     Parameters target_{};
@@ -31,6 +37,6 @@ private:
     mechana::audio::ParameterSmoother tone_;
     mechana::audio::ParameterSmoother level_;
     mechana::audio::ParameterSmoother octave_;
-    ChannelState states_[2]{};
+    std::vector<ChannelState> states_;
 };
 }
