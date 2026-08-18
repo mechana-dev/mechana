@@ -6,10 +6,6 @@ set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 REPOSITORY="${SCRIPT_DIR:h:h}"
-TARGET="${SCRIPT_DIR}/target/reverb"
-STAGING="${TARGET}/staging"
-APPS="${TARGET}/apps"
-ICON="${TARGET}/MechanaReverb.icns"
 JAVA_ENTITLEMENTS="${SCRIPT_DIR}/java-runtime-entitlements.plist"
 JPACKAGE="${JAVA_HOME:-}/bin/jpackage"
 SIGNING_IDENTITY="${MACOS_SIGNING_IDENTITY:-}"
@@ -38,6 +34,11 @@ else
 	print -u2 "Cannot determine jpackage architecture: ${JPACKAGE_KIND}"
 	exit 1
 fi
+
+TARGET="${SCRIPT_DIR}/target/effects-app/${PACKAGE_ARCH}"
+STAGING="${TARGET}/staging"
+APPS="${TARGET}/apps"
+ICON="${TARGET}/MechanaReverb.icns"
 
 cd "${REPOSITORY}"
 mvn -pl standalone-reverb-app -am package
@@ -82,10 +83,12 @@ if [[ -n "${SIGNING_IDENTITY}" ]]; then
 	/usr/bin/codesign --verify --deep --strict --verbose=2 "${APPS}/Mechana Effects.app"
 fi
 
-archive="${SCRIPT_DIR}/target/Mechana-Effects-macOS-${PACKAGE_ARCH}.zip"
+archive_directory="${SCRIPT_DIR}/target/${PACKAGE_ARCH}"
+archive="${archive_directory}/Mechana-Effects-macOS-${PACKAGE_ARCH}.zip"
+mkdir -p "${archive_directory}"
 rm -f "${archive}"
 (cd "${APPS}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archive}" "Mechana Effects.app")
 
 print "Built ${PACKAGE_ARCH} Effects app:"
 print "${APPS}/Mechana Effects.app"
-print "${SCRIPT_DIR}/target/Mechana-Effects-macOS-${PACKAGE_ARCH}.zip"
+print "${archive}"

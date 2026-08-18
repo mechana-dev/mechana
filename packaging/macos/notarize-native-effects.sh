@@ -20,7 +20,6 @@ case "${ARCHITECTURE}" in
 esac
 
 archives=(
-	"${ARCHIVES}/Mechana-Effects-Live-Host-macOS-${ARCHITECTURE}.zip"
 	"${ARCHIVES}/Mechana-Echo-AU-macOS-${ARCHITECTURE}.zip"
 	"${ARCHIVES}/Mechana-Leslie-AU-macOS-${ARCHITECTURE}.zip"
 	"${ARCHIVES}/Mechana-Reverb-AU-macOS-${ARCHITECTURE}.zip"
@@ -36,26 +35,23 @@ for archive in "${archives[@]}"; do
 	xcrun notarytool submit "${archive}" --keychain-profile "${KEYCHAIN_PROFILE}" --wait
 done
 
-app="${STAGING}/app/Mechana Effects.app"
 echo_component="${STAGING}/echo-au/Mechana Echo.component"
 leslie_component="${STAGING}/leslie-au/Mechana Leslie.component"
 reverb_component="${STAGING}/reverb-au/Mechana Reverb.component"
 fuzz_component="${STAGING}/octave-fuzz-au/Mechana Octave Fuzz.component"
 benchmark_app="${STAGING}/benchmarks/Run Benchmarks.app"
 
-for bundle in "${app}" "${echo_component}" "${leslie_component}" "${reverb_component}" "${fuzz_component}" "${benchmark_app}"; do
+for bundle in "${echo_component}" "${leslie_component}" "${reverb_component}" "${fuzz_component}" "${benchmark_app}"; do
 	xcrun stapler staple "${bundle}"
 	xcrun stapler validate "${bundle}"
 	/usr/bin/codesign --verify --deep --strict --verbose=2 "${bundle}"
 done
 
-/usr/bin/ditto -c -k --keepParent "${app}" "${archives[1]}"
-/usr/bin/ditto -c -k --keepParent "${echo_component}" "${archives[2]}"
-/usr/bin/ditto -c -k --keepParent "${leslie_component}" "${archives[3]}"
-/usr/bin/ditto -c -k --keepParent "${reverb_component}" "${archives[4]}"
-/usr/bin/ditto -c -k --keepParent "${fuzz_component}" "${archives[5]}"
-/usr/bin/ditto -c -k --keepParent "${STAGING}/benchmarks" "${archives[6]}"
+/usr/bin/ditto -c -k --keepParent "${echo_component}" "${archives[1]}"
+/usr/bin/ditto -c -k --keepParent "${leslie_component}" "${archives[2]}"
+/usr/bin/ditto -c -k --keepParent "${reverb_component}" "${archives[3]}"
+/usr/bin/ditto -c -k --keepParent "${fuzz_component}" "${archives[4]}"
+/usr/bin/ditto -c -k --keepParent "${STAGING}/benchmarks" "${archives[5]}"
 
-/usr/sbin/spctl --assess --type execute --verbose=4 "${app}"
 /usr/sbin/spctl --assess --type execute --verbose=4 "${benchmark_app}"
 print "Notarized native effects in ${TARGET}"

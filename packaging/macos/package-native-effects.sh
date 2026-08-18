@@ -57,15 +57,13 @@ package_architecture() {
 	local suffix="$3"
 	local staging="${TARGET}/${architecture}"
 	local archives="${SCRIPT_DIR}/target/${architecture}"
-	local app_source="${build}/apps/mechana-effects/MechanaEffects_artefacts/Release/Mechana Effects.app"
 	local echo_source="${build}/adapters/juce-echo-plugin/MechanaEcho_artefacts/Release/AU/Mechana Echo.component"
 	local leslie_source="${build}/adapters/juce-leslie-plugin/MechanaLeslie_artefacts/Release/AU/Mechana Leslie.component"
 	local reverb_source="${build}/adapters/juce-plugin/MechanaReverb_artefacts/Release/AU/Mechana Reverb.component"
 	local fuzz_source="${build}/adapters/juce-octave-fuzz-plugin/MechanaOctaveFuzz_artefacts/Release/AU/Mechana Octave Fuzz.component"
 
-	mkdir -p "${archives}" "${staging}/app" "${staging}/echo-au" "${staging}/leslie-au" "${staging}/reverb-au" \
+	mkdir -p "${archives}" "${staging}/echo-au" "${staging}/leslie-au" "${staging}/reverb-au" \
 		"${staging}/octave-fuzz-au" "${staging}/benchmarks/${architecture}"
-	/usr/bin/ditto "${app_source}" "${staging}/app/Mechana Effects.app"
 	/usr/bin/ditto "${echo_source}" "${staging}/echo-au/Mechana Echo.component"
 	/usr/bin/ditto "${leslie_source}" "${staging}/leslie-au/Mechana Leslie.component"
 	/usr/bin/ditto "${reverb_source}" "${staging}/reverb-au/Mechana Reverb.component"
@@ -78,7 +76,6 @@ package_architecture() {
 	cp "${REPOSITORY}/LICENSE" "${staging}/benchmarks/LICENSE"
 	create_benchmark_app "${architecture}" "${staging}/benchmarks"
 
-	sign_path "${staging}/app/Mechana Effects.app"
 	sign_path "${staging}/echo-au/Mechana Echo.component"
 	sign_path "${staging}/leslie-au/Mechana Leslie.component"
 	sign_path "${staging}/reverb-au/Mechana Reverb.component"
@@ -92,8 +89,6 @@ package_architecture() {
 	sign_path "${staging}/benchmarks/Run Benchmarks.app/Contents/Resources/${architecture}/mechana_reverb_benchmark"
 	sign_path "${staging}/benchmarks/Run Benchmarks.app/Contents/Resources/${architecture}/mechana_octave_fuzz_benchmark"
 	sign_path "${staging}/benchmarks/Run Benchmarks.app"
-	/usr/bin/ditto -c -k --keepParent "${staging}/app/Mechana Effects.app" \
-		"${archives}/Mechana-Effects-Live-Host-macOS-${suffix}.zip"
 	/usr/bin/ditto -c -k --keepParent "${staging}/echo-au/Mechana Echo.component" \
 		"${archives}/Mechana-Echo-AU-macOS-${suffix}.zip"
 	/usr/bin/ditto -c -k --keepParent "${staging}/leslie-au/Mechana Leslie.component" \

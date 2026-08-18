@@ -2164,3 +2164,15 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added a local path-based WAV analyzer and native calibration renderer. External
   Hendrix/Watchtower files remain private development material and are not committed.
 - See `brain/audio-echo-engine.md` and `docs/echo-calibration.md`.
+
+## 2026-08-18 17:55 EDT — Correct Effects release packaging
+
+- Confirmed that the supported standalone deliverables are
+  `Mechana-Effects-macOS-arm64.zip` and `Mechana-Effects-macOS-x86_64.zip`.
+  The compact native Live Host remains a development target and is no longer
+  created or notarized by the release packaging workflow.
+- Kept app builds, Developer ID signing, and notarization on the development Mac.
+  Intel packaging uses the local x86_64 Java 25 JDK under Rosetta; `rocinante` is
+  restricted to deployment and testing of completed artifacts.
+- Put standalone staging and archives in architecture-specific directories and
+  added a dedicated Effects-app notarization/stapling command.
