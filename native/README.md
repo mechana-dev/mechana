@@ -60,6 +60,7 @@ benchmark suite is built with `packaging/macos/build-effect-benchmarks.sh` and
 automatically discovers each registered native effect benchmark.
 
 `packaging/macos/package-native-effects.sh` packages architecture-specific ZIPs
+under `packaging/macos/target/arm64/` and `packaging/macos/target/x86_64/`
 for the combined app, all four separate AU components, and the benchmark suite.
 Reverb, Echo, Leslie, and Octave Fuzz results remain distinct at all four standard rates.
 Development packaging uses ad-hoc signatures by default. Release packaging sets

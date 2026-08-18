@@ -9,6 +9,7 @@ ARCHITECTURE="${1:-x86_64}"
 KEYCHAIN_PROFILE="${MACOS_NOTARY_PROFILE:-mechana-notary}"
 TARGET="${SCRIPT_DIR}/target"
 STAGING="${TARGET}/native-effects/${ARCHITECTURE}"
+ARCHIVES="${TARGET}/${ARCHITECTURE}"
 
 case "${ARCHITECTURE}" in
 	arm64 | x86_64) ;;
@@ -19,12 +20,12 @@ case "${ARCHITECTURE}" in
 esac
 
 archives=(
-	"${TARGET}/Mechana-Effects-Live-Host-macOS-${ARCHITECTURE}.zip"
-	"${TARGET}/Mechana-Echo-AU-macOS-${ARCHITECTURE}.zip"
-	"${TARGET}/Mechana-Leslie-AU-macOS-${ARCHITECTURE}.zip"
-	"${TARGET}/Mechana-Reverb-AU-macOS-${ARCHITECTURE}.zip"
-	"${TARGET}/Mechana-Octave-Fuzz-AU-macOS-${ARCHITECTURE}.zip"
-	"${TARGET}/Mechana-Effect-Benchmarks-macOS-${ARCHITECTURE}.zip"
+	"${ARCHIVES}/Mechana-Effects-Live-Host-macOS-${ARCHITECTURE}.zip"
+	"${ARCHIVES}/Mechana-Echo-AU-macOS-${ARCHITECTURE}.zip"
+	"${ARCHIVES}/Mechana-Leslie-AU-macOS-${ARCHITECTURE}.zip"
+	"${ARCHIVES}/Mechana-Reverb-AU-macOS-${ARCHITECTURE}.zip"
+	"${ARCHIVES}/Mechana-Octave-Fuzz-AU-macOS-${ARCHITECTURE}.zip"
+	"${ARCHIVES}/Mechana-Effect-Benchmarks-macOS-${ARCHITECTURE}.zip"
 )
 
 for archive in "${archives[@]}"; do
