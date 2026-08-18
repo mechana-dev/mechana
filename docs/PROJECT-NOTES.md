@@ -2126,3 +2126,10 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Presented Reverb Decay near the top of both the Audio Unit and Effects app in seconds; the existing IR shaper continues receiving a duration-relative percentage internally.
 - Corrected the macOS Effects app identity so its application menu says “About Mechana Effects” and “Quit Mechana Effects.”
 - Added playback-generation ownership to Leslie preview sessions so a scrub or output change can cancel an older audio writer without reporting its expected pipe closure as a user-facing failure.
+
+# 2026-08-18 — Octave Fuzz in the production Effects app
+
+- Added Octave Fuzz as a full workflow in the original Java Mechana Effects app: live preview, scrubbing, output selection, rendering, History, Reset, and Bypass.
+- Added Drive, Tone, Output Level, and Octave Blend controls backed by a smoothed mono/stereo Java processor.
+- Diagnosed the silent macOS launch failure as mixed Team IDs between the outer bundle and embedded Java runtime.
+- Updated Java-app packaging so jpackage signs the runtime and application consistently before archiving.

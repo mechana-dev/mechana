@@ -6,10 +6,10 @@ Mechana provides four native macOS application bundles for local development:
 - **Mechana Worker Control.app** runs Worker Control as an ordinary desktop app.
 - **Mechana Job Launcher.app** runs the Client Job Launcher as an ordinary desktop app.
 - **Mechana Effects.app** provides the original file-oriented local workflow for
-  convolution reverb, modeled echo, modeled Leslie, and native Octave Fuzz on one Mac, with no server, worker, network
+  convolution reverb, modeled echo, modeled Leslie, and Octave Fuzz on one Mac, with no server, worker, network
   connection, or separate Java installation.
 
-The bundles are unsigned local-development builds. They include a Java runtime,
+The bundles include a Java runtime,
 so Finder and Dock launches do not depend on a shell, `JAVA_HOME`, Maven, or a
 Terminal window. Distribution to other users will require an Apple Developer ID,
 code signing, hardened-runtime validation, and notarization.
@@ -50,21 +50,23 @@ separate Audio Unit. The effect is inspired by classic octave-fuzz topology and
 is not an exact Foxx Tone Machine emulation. Its 2x FIR path reports eight samples
 of latency to Audio Unit hosts.
 
-The full file-oriented Mechana Effects application includes a Leslie tab alongside
+The full file-oriented Mechana Effects application includes Leslie and Octave Fuzz tabs alongside
 Reverb, Echo, and Create IR from Sweep. It retains the shared dry-audio picker,
 macOS/AirPlay Preview controls, Apply workflow, output folder, scrubber, and
 History. Its first Classic Cabinet model provides Stop/Slow/Fast
 rotor modes, independent horn/drum inertia, Drive, Horn Balance, Mic Distance,
 Stereo Width, Crossover, Wet, Dry, Bypass, and Reset. It is a behavioral model
 awaiting controlled listening calibration against a real cabinet.
+Octave Fuzz provides Drive, Tone, Output Level, Octave Blend, Bypass, and Reset,
+with the same Preview, scrub, Apply, output-selection, and History workflow.
 
 The compact native live-input development host embeds the three AU editors. It is
 packaged separately as `Mechana-Effects-Live-Host-macOS-<architecture>.zip` and
 must not replace the full `Mechana-Effects-macOS-<architecture>.zip` application.
 
-The build also writes `Mechana-Effects-macOS-arm64.zip`, preserving the application
-bundle for transfer to another Apple Silicon Mac. Because development builds are
-not notarized, a recipient may need to Control-click the app and choose **Open**.
+The build writes architecture-specific `Mechana-Effects-macOS-<architecture>.zip`
+archives. When `MACOS_SIGNING_IDENTITY` is supplied, jpackage signs the embedded
+runtime and outer app consistently before the archive is created.
 Use `packaging/macos/build-reverb-app.sh` with `JAVA_HOME` set to a Java 25 JDK of
 the desired architecture to build only the standalone app. An Intel JDK produces
 `Mechana-Effects-macOS-x86_64.zip`; Rosetta permits that build on an Apple Silicon

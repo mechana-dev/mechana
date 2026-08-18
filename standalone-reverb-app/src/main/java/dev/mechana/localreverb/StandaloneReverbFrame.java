@@ -74,11 +74,13 @@ final class StandaloneReverbFrame extends JFrame {
 	private final transient LocalReverbEngine engine = new LocalReverbEngine();
 	private final transient LocalEchoEngine echoEngine = new LocalEchoEngine();
 	private final transient LocalLeslieEngine leslieEngine = new LocalLeslieEngine();
+	private final transient LocalOctaveFuzzEngine fuzzEngine = new LocalOctaveFuzzEngine();
 	private final transient ImpulseResponseCache impulseResponseCache = new ImpulseResponseCache();
 	private final transient IrProfileLibrary profileLibrary = new IrProfileLibrary();
 	private final transient ReverbPreviewPlayer previewPlayer = new ReverbPreviewPlayer(impulseResponseCache);
 	private final transient WavPreviewPlayer echoPreviewPlayer = new WavPreviewPlayer();
 	private final transient LesliePreviewPlayer lesliePreviewPlayer = new LesliePreviewPlayer();
+	private final transient OctaveFuzzPreviewPlayer fuzzPreviewPlayer = new OctaveFuzzPreviewPlayer();
 	private final JTextField dryPath = field("dryPath", "");
 	private final JTextField irPath = field("irPath", "");
 	private final JTextField artifactRoot = field("artifactRoot",
@@ -112,6 +114,15 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JTextField leslieCrossover = field("leslieCrossoverHertz", "800");
 	private final JTextField leslieWet = field("leslieWet", "1.0");
 	private final JTextField leslieDry = field("leslieDry", "0.0");
+	private final JTextField fuzzDrive = field("fuzzDrive", "0.62");
+	private final JTextField fuzzTone = field("fuzzTone", "0.55");
+	private final JTextField fuzzLevel = field("fuzzLevel", "0.72");
+	private final JTextField fuzzOctave = field("fuzzOctave", "0.65");
+	private final JCheckBox fuzzBypass = check("fuzzBypass", false);
+	private final JSlider fuzzDriveSlider = new JSlider(0, 100, boundedSliderValue(fuzzDrive, 100, 62, 0, 100));
+	private final JSlider fuzzToneSlider = new JSlider(0, 100, boundedSliderValue(fuzzTone, 100, 55, 0, 100));
+	private final JSlider fuzzLevelSlider = new JSlider(0, 200, boundedSliderValue(fuzzLevel, 100, 72, 0, 200));
+	private final JSlider fuzzOctaveSlider = new JSlider(0, 100, boundedSliderValue(fuzzOctave, 100, 65, 0, 100));
 	private final JSlider leslieDriveSlider = new JSlider(0, 100, boundedSliderValue(leslieDrive, 100, 18, 0, 100));
 	private final JSlider leslieHornSlider = new JSlider(0, 100, boundedSliderValue(leslieHornLevel, 100, 52, 0, 100));
 	private final JSlider leslieMicSlider = new JSlider(0, 100, boundedSliderValue(leslieMicDistance, 100, 35, 0, 100));
@@ -166,6 +177,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JButton resetCaptured = new JButton("Reset Captured Response");
 	private final JButton resetEq = new JButton("Reset EQ");
 	private final JButton resetLeslie = new JButton("Reset Leslie");
+	private final JButton resetFuzz = new JButton("Reset Octave Fuzz");
 	private final JButton playOutput = new JButton("Play Output");
 	private final JButton showOutput = new JButton("Show in Finder");
 	private final JButton deleteJob = new JButton("Delete…");
@@ -195,9 +207,11 @@ final class StandaloneReverbFrame extends JFrame {
 				previewPlayer.close();
 				echoPreviewPlayer.close();
 				lesliePreviewPlayer.close();
+				fuzzPreviewPlayer.close();
 				engine.close();
 				echoEngine.close();
 				leslieEngine.close();
+				fuzzEngine.close();
 				dispose();
 			}
 		});
@@ -223,6 +237,7 @@ final class StandaloneReverbFrame extends JFrame {
 		effectTabs.addTab("Reverb", form);
 		effectTabs.addTab("Echo", new JScrollPane(buildEchoForm()));
 		effectTabs.addTab("Leslie", new JScrollPane(buildLeslieForm()));
+		effectTabs.addTab("Octave Fuzz", new JScrollPane(buildFuzzForm()));
 		effectTabs.addTab("Create IR from Sweep", buildIrCreator());
 		workspace.add(effectTabs, BorderLayout.CENTER);
 		workspace.add(buildSharedActions(), BorderLayout.SOUTH);
@@ -246,7 +261,7 @@ final class StandaloneReverbFrame extends JFrame {
 		panel.setBorder(BorderFactory.createEmptyBorder(14, 16, 8, 16));
 		panel.add(headerIcon(), BorderLayout.WEST);
 		panel.add(new JLabel("<html><h2 style='margin:0'>Mechana Effects</h2>"
-				+ "<div>Apply captured reverbs, modeled echoes, or a rotating-speaker effect to your audio.</div></html>"),
+				+ "<div>Apply captured reverb, echo, rotating-speaker, or octave-fuzz effects to your audio.</div></html>"),
 				BorderLayout.CENTER);
 		return panel;
 	}
@@ -338,6 +353,23 @@ final class StandaloneReverbFrame extends JFrame {
 		return panel;
 	}
 
+	private JPanel buildFuzzForm() {
+		JPanel panel = new JPanel(new GridBagLayout());
+		panel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createTitledBorder("Octave Fuzz settings"),
+				BorderFactory.createEmptyBorder(10, 8, 8, 8)));
+		GridBagConstraints c = new GridBagConstraints();
+		c.insets = new Insets(8, 8, 8, 8);
+		c.gridy = 0;
+		addRow(panel, c, "Drive / Fuzz (0–1)", sliderWithOverride(fuzzDriveSlider, fuzzDrive));
+		addRow(panel, c, "Tone (0–1)", sliderWithOverride(fuzzToneSlider, fuzzTone));
+		addRow(panel, c, "Output level (0–2)", sliderWithOverride(fuzzLevelSlider, fuzzLevel));
+		addRow(panel, c, "Octave blend (0–1)", sliderWithOverride(fuzzOctaveSlider, fuzzOctave));
+		fuzzBypass.setText("Bypass effect");
+		addRow(panel, c, "", fuzzBypass);
+		addRow(panel, c, "", resetFuzz);
+		return panel;
+	}
+
 	private JPanel buildSharedActions() {
 		JPanel wrapper = new JPanel(new GridBagLayout());
 		GridBagConstraints c = new GridBagConstraints();
@@ -420,10 +452,12 @@ final class StandaloneReverbFrame extends JFrame {
 		previewPlayer.setAudioSinkFactory(MacAudioOutput.sinkFactory(selected));
 		echoPreviewPlayer.setAudioSinkFactory(MacAudioOutput.sinkFactory(selected));
 		lesliePreviewPlayer.setAudioSinkFactory(MacAudioOutput.sinkFactory(selected));
+		fuzzPreviewPlayer.setAudioSinkFactory(MacAudioOutput.sinkFactory(selected));
 		if (restartActivePreview && previewActive()) {
 			previewPlayer.stop();
 			echoPreviewPlayer.stop();
 			lesliePreviewPlayer.stop();
+			fuzzPreviewPlayer.stop();
 			previewFinished();
 			status.setText("Switching Preview to " + selected.name() + "…");
 			startPreview();
@@ -496,7 +530,9 @@ final class StandaloneReverbFrame extends JFrame {
 		dryPreviewChangeTimer.setRepeats(false);
 		run.addActionListener(event -> submit());
 		preview.addActionListener(event -> {
-			if (isLeslieSelected() && lesliePreviewPlayer.isActive())
+			if (isFuzzSelected() && fuzzPreviewPlayer.isActive())
+				fuzzPreviewPlayer.togglePause(state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)));
+			else if (isLeslieSelected() && lesliePreviewPlayer.isActive())
 				lesliePreviewPlayer.togglePause(state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)));
 			else if (isEchoSelected() && echoPreviewPlayer.isActive())
 				echoPreviewPlayer.togglePause(state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)));
@@ -508,6 +544,7 @@ final class StandaloneReverbFrame extends JFrame {
 		previewPlayer.onPosition(position -> SwingUtilities.invokeLater(() -> updatePreviewPosition(position)));
 		echoPreviewPlayer.onPosition(position -> SwingUtilities.invokeLater(() -> updatePreviewPosition(position)));
 		lesliePreviewPlayer.onPosition(position -> SwingUtilities.invokeLater(() -> updatePreviewPosition(position)));
+		fuzzPreviewPlayer.onPosition(position -> SwingUtilities.invokeLater(() -> updatePreviewPosition(position)));
 		previewPosition.addChangeListener(event -> {
 			if (updatingPreviewPosition || previewPosition.getValueIsAdjusting() || !previewActive())
 				return;
@@ -518,7 +555,12 @@ final class StandaloneReverbFrame extends JFrame {
 			previewPlayer.setBypassed(bypassPreview.isSelected());
 			echoPreviewPlayer.setBypassed(bypassPreview.isSelected());
 			lesliePreviewPlayer.setBypassed(bypassPreview.isSelected());
-			if (isLeslieSelected() && lesliePreviewPlayer.isActive())
+			fuzzPreviewPlayer.setBypassed(bypassPreview.isSelected());
+			if (isFuzzSelected() && fuzzPreviewPlayer.isActive())
+				status.setText(bypassPreview.isSelected()
+						? "Preview bypassed — playing original audio"
+						: "Octave Fuzz preview active");
+			else if (isLeslieSelected() && lesliePreviewPlayer.isActive())
 				status.setText(bypassPreview.isSelected()
 						? "Preview bypassed — playing original audio"
 						: "Leslie preview active");
@@ -535,6 +577,7 @@ final class StandaloneReverbFrame extends JFrame {
 			previewPlayer.setLooping(loopPreview.isSelected());
 			echoPreviewPlayer.setLooping(loopPreview.isSelected());
 			lesliePreviewPlayer.setLooping(loopPreview.isSelected());
+			fuzzPreviewPlayer.setLooping(loopPreview.isSelected());
 			if (previewActive())
 				status.setText(loopPreview.isSelected() ? "Preview will loop until stopped" : "Preview loop disabled");
 		});
@@ -546,6 +589,7 @@ final class StandaloneReverbFrame extends JFrame {
 		resetCaptured.addActionListener(event -> resetCapturedResponse());
 		resetEq.addActionListener(event -> resetEqualizer());
 		resetLeslie.addActionListener(event -> resetLeslie());
+		resetFuzz.addActionListener(event -> resetFuzz());
 		playOutput.addActionListener(event -> openLatestOutput(false));
 		showOutput.addActionListener(event -> openLatestOutput(true));
 		deleteJob.addActionListener(event -> deleteSelectedJob());
@@ -570,8 +614,8 @@ final class StandaloneReverbFrame extends JFrame {
 			boolean wasActive = previewActive();
 			double position = previewPosition.getValue() / 1000.0;
 			stopPreview();
-			run.setEnabled(effectTabs.getSelectedIndex() < 3);
-			if (effectTabs.getSelectedIndex() < 3) {
+			run.setEnabled(effectTabs.getSelectedIndex() < 4);
+			if (effectTabs.getSelectedIndex() < 4) {
 				outputOverridden = false;
 				updateSuggestedName();
 				if (wasActive)
@@ -592,6 +636,9 @@ final class StandaloneReverbFrame extends JFrame {
 				settings.put("leslieSpeed", selected.name());
 			leslieParametersChanged();
 		});
+		for (JTextField field : List.of(fuzzDrive, fuzzTone, fuzzLevel, fuzzOctave))
+			field.getDocument().addDocumentListener(listener(this::fuzzParametersChanged));
+		fuzzBypass.addActionListener(event -> fuzzParametersChanged());
 	}
 
 	private void configureLiveControls() {
@@ -620,6 +667,10 @@ final class StandaloneReverbFrame extends JFrame {
 		configureLiveControl(leslieCrossoverSlider, leslieCrossover, 1);
 		configureLiveControl(leslieWetSlider, leslieWet, 100);
 		configureLiveControl(leslieDrySlider, leslieDry, 100);
+		configureLiveControl(fuzzDriveSlider, fuzzDrive, 100);
+		configureLiveControl(fuzzToneSlider, fuzzTone, 100);
+		configureLiveControl(fuzzLevelSlider, fuzzLevel, 100);
+		configureLiveControl(fuzzOctaveSlider, fuzzOctave, 100);
 	}
 
 	private void configureFrequencyControl(JSlider slider, JTextField override) {
@@ -1136,6 +1187,16 @@ final class StandaloneReverbFrame extends JFrame {
 		leslieDry.setText(Double.toString(defaults.dry()));
 	}
 
+	private void resetFuzz() {
+		OctaveFuzzSettings defaults = OctaveFuzzSettings.defaults();
+		fuzzDrive.setText(Double.toString(defaults.drive()));
+		fuzzTone.setText(Double.toString(defaults.tone()));
+		fuzzLevel.setText(Double.toString(defaults.level()));
+		fuzzOctave.setText(Double.toString(defaults.octave()));
+		fuzzBypass.setSelected(defaults.bypass());
+		fuzzParametersChanged();
+	}
+
 	private void generationFinished() {
 		generateIr.setEnabled(true);
 		run.setEnabled(true);
@@ -1155,6 +1216,8 @@ final class StandaloneReverbFrame extends JFrame {
 			field.getDocument().addDocumentListener(listener(this::updateSuggestedName));
 		for (JTextField field : List.of(leslieWet, leslieDry))
 			field.getDocument().addDocumentListener(listener(this::updateSuggestedName));
+		for (JTextField field : List.of(fuzzDrive, fuzzTone, fuzzLevel, fuzzOctave))
+			field.getDocument().addDocumentListener(listener(this::updateSuggestedName));
 		updateSuggestedName();
 	}
 
@@ -1162,7 +1225,10 @@ final class StandaloneReverbFrame extends JFrame {
 		if (outputOverridden || dryPath.getText().isBlank())
 			return;
 		String suggested;
-		if (isLeslieSelected())
+		if (isFuzzSelected())
+			suggested = stem(dryPath.getText(), "audio") + "-octave-fuzz-drive" + token(fuzzDrive.getText()) + "-oct"
+					+ token(fuzzOctave.getText()) + ".wav";
+		else if (isLeslieSelected())
 			suggested = stem(dryPath.getText(), "audio") + "-leslie-" + leslieSpeedToken() + "-wet"
 					+ token(leslieWet.getText()) + "-dry" + token(leslieDry.getText()) + ".wav";
 		else if (isEchoSelected())
@@ -1196,6 +1262,10 @@ final class StandaloneReverbFrame extends JFrame {
 
 	private void submit() {
 		stopPreview();
+		if (isFuzzSelected()) {
+			submitFuzz();
+			return;
+		}
 		if (isLeslieSelected()) {
 			submitLeslie();
 			return;
@@ -1244,11 +1314,28 @@ final class StandaloneReverbFrame extends JFrame {
 		}
 	}
 
+	private void submitFuzz() {
+		try {
+			Path source = path(dryPath);
+			if (source == null || !Files.isRegularFile(source))
+				throw new IllegalArgumentException("Choose a readable dry audio file.");
+			fuzzEngine.submit(source, path(artifactRoot), outputName.getText().strip(), fuzzSettings(),
+					job -> SwingUtilities.invokeLater(() -> update(job)));
+			run.setEnabled(false);
+		} catch (IOException | RuntimeException failure) {
+			showError(failure.getMessage());
+		}
+	}
+
 	private void startPreview() {
 		startPreview(0);
 	}
 
 	private void startPreview(double startFraction) {
+		if (isFuzzSelected()) {
+			startFuzzPreview(startFraction);
+			return;
+		}
 		if (isLeslieSelected()) {
 			startLesliePreview(startFraction);
 			return;
@@ -1331,6 +1418,27 @@ final class StandaloneReverbFrame extends JFrame {
 				}));
 	}
 
+	private void startFuzzPreview(double startFraction) {
+		Path source = path(dryPath);
+		if (source == null || !Files.isRegularFile(source)) {
+			showError("Choose a readable dry audio file first.");
+			return;
+		}
+		try {
+			fuzzPreviewPlayer.setBypassed(bypassPreview.isSelected());
+			fuzzPreviewPlayer.setLooping(loopPreview.isSelected());
+			fuzzPreviewPlayer.play(source, fuzzSettings(), startFraction,
+					state -> SwingUtilities.invokeLater(() -> updatePreviewState(state)),
+					message -> SwingUtilities.invokeLater(() -> {
+						showError(message);
+						status.setText("Preview failed");
+						previewFinished();
+					}));
+		} catch (IllegalArgumentException failure) {
+			showError(failure.getMessage());
+		}
+	}
+
 	private void restartPreviewAt(double fraction) {
 		status.setText("Seeking preview…");
 		startPreview(fraction);
@@ -1355,7 +1463,7 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private void updatePreviewParameters() {
-		if (isEchoSelected() || !previewPlayer.isActive())
+		if (isEchoSelected() || isLeslieSelected() || isFuzzSelected() || !previewPlayer.isActive())
 			return;
 		try {
 			previewPlayer.update(decimal(wet, "Wet level"), decimal(dry, "Dry level"), decimal(preDelay, "Pre-delay"),
@@ -1438,6 +1546,10 @@ final class StandaloneReverbFrame extends JFrame {
 			lesliePreviewPlayer.stop();
 			status.setText("Preview stopped");
 		}
+		if (fuzzPreviewPlayer.isActive()) {
+			fuzzPreviewPlayer.stop();
+			status.setText("Preview stopped");
+		}
 		previewFinished();
 	}
 
@@ -1473,7 +1585,8 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private boolean previewActive() {
-		return previewPlayer.isActive() || echoPreviewPlayer.isActive() || lesliePreviewPlayer.isActive();
+		return previewPlayer.isActive() || echoPreviewPlayer.isActive() || lesliePreviewPlayer.isActive()
+				|| fuzzPreviewPlayer.isActive();
 	}
 
 	private boolean isEchoSelected() {
@@ -1484,8 +1597,12 @@ final class StandaloneReverbFrame extends JFrame {
 		return effectTabs.getSelectedIndex() == 2;
 	}
 
+	private boolean isFuzzSelected() {
+		return effectTabs.getSelectedIndex() == 3;
+	}
+
 	private String selectedEffectName() {
-		return isLeslieSelected() ? "Leslie" : isEchoSelected() ? "Echo" : "Reverb";
+		return isFuzzSelected() ? "Octave Fuzz" : isLeslieSelected() ? "Leslie" : isEchoSelected() ? "Echo" : "Reverb";
 	}
 
 	private EchoSettings echoSettings() {
@@ -1510,6 +1627,11 @@ final class StandaloneReverbFrame extends JFrame {
 				decimal(leslieWet, "Wet level"), decimal(leslieDry, "Dry level"));
 	}
 
+	private OctaveFuzzSettings fuzzSettings() {
+		return new OctaveFuzzSettings(decimal(fuzzDrive, "Drive"), decimal(fuzzTone, "Tone"),
+				decimal(fuzzLevel, "Output level"), decimal(fuzzOctave, "Octave blend"), fuzzBypass.isSelected());
+	}
+
 	private void echoParametersChanged() {
 		updateSuggestedName();
 		if (isEchoSelected() && echoPreviewPlayer.isActive())
@@ -1525,6 +1647,16 @@ final class StandaloneReverbFrame extends JFrame {
 		if (isLeslieSelected() && lesliePreviewPlayer.isActive())
 			try {
 				lesliePreviewPlayer.update(leslieSettings());
+			} catch (IllegalArgumentException ignored) {
+				// A partially edited numeric field takes effect as soon as it becomes valid.
+			}
+	}
+
+	private void fuzzParametersChanged() {
+		updateSuggestedName();
+		if (isFuzzSelected() && fuzzPreviewPlayer.isActive())
+			try {
+				fuzzPreviewPlayer.update(fuzzSettings());
 			} catch (IllegalArgumentException ignored) {
 				// A partially edited numeric field takes effect as soon as it becomes valid.
 			}
