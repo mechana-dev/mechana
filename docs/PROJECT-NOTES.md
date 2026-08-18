@@ -2067,3 +2067,23 @@ cloud providers remain future direction; see `brain/current-state.md` and
   plus one delay-cycle safety margin, retaining the 30-second maximum. The standalone
   renderer uses the same threshold and safety policy.
 - Added native and Java regressions for calibrated defaults and conservative tails.
+
+## 2026-08-18 02:49 EDT — Record future Mechana Audio product architecture
+
+- Accepted a future, history-preserving extraction of production native audio into
+  a separate Mechana Audio product/repository after the shared audio core and
+  Octave Fuzz work are coherent; no split or license change occurs now.
+- Defined the clean ownership boundary between the distributed Mechana platform
+  and Mechana Audio, including one authoritative home for every production source
+  component and allowance for genuine pure-Java distributed audio demonstrations
+  to remain in Mechana.
+- Required a stable, public, self-describing integration contract despite
+  potentially proprietary DSP, with independent contract versioning, rich effect
+  and parameter descriptors, offline and real-time semantics, and native,
+  command-line/JSON, and possible local-service surfaces.
+- Chose one dynamically discovering Java Mechana wrapper for all installed effects,
+  individual thin DAW plugins per effect over the shared engine, and combined
+  interfaces for the standalone application and distributed/API workflows.
+- Recorded the required ownership, JUCE, third-party DSP, impulse-response/sample,
+  and Apache notice audit before commercialization. The full accepted future
+  direction and migration checkpoint live in `brain/mechana-audio.md`.
