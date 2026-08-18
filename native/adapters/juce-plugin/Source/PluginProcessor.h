@@ -50,6 +50,7 @@ public:
     juce::AudioProcessorValueTreeState& parameters() noexcept { return parameters_; }
     [[nodiscard]] juce::StringArray factoryProfileNames() const;
     [[nodiscard]] juce::String currentProfileName() const;
+    [[nodiscard]] double sourceDurationSeconds() const noexcept { return sourceDurationSeconds_.load(); }
     bool selectFactoryProfile(int index);
     bool importImpulseResponse(const juce::File& file);
 
@@ -92,6 +93,7 @@ private:
     juce::AudioProcessorValueTreeState parameters_;
     double processingSampleRate_ { 48'000.0 };
     std::atomic<double> tailSeconds_ { 0.0 };
+    std::atomic<double> sourceDurationSeconds_ { 0.82 };
     double sourceSampleRate_ { 48'000.0 };
     std::size_t maximumBlockSize_ { 512 };
     std::size_t channelCount_ { 2 };

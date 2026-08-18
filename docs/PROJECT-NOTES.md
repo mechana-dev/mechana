@@ -2081,3 +2081,14 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added the `Mechana Octave Fuzz` AU (`Mchn`/`OcFz`,
   `dev.mechana.octave-fuzz`), combined-app tab, benchmarks, and architecture-
   specific packaging/signing/notarization manifest support.
+## 2026-08-18 04:20 EDT — Refine Reverb decay and Effects app identity
+
+- Moved the Reverb Decay control directly below the captured-response selector
+  and changed its host/UI presentation from percentage to seconds. Internally,
+  the requested seconds are normalized against the selected captured response,
+  preserving the existing non-synthetic trim-and-fade behavior.
+- Stopped plug-in target metadata from leaking into the combined application's
+  compilation so the macOS application menu consistently says **About Mechana
+  Effects** and **Quit Mechana Effects**.
+- Rebuilt the combined app and all Reverb, Echo, and Octave Fuzz Audio Unit and
+  benchmark packages for Apple Silicon and Intel.

@@ -26,7 +26,7 @@ MechanaReverbAudioProcessorEditor::MechanaReverbAudioProcessorEditor(MechanaReve
     addControl(earlyLabel_, early_, "Early", "");
     addControl(lateLabel_, late_, "Late", "");
     addControl(attackLabel_, attack_, "Attack", " ms");
-    addControl(decayLabel_, decay_, "Decay", " %");
+    addControl(decayLabel_, decay_, "Decay", " s");
     addControl(lowCutLabel_, lowCut_, "Low-cut", " Hz");
     addControl(highCutLabel_, highCut_, "High-cut", " Hz");
     wetAttachment_ = std::make_unique<Attachment>(processor_.parameters(), "wet", wet_);
@@ -66,7 +66,7 @@ MechanaReverbAudioProcessorEditor::MechanaReverbAudioProcessorEditor(MechanaReve
         setParameter("early", 1.0F);
         setParameter("late", 1.0F);
         setParameter("attack", 0.0F);
-        setParameter("decay", 100.0F);
+        setParameter("decay", static_cast<float>(processor_.sourceDurationSeconds()));
     };
     resetEq_.onClick = [this] {
         setParameter("lowcut", 0.0F);
@@ -132,6 +132,7 @@ void MechanaReverbAudioProcessorEditor::resized() {
         label.setBounds(line.removeFromLeft(90));
         slider.setBounds(line);
     };
+    row(decayLabel_, decay_);
     row(wetLabel_, wet_);
     row(dryLabel_, dry_);
     row(preDelayLabel_, preDelay_);
@@ -140,7 +141,6 @@ void MechanaReverbAudioProcessorEditor::resized() {
     row(earlyLabel_, early_);
     row(lateLabel_, late_);
     row(attackLabel_, attack_);
-    row(decayLabel_, decay_);
     resetCaptured_.setBounds(area.removeFromTop(30).removeFromRight(130));
     area.removeFromTop(4);
     row(lowCutLabel_, lowCut_);

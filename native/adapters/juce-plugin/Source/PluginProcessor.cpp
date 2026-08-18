@@ -71,7 +71,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MechanaReverbAudioProcessor:
         juce::NormalisableRange<float> { 0.0F, 5000.0F, 1.0F, 0.35F }, 0.0F, "ms"));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID { "decay", 1 }, "Decay Length",
-        juce::NormalisableRange<float> { 1.0F, 100.0F, 0.1F }, 100.0F, "%"));
+        juce::NormalisableRange<float> { 0.05F, 30.0F, 0.01F, 0.35F }, 0.82F, "s"));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID { "lowcut", 1 }, "Wet Low-Cut",
         juce::NormalisableRange<float> { 0.0F, 2000.0F, 1.0F, 0.35F }, 0.0F, "Hz"));
@@ -217,7 +217,9 @@ bool MechanaReverbAudioProcessor::loadReader(std::unique_ptr<juce::AudioFormatRe
         sourceImpulseResponse_[static_cast<std::size_t>(channel)].assign(data.getReadPointer(channel),
                                                                          data.getReadPointer(channel) + frames);
     sourceSampleRate_ = reader->sampleRate;
-    tailSeconds_.store(static_cast<double>(frames) / reader->sampleRate);
+    const auto sourceDuration = static_cast<double>(frames) / reader->sampleRate;
+    sourceDurationSeconds_.store(sourceDuration);
+    tailSeconds_.store(sourceDuration);
     parameters_.state.setProperty("profileName", profileName, nullptr);
     if (sourcePath.isNotEmpty())
         parameters_.state.setProperty("profilePath", sourcePath, nullptr);
@@ -232,7 +234,9 @@ void MechanaReverbAudioProcessor::requestPreparedResponse() {
     shaping.earlyLevel = parameters_.getRawParameterValue("early")->load();
     shaping.lateLevel = parameters_.getRawParameterValue("late")->load();
     shaping.attackMilliseconds = parameters_.getRawParameterValue("attack")->load();
-    shaping.decayLengthPercent = parameters_.getRawParameterValue("decay")->load();
+    const auto decaySeconds = parameters_.getRawParameterValue("decay")->load();
+    shaping.decayLengthPercent = static_cast<float>(
+        std::clamp(static_cast<double>(decaySeconds) / sourceDurationSeconds_.load() * 100.0, 1.0, 100.0));
     std::ostringstream key;
     key << currentProfileName() << ':' << sourceImpulseResponse_.front().size() << ':' << sourceSampleRate_ << ':'
         << processingSampleRate_ << ':' << channelCount_ << ':' << shaping.earlyLevel << ':' << shaping.lateLevel << ':'

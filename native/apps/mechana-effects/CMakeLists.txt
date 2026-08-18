@@ -13,10 +13,15 @@ target_include_directories(MechanaEffects PRIVATE
     ${CMAKE_SOURCE_DIR}/adapters/juce-echo-plugin/Source)
 target_include_directories(MechanaEffects PRIVATE ${CMAKE_SOURCE_DIR}/adapters/juce-octave-fuzz-plugin/Source)
 target_compile_definitions(MechanaEffects PRIVATE JUCE_REPORT_APP_USAGE=0 JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
+target_compile_options(MechanaEffects PRIVATE
+    -UJucePlugin_Name
+    "-DJucePlugin_Name=\"Mechana Effects\""
+    -UJucePlugin_CFBundleIdentifier
+    -DJucePlugin_CFBundleIdentifier=dev.mechana.effects)
 target_link_libraries(MechanaEffects PRIVATE
-    MechanaReverb
-    MechanaEcho
-    MechanaOctaveFuzz
+    $<LINK_ONLY:MechanaReverb>
+    $<LINK_ONLY:MechanaEcho>
+    $<LINK_ONLY:MechanaOctaveFuzz>
     mechana_reverb_core
     mechana_echo_core
     mechana_octave_fuzz_core
