@@ -1267,9 +1267,9 @@ final class StandaloneReverbFrame extends JFrame {
 			var settings = new ReverbPreviewPlayer.Settings(selectedDry, selectedIr, decimal(wet, "Wet level"),
 					decimal(dry, "Dry level"), decimal(preDelay, "Pre-delay"), decimal(lowCut, "Wet low-cut"),
 					decimal(highCut, "Wet high-cut"), decimal(earlyLevel, "Early reflections level"),
-					decimal(lateLevel, "Late tail level"), decimal(attack, "Attack"),
-					decayLengthPercent(), AUTOMATIC_IR_PEAK_SAFETY, AUTOMATIC_PEAK_PROTECTION,
-					AUTOMATIC_HEADROOM_DECIBELS, calibrationGain(selectedIr));
+					decimal(lateLevel, "Late tail level"), decimal(attack, "Attack"), decayLengthPercent(),
+					AUTOMATIC_IR_PEAK_SAFETY, AUTOMATIC_PEAK_PROTECTION, AUTOMATIC_HEADROOM_DECIBELS,
+					calibrationGain(selectedIr));
 			previewPlayer.setBypassed(bypassPreview.isSelected());
 			previewPlayer.setLooping(loopPreview.isSelected());
 			previewPlayer.play(settings, startFraction,
@@ -1413,8 +1413,8 @@ final class StandaloneReverbFrame extends JFrame {
 	}
 
 	private static String compact(double value) {
-		return java.math.BigDecimal.valueOf(value).setScale(2, java.math.RoundingMode.HALF_UP)
-				.stripTrailingZeros().toPlainString();
+		return java.math.BigDecimal.valueOf(value).setScale(2, java.math.RoundingMode.HALF_UP).stripTrailingZeros()
+				.toPlainString();
 	}
 
 	private void restartPreviewWithSelectedSource() {
