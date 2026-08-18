@@ -10,6 +10,7 @@ TARGET="${SCRIPT_DIR}/target/reverb"
 STAGING="${TARGET}/staging"
 APPS="${TARGET}/apps"
 ICON="${TARGET}/MechanaReverb.icns"
+JAVA_ENTITLEMENTS="${SCRIPT_DIR}/java-runtime-entitlements.plist"
 JPACKAGE="${JAVA_HOME:-}/bin/jpackage"
 SIGNING_IDENTITY="${MACOS_SIGNING_IDENTITY:-}"
 
@@ -76,7 +77,8 @@ if [[ -n "${SIGNING_IDENTITY}" ]]; then
 	done < <(find "${app_bundle}" -type f -print0)
 	/usr/bin/codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" \
 		"${app_bundle}/Contents/runtime"
-	/usr/bin/codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" "${app_bundle}"
+	/usr/bin/codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" \
+		--entitlements "${JAVA_ENTITLEMENTS}" "${app_bundle}"
 	/usr/bin/codesign --verify --deep --strict --verbose=2 "${APPS}/Mechana Effects.app"
 fi
 
