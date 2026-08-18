@@ -28,8 +28,10 @@ option(MECHANA_BUILD_JUCE_PLUGIN "Build the temporary JUCE AU adapter" ON)
 option(MECHANA_BUILD_TESTS "Build the JUCE-free core tests" ON)
 option(MECHANA_BUILD_BENCHMARKS "Build the self-contained native DSP benchmark" ON)
 
+add_subdirectory(audio-core)
 add_subdirectory(reverb-core)
 add_subdirectory(echo-core)
+add_subdirectory(octave-fuzz-core)
 
 if(MECHANA_BUILD_TESTS)
     enable_testing()
