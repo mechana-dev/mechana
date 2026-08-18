@@ -27,6 +27,13 @@ xcrun stapler staple "${app}"
 xcrun stapler validate "${app}"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "${app}"
 /usr/sbin/spctl --assess --type execute --verbose=4 "${app}"
-/usr/bin/ditto -c -k --keepParent "${app}" "${archive}"
+rm -f "${archive}"
+(cd "${app:h}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archive}" "${app:t}")
+
+verification_directory="$(mktemp -d "${TMPDIR:-/tmp}/mechana-effects-verify.XXXXXX")"
+trap 'rm -rf "${verification_directory}"' EXIT
+/usr/bin/ditto -x -k "${archive}" "${verification_directory}"
+/usr/bin/codesign --verify --deep --strict --verbose=2 "${verification_directory}/${app:t}"
+/usr/sbin/spctl --assess --type execute --verbose=4 "${verification_directory}/${app:t}"
 
 print "Notarized Effects app: ${archive}"

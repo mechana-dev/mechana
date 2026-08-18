@@ -2176,3 +2176,5 @@ cloud providers remain future direction; see `brain/current-state.md` and
   restricted to deployment and testing of completed artifacts.
 - Put standalone staging and archives in architecture-specific directories and
   added a dedicated Effects-app notarization/stapling command.
+- Corrected the post-stapling archive step to suppress AppleDouble metadata and
+  verify the signature and Gatekeeper result again after extracting the final ZIP.

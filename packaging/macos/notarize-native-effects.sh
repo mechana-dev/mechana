@@ -47,11 +47,12 @@ for bundle in "${echo_component}" "${leslie_component}" "${reverb_component}" "$
 	/usr/bin/codesign --verify --deep --strict --verbose=2 "${bundle}"
 done
 
-/usr/bin/ditto -c -k --keepParent "${echo_component}" "${archives[1]}"
-/usr/bin/ditto -c -k --keepParent "${leslie_component}" "${archives[2]}"
-/usr/bin/ditto -c -k --keepParent "${reverb_component}" "${archives[3]}"
-/usr/bin/ditto -c -k --keepParent "${fuzz_component}" "${archives[4]}"
-/usr/bin/ditto -c -k --keepParent "${STAGING}/benchmarks" "${archives[5]}"
+rm -f "${archives[@]}"
+(cd "${echo_component:h}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archives[1]}" "${echo_component:t}")
+(cd "${leslie_component:h}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archives[2]}" "${leslie_component:t}")
+(cd "${reverb_component:h}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archives[3]}" "${reverb_component:t}")
+(cd "${fuzz_component:h}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archives[4]}" "${fuzz_component:t}")
+(cd "${STAGING}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archives[5]}" benchmarks)
 
 /usr/sbin/spctl --assess --type execute --verbose=4 "${benchmark_app}"
 print "Notarized native effects in ${TARGET}"
