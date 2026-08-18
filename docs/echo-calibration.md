@@ -28,3 +28,10 @@ and the old Mechana render -2.73 dB. The calibrated engine measured -8.00 dB, wi
 tail centroid falling from about 1481 Hz to 1011 Hz over ten windows. The new 26% linear
 Mix has 74% dry gain by definition; unlike the old independent controls, it cannot also
 match a reference direct gain near 89% without separate makeup gain.
+
+The file-oriented Mechana Effects application mirrors these native Echo semantics.
+Its standalone regression suite locks the 36% Feedback coefficient,
+unity-small-signal Analog Memory coloration, linear Mix endpoints, and smoothed Mix
+automation so an app release cannot silently fall back to raw feedback. Existing app
+preferences containing separate Wet and Dry values migrate to
+`Mix = Wet / (Wet + Dry)`; new and reset Analog Memory settings use 26% Mix.

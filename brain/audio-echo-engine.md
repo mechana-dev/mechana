@@ -44,8 +44,11 @@ indices. A single linear control cannot preserve legacy makeup gain exactly. The
 conservatively reports decay through
 -100 dB amplitude plus one safety repeat, capped at 30 seconds, so hosts that honor
 effect tails do not stop an otherwise orderly quiet decay at an audible boundary.
-The `Mechana Effects` live-input app
-hosts Reverb and Echo on separate tabs. A standard benchmark target exercises the
+The shipping file-oriented `Mechana Effects` app mirrors the calibrated feedback,
+repeat-path coloration, tail calculation, and single percentage-based Mix semantics.
+Legacy standalone Wet/Dry preferences migrate to their normalized ratio. Its Java
+regression tests lock the shared calibration constants to prevent silent release
+drift. A standard benchmark target exercises the
 production Echo engine at 44.1, 48, 88.2, and 96 kHz and is packaged for arm64 and
 x86_64. A Java/Mechana worker plugin remains follow-up work.
 

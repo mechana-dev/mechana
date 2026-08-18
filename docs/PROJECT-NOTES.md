@@ -2178,3 +2178,15 @@ cloud providers remain future direction; see `brain/current-state.md` and
   added a dedicated Effects-app notarization/stapling command.
 - Corrected the post-stapling archive step to suppress AppleDouble metadata and
   verify the signature and Gatekeeper result again after extracting the final ZIP.
+
+## 2026-08-18 18:55 EDT — Keep the shipping Effects app aligned with Echo core
+
+- Ported the calibrated Feedback curve and unity-small-signal Analog Memory
+  coloration into the file-oriented Java Effects app after a new Watchtower render
+  proved it was still using the former raw-feedback path.
+- Replaced the app's independent Echo Wet and Dry controls with one 0–100% Mix
+  control, including 10 ms smoothing and migration of saved preferences using
+  `Mix = Wet / (Wet + Dry)`.
+- Added standalone parity regressions for the 36% coefficient, decay behavior, Mix
+  endpoints, automation smoothing, and legacy migration. Shipping app builds run
+  this test suite before packaging.

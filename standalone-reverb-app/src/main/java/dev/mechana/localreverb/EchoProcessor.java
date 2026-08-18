@@ -14,6 +14,8 @@ final class EchoProcessor {
 	private final int sampleRate;
 	private int writePosition;
 	private double phase;
+	private double smoothedMix;
+	private boolean mixInitialized;
 
 	EchoProcessor(int sampleRate, int channels) {
 		this.sampleRate = sampleRate;
@@ -29,6 +31,12 @@ final class EchoProcessor {
 		double phaseIncrement = 2 * Math.PI * settings.modulationRateHertz() / sampleRate;
 		double lowPassCoefficient = Math.exp(-2 * Math.PI * Math.max(1, settings.highCutHertz()) / sampleRate);
 		double highPassCoefficient = 1 / (1 + 2 * Math.PI * Math.max(1, settings.lowCutHertz()) / sampleRate);
+		double feedback = EchoSettings.feedbackCoefficient(settings.feedback());
+		double mixCoefficient = 1 - Math.exp(-1 / (0.01 * sampleRate));
+		if (!mixInitialized) {
+			smoothedMix = settings.mix();
+			mixInitialized = true;
+		}
 		double[] repeated = new double[audio.length];
 		for (int frame = 0; frame < frames; frame++) {
 			double modulation = Math.sin(phase);
@@ -55,13 +63,14 @@ final class EchoProcessor {
 				if (settings.saturation() > 0) {
 					double drive = 1 + settings.saturation() * 7;
 					repeat = settings.model() == EchoSettings.Model.ANALOG
-							? (Math.tanh(repeat * drive + 0.035) - Math.tanh(0.035)) / Math.tanh(drive)
-							: Math.tanh(repeat * drive) / Math.tanh(drive);
+							? (Math.tanh(repeat * drive + 0.035) - Math.tanh(0.035)) / drive
+							: Math.tanh(repeat * drive) / drive;
 				}
 				double input = audio[channel][frame];
-				delay[channel][writePosition] = input + settings.feedback() * repeat;
-				audio[channel][frame] = input * settings.dry() + repeat * settings.wet();
+				delay[channel][writePosition] = input + feedback * repeat;
+				audio[channel][frame] = input * (1 - smoothedMix) + repeat * smoothedMix;
 			}
+			smoothedMix += (settings.mix() - smoothedMix) * mixCoefficient;
 			writePosition = (writePosition + 1) % delay[0].length;
 		}
 	}

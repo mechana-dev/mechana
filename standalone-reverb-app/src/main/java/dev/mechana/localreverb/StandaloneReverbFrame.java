@@ -98,8 +98,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JComboBox<EchoSettings.Model> echoModel = new JComboBox<>(EchoSettings.Model.values());
 	private final JTextField echoDelay = field("echoDelayMilliseconds", "375");
 	private final JTextField echoFeedback = field("echoFeedback", "0.38");
-	private final JTextField echoWet = field("echoWet", "0.26");
-	private final JTextField echoDry = field("echoDry", "1.0");
+	private final JTextField echoMix = field("echoMix", migratedEchoMix());
 	private final JTextField echoLowCut = field("echoLowCutHertz", "45");
 	private final JTextField echoHighCut = field("echoHighCutHertz", "6000");
 	private final JTextField echoSaturation = field("echoSaturation", "0.22");
@@ -134,8 +133,7 @@ final class StandaloneReverbFrame extends JFrame {
 	private final JSlider leslieDrySlider = new JSlider(0, 200, boundedSliderValue(leslieDry, 100, 0, 0, 200));
 	private final JSlider echoDelaySlider = new JSlider(1, 1_500, boundedSliderValue(echoDelay, 1, 375, 1, 1_500));
 	private final JSlider echoFeedbackSlider = new JSlider(0, 95, boundedSliderValue(echoFeedback, 100, 38, 0, 95));
-	private final JSlider echoWetSlider = new JSlider(0, 200, boundedSliderValue(echoWet, 100, 26, 0, 200));
-	private final JSlider echoDrySlider = new JSlider(0, 200, boundedSliderValue(echoDry, 100, 100, 0, 200));
+	private final JSlider echoMixSlider = new JSlider(0, 100, boundedSliderValue(echoMix, 1, 26, 0, 100));
 	private final JSlider echoLowCutSlider = new JSlider(0, 1000, frequencySliderValue(echoLowCut));
 	private final JSlider echoHighCutSlider = new JSlider(0, 1000, frequencySliderValue(echoHighCut));
 	private final JSlider echoSaturationSlider = new JSlider(0, 100,
@@ -319,8 +317,7 @@ final class StandaloneReverbFrame extends JFrame {
 		addRow(panel, c, "Echo model", echoModel);
 		addRow(panel, c, "Delay (1–1500 ms slider)", sliderWithOverride(echoDelaySlider, echoDelay));
 		addRow(panel, c, "Feedback (0–0.95 slider)", sliderWithOverride(echoFeedbackSlider, echoFeedback));
-		addRow(panel, c, "Wet level (0–2)", sliderWithOverride(echoWetSlider, echoWet));
-		addRow(panel, c, "Dry level (0–2)", sliderWithOverride(echoDrySlider, echoDry));
+		addRow(panel, c, "Mix (0% dry – 100% wet)", sliderWithOverride(echoMixSlider, echoMix));
 		addSection(panel, c, "Repeat color");
 		addRow(panel, c, "Low-cut (Hz, 0 = off)", sliderWithOverride(echoLowCutSlider, echoLowCut));
 		addRow(panel, c, "High-cut (Hz, 0 = off)", sliderWithOverride(echoHighCutSlider, echoHighCut));
@@ -622,8 +619,8 @@ final class StandaloneReverbFrame extends JFrame {
 					startPreview(position);
 			}
 		});
-		for (JTextField field : List.of(echoDelay, echoFeedback, echoWet, echoDry, echoLowCut, echoHighCut,
-				echoSaturation, echoRate, echoDepth))
+		for (JTextField field : List.of(echoDelay, echoFeedback, echoMix, echoLowCut, echoHighCut, echoSaturation,
+				echoRate, echoDepth))
 			field.getDocument().addDocumentListener(listener(this::echoParametersChanged));
 		echoModel.addActionListener(event -> applyEchoModelDefaults());
 		echoPingPong.addActionListener(event -> echoParametersChanged());
@@ -653,8 +650,7 @@ final class StandaloneReverbFrame extends JFrame {
 		configureLiveControl(decaySlider, decayLength, 100);
 		configureLiveControl(echoDelaySlider, echoDelay, 1);
 		configureLiveControl(echoFeedbackSlider, echoFeedback, 100);
-		configureLiveControl(echoWetSlider, echoWet, 100);
-		configureLiveControl(echoDrySlider, echoDry, 100);
+		configureLiveControl(echoMixSlider, echoMix, 1);
 		configureFrequencyControl(echoLowCutSlider, echoLowCut);
 		configureFrequencyControl(echoHighCutSlider, echoHighCut);
 		configureLiveControl(echoSaturationSlider, echoSaturation, 100);
@@ -1212,7 +1208,7 @@ final class StandaloneReverbFrame extends JFrame {
 			}));
 		for (JTextField field : List.of(wet, dry, preDelay))
 			field.getDocument().addDocumentListener(listener(this::updateSuggestedName));
-		for (JTextField field : List.of(echoDelay, echoFeedback, echoWet, echoDry))
+		for (JTextField field : List.of(echoDelay, echoFeedback, echoMix))
 			field.getDocument().addDocumentListener(listener(this::updateSuggestedName));
 		for (JTextField field : List.of(leslieWet, leslieDry))
 			field.getDocument().addDocumentListener(listener(this::updateSuggestedName));
@@ -1233,8 +1229,8 @@ final class StandaloneReverbFrame extends JFrame {
 					+ token(leslieWet.getText()) + "-dry" + token(leslieDry.getText()) + ".wav";
 		else if (isEchoSelected())
 			suggested = stem(dryPath.getText(), "audio") + "-echo-" + echoModelToken() + "-delay"
-					+ token(echoDelay.getText()) + "ms-fb" + token(echoFeedback.getText()) + "-wet"
-					+ token(echoWet.getText()) + "-dry" + token(echoDry.getText()) + ".wav";
+					+ token(echoDelay.getText()) + "ms-fb" + token(echoFeedback.getText()) + "-mix"
+					+ token(echoMix.getText()) + ".wav";
 		else {
 			if (irPath.getText().isBlank())
 				return;
@@ -1607,15 +1603,15 @@ final class StandaloneReverbFrame extends JFrame {
 
 	private EchoSettings echoSettings() {
 		return new EchoSettings((EchoSettings.Model) echoModel.getSelectedItem(), decimal(echoDelay, "Delay"),
-				decimal(echoFeedback, "Feedback"), decimal(echoWet, "Wet level"), decimal(echoDry, "Dry level"),
-				decimal(echoLowCut, "Repeat low-cut"), decimal(echoHighCut, "Repeat high-cut"),
-				decimal(echoSaturation, "Saturation"), decimal(echoRate, "Modulation rate"),
-				decimal(echoDepth, "Modulation depth"), echoPingPong.isSelected());
+				decimal(echoFeedback, "Feedback"), decimal(echoMix, "Mix") / 100, decimal(echoLowCut, "Repeat low-cut"),
+				decimal(echoHighCut, "Repeat high-cut"), decimal(echoSaturation, "Saturation"),
+				decimal(echoRate, "Modulation rate"), decimal(echoDepth, "Modulation depth"),
+				echoPingPong.isSelected());
 	}
 
 	private EchoSettings bypassedEchoSettings() {
 		EchoSettings value = echoSettings();
-		return new EchoSettings(value.model(), value.delayMilliseconds(), value.feedback(), 0, 1, value.lowCutHertz(),
+		return new EchoSettings(value.model(), value.delayMilliseconds(), value.feedback(), 0, value.lowCutHertz(),
 				value.highCutHertz(), value.saturation(), value.modulationRateHertz(),
 				value.modulationDepthMilliseconds(), value.pingPong());
 	}
@@ -1666,8 +1662,7 @@ final class StandaloneReverbFrame extends JFrame {
 		EchoSettings defaults = EchoSettings.defaults((EchoSettings.Model) echoModel.getSelectedItem());
 		echoDelay.setText(Double.toString(defaults.delayMilliseconds()));
 		echoFeedback.setText(Double.toString(defaults.feedback()));
-		echoWet.setText(Double.toString(defaults.wet()));
-		echoDry.setText(Double.toString(defaults.dry()));
+		echoMix.setText(Double.toString(defaults.mix() * 100));
 		echoLowCut.setText(Double.toString(defaults.lowCutHertz()));
 		echoHighCut.setText(Double.toString(defaults.highCutHertz()));
 		echoSaturation.setText(Double.toString(defaults.saturation()));
@@ -1820,6 +1815,25 @@ final class StandaloneReverbFrame extends JFrame {
 		JTextField result = new JTextField(settings.get(key, fallback), 34);
 		result.getDocument().addDocumentListener(listener(() -> settings.put(key, result.getText())));
 		return result;
+	}
+
+	private String migratedEchoMix() {
+		String saved = settings.get("echoMix", null);
+		if (saved != null)
+			return saved;
+		try {
+			String legacyWet = settings.get("echoWet", null);
+			String legacyDry = settings.get("echoDry", null);
+			if (legacyWet == null && legacyDry == null)
+				return "26";
+			double wet = Double.parseDouble(legacyWet == null ? "0.26" : legacyWet);
+			double dry = Double.parseDouble(legacyDry == null ? "1.0" : legacyDry);
+			String migrated = Double.toString(EchoSettings.mixFromLegacy(wet, dry) * 100);
+			settings.put("echoMix", migrated);
+			return migrated;
+		} catch (NumberFormatException invalidLegacyValue) {
+			return "26";
+		}
 	}
 
 	private JCheckBox check(String key, boolean fallback) {

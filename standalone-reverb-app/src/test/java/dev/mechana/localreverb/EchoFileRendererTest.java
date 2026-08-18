@@ -23,16 +23,16 @@ class EchoFileRendererTest {
 
 	@Test
 	void usesConservativeTailThresholdAndSafetyRepeat() {
-		EchoSettings settings = new EchoSettings(EchoSettings.Model.TAPE, 750, 0.48, 1, 1, 0, 0, 0, 0, 0, false);
+		EchoSettings settings = new EchoSettings(EchoSettings.Model.TAPE, 750, 0.48, 1, 0, 0, 0, 0, 0, false);
 		long frames = EchoFileRenderer.tailFrames(1_000, settings);
-		assertTrue(frames >= 12_000 && frames <= 14_000);
+		assertTrue(frames >= 14_000 && frames <= 16_000);
 	}
 
 	@Test
 	void rendersRequestedDelayAndIncludesTheEchoTail() throws Exception {
 		Path source = impulse("source.wav", 1_000, 100);
 		Path output = temporary.resolve("echo.wav");
-		EchoSettings settings = new EchoSettings(EchoSettings.Model.TAPE, 10, 0.5, 1, 1, 0, 0, 0, 0, 0, false);
+		EchoSettings settings = new EchoSettings(EchoSettings.Model.TAPE, 10, 0.5, 1, 0, 0, 0, 0, 0, false);
 
 		new EchoFileRenderer().render(source, output, settings, ignored -> {
 		});
@@ -41,9 +41,9 @@ class EchoFileRendererTest {
 			assertTrue(reader.format().frames() > 100);
 			double[][] samples = new double[1][(int) reader.format().frames()];
 			assertEquals(reader.format().frames(), reader.read(samples, 0, samples[0].length));
-			assertEquals(1, samples[0][0], 1.0e-4);
+			assertEquals(0, samples[0][0], 1.0e-4);
 			assertEquals(1, samples[0][10], 1.0e-4);
-			assertEquals(0.5, samples[0][20], 1.0e-4);
+			assertEquals(EchoSettings.feedbackCoefficient(0.5), samples[0][20], 1.0e-4);
 		}
 	}
 
