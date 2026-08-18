@@ -3,8 +3,10 @@
  * Licensed under the Apache License, Version 2.0. See the repository LICENSE.
  */
 #include <mechana/echo/EchoEngine.h>
+#include <mechana/echo/Feedback.h>
 #include <mechana/echo/Models.h>
 #include <mechana/echo/Tail.h>
+#include <mechana/audio/DryWetMixer.h>
 
 #include <algorithm>
 #include <cmath>
@@ -42,16 +44,41 @@ int main() {
     try {
         mechana::echo::Parameters parameters;
         parameters.delayMilliseconds = 100.0F;
-        parameters.dryLevel = 1.0F;
-        parameters.wetLevel = 1.0F;
+        parameters.mix = 1.0F;
         parameters.feedback = 0.5F;
         auto output = render(1, parameters);
-        require(std::abs(output[0][0] - 1.0F) < 1.0e-6F, "dry impulse changed");
+        require(std::abs(output[0][0]) < 1.0e-6F, "100% wet mix leaked dry impulse");
         require(std::abs(output[0][100] - 1.0F) < 1.0e-5F, "first echo timing or gain changed");
-        require(std::abs(output[0][200] - 0.5F) < 1.0e-5F, "feedback repeat timing or gain changed");
-        require(std::abs(output[0][300] - 0.25F) < 1.0e-5F, "second feedback repeat changed");
+        const auto coefficient = mechana::echo::feedbackCoefficient(0.5F);
+        require(std::abs(output[0][200] - coefficient) < 1.0e-5F, "feedback mapping changed");
+        require(std::abs(output[0][300] - coefficient * coefficient) < 1.0e-5F, "second feedback repeat changed");
 
         parameters.feedback = 0.0F;
+        parameters.mix = 0.0F;
+        output = render(1, parameters);
+        require(std::abs(output[0][0] - 1.0F) < 1.0e-6F && std::abs(output[0][100]) < 1.0e-6F,
+                "0% mix must be dry only");
+        parameters.mix = 0.5F;
+        output = render(1, parameters);
+        require(std::abs(output[0][0] - 0.5F) < 1.0e-6F && std::abs(output[0][100] - 0.5F) < 1.0e-5F,
+                "50% mix must use a linear crossfade");
+
+        mechana::audio::DryWetMixer mixer;
+        mixer.prepare(1'000.0, 10.0);
+        mixer.reset(0.0F);
+        mixer.setMix(1.0F);
+        auto previousWet = 0.0F;
+        for (int sample = 0; sample < 200; ++sample) {
+            const auto gains = mixer.next();
+            require(gains.wet >= previousWet && gains.wet - previousWet < 0.1F,
+                    "Mix automation was not click-smoothed");
+            require(std::abs(gains.dry + gains.wet - 1.0F) < 1.0e-6F,
+                    "smoothed Mix violated linear coefficient sum");
+            previousWet = gains.wet;
+        }
+        require(previousWet > 0.99F, "Mix smoothing did not converge");
+
+        parameters.mix = 1.0F;
         parameters.pingPong = true;
         output = render(2, parameters);
         require(std::abs(output[0][100]) < 1.0e-6F, "ping-pong left the first echo on its source channel");
@@ -74,14 +101,27 @@ int main() {
                 "analog-memory model should roll off more high end than vintage tape");
         require(tape.modulationDepthMilliseconds > 0.0F && memory.modulationDepthMilliseconds > 0.0F,
                 "modeled echoes must include subtle modulation");
-        require(std::abs(tape.wetLevel - 0.26F) < 1.0e-6F && std::abs(memory.wetLevel - 0.26F) < 1.0e-6F,
-                "modeled first-repeat level should match the listening-calibrated default");
+        require(std::abs(tape.mix - 0.26F) < 1.0e-6F && std::abs(memory.mix - 0.26F) < 1.0e-6F,
+                "modeled mix should match the listening-calibrated default");
+        require(std::abs(mechana::echo::feedbackCoefficient(0.36F) - 0.419F) < 0.01F,
+                "mid-30% feedback should decay about 7.6 dB per unfiltered repeat");
+
+        auto degradation = memory;
+        degradation.delayMilliseconds = 100.0F;
+        degradation.mix = 1.0F;
+        degradation.feedback = 0.36F;
+        degradation.modulationDepthMilliseconds = 0.0F;
+        output = render(1, degradation);
+        require(std::abs(output[0][200]) < std::abs(output[0][100]) * 0.6F,
+                "analog feedback generation did not become softer");
+        require(std::ranges::all_of(output[0], [](const float sample) { return std::isfinite(sample) && std::abs(sample) <= 2.0F; }),
+                "analog feedback became unstable");
 
         auto tailParameters = tape;
         tailParameters.delayMilliseconds = 750.0F;
         tailParameters.feedback = 0.48F;
         const auto conservativeTail = mechana::echo::reportedTailSeconds(tailParameters);
-        require(conservativeTail >= 12.0 && conservativeTail <= 14.0,
+        require(conservativeTail >= 14.0 && conservativeTail <= 16.0,
                 "reported Echo tail should reach -100 dB plus one safety repeat");
         tailParameters.feedback = 0.98F;
         require(mechana::echo::reportedTailSeconds(tailParameters) == 30.0,

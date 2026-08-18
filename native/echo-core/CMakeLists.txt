@@ -2,6 +2,7 @@
 # Licensed under the Apache License, Version 2.0. See the repository LICENSE.
 
 add_library(mechana_echo_core STATIC src/EchoEngine.cpp)
+target_link_libraries(mechana_echo_core PUBLIC mechana_audio_core)
 
 target_include_directories(mechana_echo_core PUBLIC include)
 target_compile_features(mechana_echo_core PUBLIC cxx_std_20)
