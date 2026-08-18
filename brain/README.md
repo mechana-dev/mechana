@@ -27,6 +27,7 @@ loaded through the root `AGENTS.md` and does not affect other repositories.
 - [Blender plugin](blender-plugin.md): distributed animation-frame rendering and movie assembly
 - [Audio reverb plugin](audio-reverb-plugin.md): pure-Java partitioned convolution and WAV artifact workflow
 - [Native echo engine](audio-echo-engine.md): reusable delay-loop DSP and behavioral device models
+- [Mechana Audio](mechana-audio.md): future product/repository boundary, public integration contract, packaging, and migration checkpoint
 - [Glossary](glossary.md): shared terminology
 
 ## Maintenance
