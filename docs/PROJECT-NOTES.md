@@ -2067,6 +2067,72 @@ cloud providers remain future direction; see `brain/current-state.md` and
   plus one delay-cycle safety margin, retaining the 30-second maximum. The standalone
   renderer uses the same threshold and safety policy.
 - Added native and Java regressions for calibrated defaults and conservative tails.
+## 2026-08-18 03:40 EDT — Add shared DSP core and Octave Fuzz prototype
+
+- Hardened `native/audio-core` with reusable smoothing, gain/mix/peak helpers,
+  filters, clipping/waveshaping abstractions, DC rejection, and allocation-free
+  2x linear-phase FIR oversampling with deterministic eight-sample latency.
+- Finished mono/stereo Octave Fuzz DSP using oversampled asymmetric fuzz,
+  rectified octave generation, DC blocking, octave blend, tone shaping, and
+  bounded output. It is inspired by classic octave-fuzz topology and is not an
+  exact Foxx Tone Machine emulation.
+- Added numerical, harmonic-content, bypass, routing, sample-rate determinism,
+  oversampling-latency, and folded-alias regressions while retaining Reverb/Echo.
+- Added the `Mechana Octave Fuzz` AU (`Mchn`/`OcFz`,
+  `dev.mechana.octave-fuzz`), combined-app tab, benchmarks, and architecture-
+  specific packaging/signing/notarization manifest support.
+## 2026-08-18 04:20 EDT — Refine Reverb decay and Effects app identity
+
+- Moved the Reverb Decay control directly below the captured-response selector
+  and changed its host/UI presentation from percentage to seconds. Internally,
+  the requested seconds are normalized against the selected captured response,
+  preserving the existing non-synthetic trim-and-fade behavior.
+- Stopped plug-in target metadata from leaking into the combined application's
+  compilation so the macOS application menu consistently says **About Mechana
+  Effects** and **Quit Mechana Effects**.
+- Rebuilt the combined app and all Reverb, Echo, and Octave Fuzz Audio Unit and
+  benchmark packages for Apple Silicon and Intel.
+
+## 2026-08-17 12:22:22 EDT — Add first native Leslie development model
+
+- Added a JUCE-free C++20 moving-speaker core with a two-way crossover, independent
+  horn/drum mechanical inertia, Doppler delay, directional amplitude, stereo
+  microphone geometry, cabinet drive, and smoothed real-time controls.
+- Added a separate Mechana Leslie Audio Unit with Stop/Slow/Fast, Drive, Horn
+  Balance, Mic Distance, Stereo Width, Crossover, Wet, Dry, Bypass, and Reset.
+- Added Leslie to the native Mechana Effects app. The app now processes only the
+  currently selected Reverb, Echo, or Leslie tab rather than chaining every effect.
+- Registered Modeled Leslie in the standard four-sample-rate, cross-architecture
+  benchmark and native macOS packaging/notarization flow.
+- Added core regressions for transparent bypass, finite stereo motion, zero reported
+  latency, and physically distinct horn/drum acceleration. This is a behavioral
+  development model requiring listening calibration, not a measured cabinet clone.
+
+## 2026-08-17 13:42:10 EDT — Restore full Effects application and add Leslie workflow
+
+- Restored the file-oriented Mechana Effects application as the canonical app
+  package instead of allowing the compact native AU development host to overwrite
+  it under the same ZIP name.
+- Added a functional Leslie tab to the full application with Stop/Slow/Fast rotor
+  speed, drive, horn balance, mic distance, stereo width, crossover, wet/dry, and
+  reset controls.
+- Integrated Leslie with streaming Preview, live control changes, bypass, looping,
+  scrub position, macOS/AirPlay output selection, Apply rendering, suggested output
+  names, job reports, and shared History.
+- Renamed the compact AU-editor host package to `Mechana-Effects-Live-Host` so the
+  two applications cannot be confused again.
+# 2026-08-18 — Effects app polish and Leslie scrub stability
+
+- Presented Reverb Decay near the top of both the Audio Unit and Effects app in seconds; the existing IR shaper continues receiving a duration-relative percentage internally.
+- Corrected the macOS Effects app identity so its application menu says “About Mechana Effects” and “Quit Mechana Effects.”
+- Added playback-generation ownership to Leslie preview sessions so a scrub or output change can cancel an older audio writer without reporting its expected pipe closure as a user-facing failure.
+
+# 2026-08-18 — Octave Fuzz in the production Effects app
+
+- Added Octave Fuzz as a full workflow in the original Java Mechana Effects app: live preview, scrubbing, output selection, rendering, History, Reset, and Bypass.
+- Added Drive, Tone, Output Level, and Octave Blend controls backed by a smoothed mono/stereo Java processor.
+- Diagnosed the silent macOS launch failure as mixed Team IDs between the outer bundle and embedded Java runtime.
+- Updated Java-app packaging so jpackage signs the runtime and application consistently before archiving.
 
 ## 2026-08-18 02:49 EDT — Record future Mechana Audio product architecture
 

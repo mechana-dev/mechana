@@ -10,7 +10,9 @@ TARGET="${SCRIPT_DIR}/target/reverb"
 STAGING="${TARGET}/staging"
 APPS="${TARGET}/apps"
 ICON="${TARGET}/MechanaReverb.icns"
+JAVA_ENTITLEMENTS="${SCRIPT_DIR}/java-runtime-entitlements.plist"
 JPACKAGE="${JAVA_HOME:-}/bin/jpackage"
+SIGNING_IDENTITY="${MACOS_SIGNING_IDENTITY:-}"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
 	print -u2 "The macOS Reverb app must be built on macOS."
@@ -53,13 +55,36 @@ cp standalone-reverb-app/src/main/distribution/ir-profiles/* "${STAGING}/ir-prof
 cp standalone-reverb-app/src/main/distribution/capture/* "${STAGING}/capture/"
 cp LICENSE NOTICE "${STAGING}/"
 
+signing_options=()
+if [[ -n "${SIGNING_IDENTITY}" ]]; then
+	signing_options=(--mac-sign --mac-signing-key-user-name "${SIGNING_IDENTITY}")
+fi
+
 "${JPACKAGE}" --type app-image --dest "${APPS}" --input "${STAGING}" \
 	--name "Mechana Effects" --main-jar mechana-standalone-reverb.jar \
 	--main-class dev.mechana.localreverb.StandaloneReverbMain --icon "${ICON}" \
-	--mac-package-identifier dev.mechana.effects --app-version 1.0.0
+	--mac-package-identifier dev.mechana.effects --app-version 1.0.0 "${signing_options[@]}"
 
-/usr/bin/ditto -c -k --sequesterRsrc --keepParent "${APPS}/Mechana Effects.app" \
-	"${SCRIPT_DIR}/target/Mechana-Effects-macOS-${PACKAGE_ARCH}.zip"
+if [[ -n "${SIGNING_IDENTITY}" ]]; then
+	app_bundle="${APPS}/Mechana Effects.app"
+	chmod -R u+w "${app_bundle}"
+	xattr -cr "${app_bundle}"
+	while IFS= read -r -d '' binary; do
+		if file "${binary}" | grep -q 'Mach-O'; then
+			/usr/bin/codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" \
+				--preserve-metadata=identifier,entitlements,requirements,flags "${binary}"
+		fi
+	done < <(find "${app_bundle}" -type f -print0)
+	/usr/bin/codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" \
+		"${app_bundle}/Contents/runtime"
+	/usr/bin/codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" \
+		--entitlements "${JAVA_ENTITLEMENTS}" "${app_bundle}"
+	/usr/bin/codesign --verify --deep --strict --verbose=2 "${APPS}/Mechana Effects.app"
+fi
+
+archive="${SCRIPT_DIR}/target/Mechana-Effects-macOS-${PACKAGE_ARCH}.zip"
+rm -f "${archive}"
+(cd "${APPS}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks "${archive}" "Mechana Effects.app")
 
 print "Built ${PACKAGE_ARCH} Effects app:"
 print "${APPS}/Mechana Effects.app"

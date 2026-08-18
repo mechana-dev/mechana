@@ -163,3 +163,14 @@ require absolute operator-declared native executable paths where applicable.
 Windows now uses a verified AppContainer and Job Object backend for the pure-Java
 plugin-host path. Native Windows plugin runtimes still require individual
 certification.
+# Shared native audio DSP core (2026-08-18)
+
+`native/audio-core` is the JUCE-free reuse boundary for parameter smoothing,
+gain/mix/metering helpers, filters, nonlinear waveshaping, and deterministic 2x
+FIR oversampling. Echo reuses nonlinear helpers, Octave Fuzz uses the broader
+core, and Reverb migration remains incremental. Leslie, chorus, and flanger
+should build on this layer.
+
+The Octave Fuzz engine is classic-topology-inspired rather than a circuit-exact
+Foxx Tone Machine model. Its AU identity is `Mchn`/`OcFz`, bundle
+`dev.mechana.octave-fuzz`, display name `Mechana Octave Fuzz`.
