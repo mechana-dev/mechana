@@ -2092,3 +2092,37 @@ cloud providers remain future direction; see `brain/current-state.md` and
   Effects** and **Quit Mechana Effects**.
 - Rebuilt the combined app and all Reverb, Echo, and Octave Fuzz Audio Unit and
   benchmark packages for Apple Silicon and Intel.
+
+## 2026-08-17 12:22:22 EDT — Add first native Leslie development model
+
+- Added a JUCE-free C++20 moving-speaker core with a two-way crossover, independent
+  horn/drum mechanical inertia, Doppler delay, directional amplitude, stereo
+  microphone geometry, cabinet drive, and smoothed real-time controls.
+- Added a separate Mechana Leslie Audio Unit with Stop/Slow/Fast, Drive, Horn
+  Balance, Mic Distance, Stereo Width, Crossover, Wet, Dry, Bypass, and Reset.
+- Added Leslie to the native Mechana Effects app. The app now processes only the
+  currently selected Reverb, Echo, or Leslie tab rather than chaining every effect.
+- Registered Modeled Leslie in the standard four-sample-rate, cross-architecture
+  benchmark and native macOS packaging/notarization flow.
+- Added core regressions for transparent bypass, finite stereo motion, zero reported
+  latency, and physically distinct horn/drum acceleration. This is a behavioral
+  development model requiring listening calibration, not a measured cabinet clone.
+
+## 2026-08-17 13:42:10 EDT — Restore full Effects application and add Leslie workflow
+
+- Restored the file-oriented Mechana Effects application as the canonical app
+  package instead of allowing the compact native AU development host to overwrite
+  it under the same ZIP name.
+- Added a functional Leslie tab to the full application with Stop/Slow/Fast rotor
+  speed, drive, horn balance, mic distance, stereo width, crossover, wet/dry, and
+  reset controls.
+- Integrated Leslie with streaming Preview, live control changes, bypass, looping,
+  scrub position, macOS/AirPlay output selection, Apply rendering, suggested output
+  names, job reports, and shared History.
+- Renamed the compact AU-editor host package to `Mechana-Effects-Live-Host` so the
+  two applications cannot be confused again.
+# 2026-08-18 — Effects app polish and Leslie scrub stability
+
+- Presented Reverb Decay near the top of both the Audio Unit and Effects app in seconds; the existing IR shaper continues receiving a duration-relative percentage internally.
+- Corrected the macOS Effects app identity so its application menu says “About Mechana Effects” and “Quit Mechana Effects.”
+- Added playback-generation ownership to Leslie preview sessions so a scrub or output change can cancel an older audio writer without reporting its expected pipe closure as a user-facing failure.

@@ -71,6 +71,20 @@ This file reports repository evidence, not desired future status.
 
 ## Present in the repository
 
+- A JUCE-free C++20 `leslie-core` provides a first real-time Classic Cabinet
+  moving-speaker model with a two-way crossover, independent horn/drum inertia,
+  Doppler and amplitude modulation, stereo microphone geometry, drive, smoothed
+  continuous parameters, and zero reported host latency. A separate JUCE Audio
+  Unit exposes Stop/Slow/Fast, Drive, Horn Balance, Mic Distance, Stereo Width,
+  Crossover, Wet, Dry, Bypass, and Reset. The compact native live-input host adds
+  a Leslie tab and processes only the selected effect. Its package is explicitly
+  named as a live host so it cannot replace the full file-oriented application.
+  The full application retains its shared file, Preview/AirPlay, Apply, output,
+  History, and IR-creation workflow and now includes a functional Leslie tab.
+  Leslie is registered separately in the four-rate native benchmark. This is an initial behavioral
+  model requiring listening calibration against a real cabinet, not a measured
+  clone or manufacturer-endorsed emulation. See `brain/audio-leslie-engine.md`.
+
 - A JUCE-free C++20 `echo-core` provides a zero-latency, allocation-free-after-prepare
   real-time delay loop with fractional delay, feedback, repeat-path low/high cuts,
   saturation, modulation, stereo ping-pong, wet/dry mix, bypass, and smoothed delay

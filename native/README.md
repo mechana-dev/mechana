@@ -26,6 +26,12 @@ octave blend, tone shaping, and bounded output saturation. Drive, Tone, Level,
 and Octave are smoothed per sample. Mono and stereo channels are independent.
 The FIR path has fixed eight-sample base-rate latency, reported by the AU.
 
+`leslie-core` is a separate JUCE-free moving-speaker engine. It models a
+crossed-over treble horn and bass drum with independent mechanical inertia,
+Doppler and directional amplitude motion, stereo microphone geometry, drive,
+and smoothed real-time controls. Its temporary adapter builds a separate AU, and
+the combined application adds a Leslie tab. Only the selected tab processes audio.
+
 ## Build on macOS
 
 ```shell
@@ -54,13 +60,13 @@ benchmark suite is built with `packaging/macos/build-effect-benchmarks.sh` and
 automatically discovers each registered native effect benchmark.
 
 `packaging/macos/package-native-effects.sh` packages architecture-specific ZIPs
-for the combined app, all three separate AU components, and the benchmark suite.
-Echo, Reverb, and Octave Fuzz results remain distinct at all four standard rates.
+for the combined app, all four separate AU components, and the benchmark suite.
+Reverb, Echo, Leslie, and Octave Fuzz results remain distinct at all four standard rates.
 Development packaging uses ad-hoc signatures by default. Release packaging sets
 `MACOS_SIGNING_IDENTITY` to a Developer ID Application identity, which enables
 hardened runtime and secure timestamps, and may limit packaging to `arm64` or
 `x86_64`. After the one-time `notarytool` Keychain profile setup, run
-`packaging/macos/notarize-native-effects.sh <architecture>` to submit all four
+`packaging/macos/notarize-native-effects.sh <architecture>` to submit all six
 archives, staple supported bundles, rebuild their ZIPs, and validate the result.
 
 The build downloads the pinned JUCE 9.0.0 source into the ignored build tree.
