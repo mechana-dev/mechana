@@ -6,7 +6,7 @@ Mechana provides four native macOS application bundles for local development:
 - **Mechana Worker Control.app** runs Worker Control as an ordinary desktop app.
 - **Mechana Job Launcher.app** runs the Client Job Launcher as an ordinary desktop app.
 - **Mechana Effects.app** provides the original file-oriented local workflow for
-  convolution reverb and modeled echo on one Mac, with no server, worker, network
+  convolution reverb, modeled echo, and native Octave Fuzz on one Mac, with no server, worker, network
   connection, or separate Java installation.
 
 The bundles are unsigned local-development builds. They include a Java runtime,
@@ -43,6 +43,12 @@ Echo timing, feedback, mix, repeat filtering, saturation, and modulation control
 use the same slider-plus-numeric-override pattern as Reverb. The sliders emphasize
 practical musical ranges; the adjacent fields retain the engine's wider valid range
 for exact values and less common settings.
+
+The native combined effects host also exposes **Octave Fuzz** with Drive, Tone,
+Level, Octave Blend, Bypass, and Reset. It uses the same JUCE-free engine as the
+separate Audio Unit. The effect is inspired by classic octave-fuzz topology and
+is not an exact Foxx Tone Machine emulation. Its 2x FIR path reports eight samples
+of latency to Audio Unit hosts.
 
 The build also writes `Mechana-Effects-macOS-arm64.zip`, preserving the application
 bundle for transfer to another Apple Silicon Mac. Because development builds are

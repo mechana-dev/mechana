@@ -12,6 +12,7 @@
 
 #include "../../../adapters/juce-echo-plugin/Source/PluginProcessor.h"
 #include "../../../adapters/juce-plugin/Source/PluginProcessor.h"
+#include "../../../adapters/juce-octave-fuzz-plugin/Source/PluginProcessor.h"
 
 namespace {
 class EffectsComponent final : public juce::AudioAppComponent {
@@ -20,6 +21,7 @@ public:
         addAndMakeVisible(tabs);
         tabs.addTab("Reverb", juce::Colour(0xff24333a), reverb.createEditor(), true);
         tabs.addTab("Echo", juce::Colour(0xff3a3024), echo.createEditor(), true);
+        tabs.addTab("Octave Fuzz", juce::Colour(0xff35283c), octaveFuzz.createEditor(), true);
         setSize(1'080, 820);
         setAudioChannels(2, 2);
     }
@@ -29,13 +31,16 @@ public:
     void prepareToPlay(const int samplesPerBlockExpected, const double sampleRate) override {
         reverb.setPlayConfigDetails(2, 2, sampleRate, samplesPerBlockExpected);
         echo.setPlayConfigDetails(2, 2, sampleRate, samplesPerBlockExpected);
+        octaveFuzz.setPlayConfigDetails(2, 2, sampleRate, samplesPerBlockExpected);
         reverb.prepareToPlay(sampleRate, samplesPerBlockExpected);
         echo.prepareToPlay(sampleRate, samplesPerBlockExpected);
+        octaveFuzz.prepareToPlay(sampleRate, samplesPerBlockExpected);
     }
 
     void releaseResources() override {
         reverb.releaseResources();
         echo.releaseResources();
+        octaveFuzz.releaseResources();
     }
 
     void getNextAudioBlock(const juce::AudioSourceChannelInfo& info) override {
@@ -46,6 +51,7 @@ public:
                                               info.startSample, info.numSamples);
         reverb.processBlock(block, midi);
         echo.processBlock(block, midi);
+        octaveFuzz.processBlock(block, midi);
     }
 
     void resized() override { tabs.setBounds(getLocalBounds()); }
@@ -53,6 +59,7 @@ public:
 private:
     MechanaReverbAudioProcessor reverb;
     MechanaEchoAudioProcessor echo;
+    MechanaOctaveFuzzAudioProcessor octaveFuzz;
     juce::TabbedComponent tabs;
 };
 

@@ -2067,3 +2067,17 @@ cloud providers remain future direction; see `brain/current-state.md` and
   plus one delay-cycle safety margin, retaining the 30-second maximum. The standalone
   renderer uses the same threshold and safety policy.
 - Added native and Java regressions for calibrated defaults and conservative tails.
+## 2026-08-18 03:40 EDT — Add shared DSP core and Octave Fuzz prototype
+
+- Hardened `native/audio-core` with reusable smoothing, gain/mix/peak helpers,
+  filters, clipping/waveshaping abstractions, DC rejection, and allocation-free
+  2x linear-phase FIR oversampling with deterministic eight-sample latency.
+- Finished mono/stereo Octave Fuzz DSP using oversampled asymmetric fuzz,
+  rectified octave generation, DC blocking, octave blend, tone shaping, and
+  bounded output. It is inspired by classic octave-fuzz topology and is not an
+  exact Foxx Tone Machine emulation.
+- Added numerical, harmonic-content, bypass, routing, sample-rate determinism,
+  oversampling-latency, and folded-alias regressions while retaining Reverb/Echo.
+- Added the `Mechana Octave Fuzz` AU (`Mchn`/`OcFz`,
+  `dev.mechana.octave-fuzz`), combined-app tab, benchmarks, and architecture-
+  specific packaging/signing/notarization manifest support.

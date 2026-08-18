@@ -477,3 +477,10 @@ native dependencies, or untested runtime versions and plugin features.
   the standalone Reverb app. A launcher job accepts the original excitation
   sweep and recorded 100%-wet return, publishes a convolution-ready 24-bit WAV
   plus provenance, and can mirror each result into a shared IR library folder.
+# 2026-08-18 native Octave Fuzz prototype
+
+- Shared audio core includes smoothers, utilities, filters, nonlinear shapes,
+  and allocation-free 2x FIR oversampling with eight samples fixed latency.
+- Octave Fuzz supports mono/stereo Drive, Tone, Level, Octave Blend, and Bypass.
+- Separate `Mechana Octave Fuzz` AU and combined-app tab use the production engine.
+- The design is topology-inspired, not an exact Foxx Tone Machine emulation.

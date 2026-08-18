@@ -1,4 +1,4 @@
-# Native Reverb development
+# Native audio effects development
 
 This tree begins the native Audio Unit implementation while preserving an exit
 from JUCE. `reverb-core` contains product DSP and has no JUCE dependency. The
@@ -10,6 +10,21 @@ delay, feedback, repeat filtering, saturation, modulation, stereo routing, and
 neutral plus initial tape/BBD-style behavioral defaults. The temporary Echo
 adapter builds a separate AU; it does not use convolution. `apps/mechana-effects`
 builds a live-input macOS application with separate Reverb and Echo tabs.
+
+`audio-core` is the shared, JUCE-free foundation for real-time effects. It
+provides parameter smoothing, gain/equal-power mix and peak helpers, reusable
+DC-blocking and one-pole filtering, clipping/waveshaping primitives, and a
+streaming 2x linear-phase FIR oversampler. Echo consumes shared nonlinear
+primitives; Octave Fuzz uses the smoothing, filters, nonlinearities, and
+oversampler. Reverb remains unchanged while reusable pieces are migrated
+incrementally. Leslie, chorus, and flanger are intended next consumers.
+
+`octave-fuzz-core` is inspired by classic octave-fuzz topology, not a
+circuit-authentic or trademarked-product emulation. Its path is input gain,
+2x oversampled asymmetric fuzz, full-wave octave generation and DC rejection,
+octave blend, tone shaping, and bounded output saturation. Drive, Tone, Level,
+and Octave are smoothed per sample. Mono and stereo channels are independent.
+The FIR path has fixed eight-sample base-rate latency, reported by the AU.
 
 ## Build on macOS
 
@@ -39,8 +54,8 @@ benchmark suite is built with `packaging/macos/build-effect-benchmarks.sh` and
 automatically discovers each registered native effect benchmark.
 
 `packaging/macos/package-native-effects.sh` packages architecture-specific ZIPs
-for the combined app, both separate AU components, and the benchmark suite. The
-Echo and Reverb benchmark results remain distinct at all four standard rates.
+for the combined app, all three separate AU components, and the benchmark suite.
+Echo, Reverb, and Octave Fuzz results remain distinct at all four standard rates.
 Development packaging uses ad-hoc signatures by default. Release packaging sets
 `MACOS_SIGNING_IDENTITY` to a Developer ID Application identity, which enables
 hardened runtime and secure timestamps, and may limit packaging to `arm64` or
