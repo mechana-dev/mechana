@@ -18,6 +18,14 @@ Last reviewed: 2026-08-09
 
 ## Stable shape
 
+The accepted future [Mechana Audio product architecture](mechana-audio.md) will
+separate production audio DSP and products from this distributed-compute platform
+after the current native audio core is coherent. The split is not implemented.
+Mechana will retain orchestration, artifacts, workers, the plugin SDK/launcher,
+and a generic Java wrapper that consumes Mechana Audio's public engine contract;
+Mechana Audio will own the native DSP, product adapters, standalone application,
+and audio release lifecycle.
+
 The standalone Reverb composition is an explicit local/demo boundary: it depends
 on the concrete audio plugin, supplies platform-owned lifecycle and artifact
 publication locally, and does not change the plugin contract. It invokes the same

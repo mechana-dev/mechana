@@ -52,6 +52,11 @@ Verified: 2026-08-09
 
 This file reports repository evidence, not desired future status.
 
+The accepted [Mechana Audio product/repository direction](mechana-audio.md) is
+planned only. Production native audio code has not been extracted, the public
+engine contract and generic Java wrapper are not implemented, and no final
+commercial/proprietary license has been chosen.
+
 ## 2026-08-06 long-running native-task reliability
 
 - Worker-presence and task-lease heartbeats use dedicated daemon platform threads,
