@@ -76,6 +76,15 @@ hardened runtime and secure timestamps, and may limit packaging to `arm64` or
 `packaging/macos/notarize-native-effects.sh <architecture>` to submit all five
 archives, staple supported bundles, rebuild their ZIPs, and validate the result.
 
+For local Echo AU development, package the current arm64 checkout and then run
+`packaging/macos/install-echo-au-development.sh`. The installer rejects stale
+artifacts by comparing the embedded commit and Echo DSP hash with the checkout,
+automatically selects an available Apple Development identity (or honors
+`MACOS_DEVELOPMENT_SIGNING_IDENTITY`), removes quarantine metadata, atomically
+replaces the user-level component, refreshes Audio Component registration, and
+runs the complete `auval -v aufx Echo Mchn` suite. This is the supported way to
+avoid validating an older component left in `~/Library/Audio/Plug-Ins/Components`.
+
 The build downloads the pinned JUCE 9.0.0 source into the ignored build tree.
 JUCE is not vendored and no JUCE type crosses into `reverb-core`. The AU component
 is emitted beneath `native/build/adapters/juce-plugin/MechanaReverb_artefacts`.

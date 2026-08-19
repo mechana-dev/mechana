@@ -58,3 +58,10 @@ Native release packaging rebuilds the Echo AU from the selected architecture bui
 immediately before staging. Each signed component contains `MechanaBuild.txt` with the
 Git commit, Echo DSP source SHA-256, pre-signing component checksum, and architecture;
 the final ZIP receives a SHA-256 sidecar.
+
+Local AU calibration must install through
+`packaging/macos/install-echo-au-development.sh`. It verifies that the package marker
+matches the current checkout before replacing the user component, applies an Apple
+Development signature, forces Audio Component Registrar discovery, and runs full
+Apple validation. A successful `auval` result without the marker comparison is not
+sufficient because the registrar may still be loading a previously installed build.
