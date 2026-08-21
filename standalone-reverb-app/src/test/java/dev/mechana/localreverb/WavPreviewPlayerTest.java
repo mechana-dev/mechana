@@ -11,9 +11,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mechana.plugins.audio.WavFile;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -53,6 +57,81 @@ class WavPreviewPlayerTest {
 		assertEquals(8_192, sample(pcm, 0), 1);
 		assertEquals(8_192, sample(pcm, 10), 1);
 		assertEquals(Math.round(8_192 * EchoSettings.feedbackCoefficient(0.5)), sample(pcm, 20), 1);
+	}
+
+	@Test
+	void seekReplacementIgnoresBrokenPipeFromStaleEchoPlayback() throws Exception {
+		Path input = temporary.resolve("replacement-source.wav");
+		try (WavFile.Writer writer = WavFile.create24Bit(input, 1_000, 1, 4_000)) {
+			for (int frame = 0; frame < 4_000; frame++)
+				writer.writeFrame(new double[]{0});
+		}
+		EchoSettings settings = new EchoSettings(EchoSettings.Model.TAPE, 10, 0.5, 0.5, 0, 0, 0, 0, 0, false);
+		CountDownLatch firstWrite = new CountDownLatch(1);
+		CountDownLatch releaseFirstWrite = new CountDownLatch(1);
+		CountDownLatch replacementWrite = new CountDownLatch(1);
+		CountDownLatch releaseReplacementWrite = new CountDownLatch(1);
+		AtomicInteger opened = new AtomicInteger();
+		List<String> failures = new CopyOnWriteArrayList<>();
+
+		try (WavPreviewPlayer player = new WavPreviewPlayer()) {
+			player.setAudioSinkFactory((sampleRate, channels) -> new ReverbPreviewPlayer.AudioSink() {
+				private final boolean stale = opened.getAndIncrement() == 0;
+
+				@Override
+				public void start() {
+				}
+
+				@Override
+				public void write(byte[] samples, int length) throws IOException {
+					if (stale) {
+						firstWrite.countDown();
+						awaitUninterruptibly(releaseFirstWrite);
+						throw new IOException("Broken pipe");
+					}
+					replacementWrite.countDown();
+					awaitUninterruptibly(releaseReplacementWrite);
+				}
+
+				@Override
+				public void drain() {
+				}
+				@Override
+				public void pause() {
+				}
+				@Override
+				public void resume() {
+				}
+				@Override
+				public void stop() {
+				}
+				@Override
+				public void close() {
+				}
+			});
+			player.play(input, settings, 0, ignored -> {
+			}, failures::add);
+			assertTrue(firstWrite.await(1, TimeUnit.SECONDS));
+			player.play(input, settings, 0.5, ignored -> {
+			}, failures::add);
+			assertTrue(replacementWrite.await(1, TimeUnit.SECONDS));
+			releaseFirstWrite.countDown();
+			Thread.sleep(100);
+			releaseReplacementWrite.countDown();
+			player.stop();
+		}
+
+		assertTrue(failures.isEmpty(), "Stale Echo playback reported " + failures);
+	}
+
+	private static void awaitUninterruptibly(CountDownLatch latch) {
+		while (true)
+			try {
+				latch.await();
+				return;
+			} catch (InterruptedException ignored) {
+				// Model a native helper write that outlives the seek interruption.
+			}
 	}
 
 	private static int sample(byte[] pcm, int frame) {

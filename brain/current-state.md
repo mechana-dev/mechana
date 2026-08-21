@@ -211,6 +211,8 @@ commercial/proprietary license has been chosen.
   cannot report a stale broken-pipe error or overwrite the replacement's state.
   The native Core Audio helper confirms device initialization before Java sends
   PCM, and replaced helpers terminate boundedly before the new session takes over.
+  Echo seek restarts use the same generation isolation as Reverb, so an old Echo
+  helper cannot surface a stale broken-pipe failure after its replacement starts.
 - Preview and Apply peak protection use the same stereo-linked streaming gain
   limiter with 10 ms look-ahead and a smooth release. The normal Apply path no
   longer substitutes a whole-file gain, allowing preview captures and 24-bit

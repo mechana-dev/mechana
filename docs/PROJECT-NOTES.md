@@ -2254,3 +2254,11 @@ cloud providers remain future direction; see `brain/current-state.md` and
   that its Core Audio device and buffers are ready before Java returns the sink.
 - Made helper cleanup wait boundedly for process termination, preventing rapid seeks
   from overlapping the old and replacement Core Audio device lifecycles.
+
+## 2026-08-21 01:45:00 EDT — Isolate Echo preview seek generations
+
+- The remaining MBA reproduction was specific to Echo preview, which uses the
+  direct modeled-audio player rather than the Reverb preview player fixed earlier.
+- Echo seek restarts now isolate playback generations and wait boundedly for the
+  replaced thread, preventing its late broken pipe or cleanup from affecting the
+  replacement preview. Added a regression that reproduces that exact stale-write race.
