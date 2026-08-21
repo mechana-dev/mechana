@@ -131,7 +131,10 @@ commercial/proprietary license has been chosen.
   Universal packaging remains future work. Architecture-specific native release
   packaging supports Developer ID signing, hardened runtime, secure timestamps,
   Apple notarization, ticket stapling for the app and AU components, and local
-  validation. Native macOS deliverables declare macOS 12.0 as their minimum
+  validation. The benchmark app also stabilizes launches from temporary
+  Gatekeeper/archive locations by reopening an intact signed copy from user
+  Application Support, while release validation requires matching Developer ID
+  teams for the app and its nested executables. Native macOS deliverables declare macOS 12.0 as their minimum
   deployment target for Intel Monterey compatibility. JUCE is
   fetched only into the ignored build directory and is not part of the core.
   A JUCE-free native benchmark with embedded deterministic audio now reports

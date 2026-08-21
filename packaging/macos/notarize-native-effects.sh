@@ -27,6 +27,28 @@ archives=(
 	"${ARCHIVES}/Mechana-Effect-Benchmarks-macOS-${ARCHITECTURE}.zip"
 )
 
+echo_component="${STAGING}/echo-au/Mechana Echo.component"
+leslie_component="${STAGING}/leslie-au/Mechana Leslie.component"
+reverb_component="${STAGING}/reverb-au/Mechana Reverb.component"
+fuzz_component="${STAGING}/octave-fuzz-au/Mechana Octave Fuzz.component"
+benchmark_app="${STAGING}/benchmarks/Run Benchmarks.app"
+
+benchmark_details="$(/usr/bin/codesign -dvvv "${benchmark_app}" 2>&1)"
+print -r -- "${benchmark_details}" | grep -q '^Authority=Developer ID Application:'
+print -r -- "${benchmark_details}" | grep -q 'flags=.*runtime'
+benchmark_team="$(print -r -- "${benchmark_details}" | sed -n 's/^TeamIdentifier=//p')"
+[[ -n "${benchmark_team}" && "${benchmark_team}" != "not set" ]] || {
+	print -u2 "Benchmark app is not signed with a distribution team"
+	exit 1
+}
+for executable in "${benchmark_app}/Contents/Resources/${ARCHITECTURE}"/mechana_*_benchmark(N); do
+	executable_team="$(/usr/bin/codesign -dvvv "${executable}" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+	[[ "${executable_team}" == "${benchmark_team}" ]] || {
+		print -u2 "Benchmark executable signature does not match the app team: ${executable}"
+		exit 1
+	}
+done
+
 for archive in "${archives[@]}"; do
 	[[ -f "${archive}" ]] || {
 		print -u2 "Missing signed archive: ${archive}"
@@ -34,12 +56,6 @@ for archive in "${archives[@]}"; do
 	}
 	xcrun notarytool submit "${archive}" --keychain-profile "${KEYCHAIN_PROFILE}" --wait
 done
-
-echo_component="${STAGING}/echo-au/Mechana Echo.component"
-leslie_component="${STAGING}/leslie-au/Mechana Leslie.component"
-reverb_component="${STAGING}/reverb-au/Mechana Reverb.component"
-fuzz_component="${STAGING}/octave-fuzz-au/Mechana Octave Fuzz.component"
-benchmark_app="${STAGING}/benchmarks/Run Benchmarks.app"
 
 for bundle in "${echo_component}" "${leslie_component}" "${reverb_component}" "${fuzz_component}" "${benchmark_app}"; do
 	xcrun stapler staple "${bundle}"

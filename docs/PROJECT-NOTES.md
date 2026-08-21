@@ -2249,6 +2249,16 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Kept output headroom and peak protection as a separate follow-up concern; additive
   dry plus Echo can exceed unity on correlated peaks.
 
+## 2026-08-21 01:10:00 EDT — Stabilize and verify the benchmark application
+
+- Diagnosed an Intel benchmark launcher crash whose report showed the app executing
+  from `/private/var/folders` and a force-unmounted backing vnode. The launcher now
+  copies a temporarily hosted bundle to user Application Support and reopens the
+  stable copy before starting benchmark processes.
+- Changed benchmark ZIP creation to suppress and reject AppleDouble metadata.
+- Added release gates requiring a Developer ID Application signature, hardened
+  runtime, and one matching team identity across the app and every nested benchmark.
+
 ## 2026-08-21 01:17:41 EDT — Isolate preview seek generations
 
 - Prevented a scrub restart from reactivating the cancellation state of the preview
