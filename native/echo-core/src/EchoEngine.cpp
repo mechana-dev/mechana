@@ -120,7 +120,7 @@ public:
             smoothedModulationRateHertz +=
                 (std::clamp(parameters.modulationRateHertz, 0.0F, 20.0F) - smoothedModulationRateHertz)
                 * smoothingCoefficient;
-            const auto mix = mixer.next();
+            const auto mix = mixer.nextAdditive();
             auto modulation = static_cast<float>(std::sin(modulationPhase));
             if (parameters.character == Character::vintageTape) {
                 modulation = modulation * 0.78F
