@@ -18,19 +18,10 @@ Last reviewed: 2026-08-09
 
 ## Stable shape
 
-The accepted future [Mechana Audio product architecture](mechana-audio.md) will
-separate production audio DSP and products from this distributed-compute platform
-after the current native audio core is coherent. The split is not implemented.
-Mechana will retain orchestration, artifacts, workers, the plugin SDK/launcher,
-and a generic Java wrapper that consumes Mechana Audio's public engine contract;
-Mechana Audio will own the native DSP, product adapters, standalone application,
-and audio release lifecycle.
-
-The standalone Reverb composition is an explicit local/demo boundary: it depends
-on the concrete audio plugin, supplies platform-owned lifecycle and artifact
-publication locally, and does not change the plugin contract. It invokes the same
-plugin entry point used by workers but has no scheduler, leases, worker registry,
-HTTP listener, or distributed data plane.
+Production audio DSP and products have been extracted to the private Mechana Audio
+repository. Mechana retains orchestration, artifacts, workers, the plugin SDK and
+launcher, plus the pure-Java distributed reverb reference plugin. A future generic
+Java adapter will consume Mechana Audio through its public contract without copying DSP.
 
 Mechana separates the control plane from the data plane and keeps the execution
 core task-agnostic. A plugin encapsulates the complete computational contract for
@@ -163,14 +154,3 @@ require absolute operator-declared native executable paths where applicable.
 Windows now uses a verified AppContainer and Job Object backend for the pure-Java
 plugin-host path. Native Windows plugin runtimes still require individual
 certification.
-# Shared native audio DSP core (2026-08-18)
-
-`native/audio-core` is the JUCE-free reuse boundary for parameter smoothing,
-gain/mix/metering helpers, filters, nonlinear waveshaping, and deterministic 2x
-FIR oversampling. Echo reuses nonlinear helpers, Octave Fuzz uses the broader
-core, and Reverb migration remains incremental. Leslie, chorus, and flanger
-should build on this layer.
-
-The Octave Fuzz engine is classic-topology-inspired rather than a circuit-exact
-Foxx Tone Machine model. Its AU identity is `Mchn`/`OcFz`, bundle
-`dev.mechana.octave-fuzz`, display name `Mechana Octave Fuzz`.

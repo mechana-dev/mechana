@@ -1,82 +1,14 @@
 # Mechana macOS apps
 
-Mechana provides four native macOS application bundles for local development:
+Mechana provides three native macOS application bundles for local development:
 
 - **Mechana Server.app** starts or reveals its dedicated local server dashboard window.
 - **Mechana Worker Control.app** runs Worker Control as an ordinary desktop app.
 - **Mechana Job Launcher.app** runs the Client Job Launcher as an ordinary desktop app.
-- **Mechana Effects.app** provides the original file-oriented local workflow for
-  convolution reverb, modeled echo, modeled Leslie, and Octave Fuzz on one Mac, with no server, worker, network
-  connection, or separate Java installation.
 
-The bundles include a Java runtime,
-so Finder and Dock launches do not depend on a shell, `JAVA_HOME`, Maven, or a
-Terminal window. Distribution to other users will require an Apple Developer ID,
-code signing, hardened-runtime validation, and notarization.
-
-Mechana Reverb keeps its working impulse-response library in
-`~/Library/Application Support/Mechana Reverb/IR Profiles`. On launch it installs
-or refreshes factory profiles from the bundle.
-Profiles imported with **Add…** and profiles created from sweep recordings are
-copied into the same durable library and remain available across app upgrades.
-Each library WAV remains untouched and receives a checksum-bound calibration
-sidecar. One stereo-linked, sample-rate-aware energy gain is applied identically
-in Preview and Apply; recalibration happens automatically when profile audio
-changes. The gain is capped conservatively to avoid amplifying noisy captures.
-IR peak safety and streaming peak protection are automatic in the standalone app,
-with fixed 1 dB headroom. These implementation safeguards are not shown alongside
-the creative reverb controls.
-The preview transport includes an elapsed/total scrub bar. Releasing a dragged
-position restarts preview there after a silent state-building pre-roll, preserving
-the captured reverb rather than starting the effect from an empty convolution.
-
-Reverb and Echo share dry-audio selection, output naming and folder selection,
-Preview/Apply transport, Core Audio/AirPlay destination selection, and History.
-Effect-specific controls remain on separate tabs. Echo includes Echoplex-style Tape
-and Deluxe Memory Man-style Analog development models; these are behavioral
-approximations rather than measured captures or manufacturer-endorsed emulations.
-Echo Preview processes and emits source blocks continuously instead of first
-rendering a temporary WAV. Its controls and bypass are read between blocks, so
-valid edits normally become audible within one 1,024-frame block. Apply remains a
-streaming file render and continues to preserve the calculated repeat tail.
-Echo timing, feedback, mix, repeat filtering, saturation, and modulation controls
-use the same slider-plus-numeric-override pattern as Reverb. The sliders emphasize
-practical musical ranges; the adjacent fields retain the engine's wider valid range
-for exact values and less common settings.
-
-The native combined effects host also exposes **Octave Fuzz** with Drive, Tone,
-Level, Octave Blend, Bypass, and Reset. It uses the same JUCE-free engine as the
-separate Audio Unit. The effect is inspired by classic octave-fuzz topology and
-is not an exact Foxx Tone Machine emulation. Its 2x FIR path reports eight samples
-of latency to Audio Unit hosts.
-
-The full file-oriented Mechana Effects application includes Leslie and Octave Fuzz tabs alongside
-Reverb, Echo, and Create IR from Sweep. It retains the shared dry-audio picker,
-macOS/AirPlay Preview controls, Apply workflow, output folder, scrubber, and
-History. Its first Classic Cabinet model provides Stop/Slow/Fast
-rotor modes, independent horn/drum inertia, Drive, Horn Balance, Mic Distance,
-Stereo Width, Crossover, Wet, Dry, Bypass, and Reset. It is a behavioral model
-awaiting controlled listening calibration against a real cabinet.
-Octave Fuzz provides Drive, Tone, Output Level, Octave Blend, Bypass, and Reset,
-with the same Preview, scrub, Apply, output-selection, and History workflow.
-
-The compact native live-input host is a development target only. Release packaging
-does not create or distribute a `Mechana-Effects-Live-Host` archive. The supported
-application deliverable is the full file-oriented
-`Mechana-Effects-macOS-<architecture>.zip` application.
-
-The build writes architecture-specific `Mechana-Effects-macOS-<architecture>.zip`
-archives. When `MACOS_SIGNING_IDENTITY` is supplied, jpackage signs the embedded
-runtime and outer app consistently before the archive is created.
-Use `packaging/macos/build-reverb-app.sh` with `JAVA_HOME` set to a Java 25 JDK of
-the desired architecture to build only the standalone app. An Intel JDK produces
-`Mechana-Effects-macOS-x86_64.zip`; Rosetta permits that build on an Apple Silicon
-development Mac. The JDK architecture determines the bundled runtime and native
-launcher architecture.
-Build and sign both architectures on the development Mac. Use
-`packaging/macos/notarize-effects-app.sh <architecture>` afterward. Deployment
-machines such as `rocinante` are for installing and testing finished artifacts only;
-do not stage source or run builds there.
+The bundles include a Java runtime, so Finder and Dock launches do not depend on
+a shell, `JAVA_HOME`, Maven, or a Terminal window. Production audio applications
+and Audio Units are built and distributed from the separate Mechana Audio repository.
 
 ## Build and install
 
@@ -105,10 +37,6 @@ standard **Applications** shortcut. Drag each app from there to the Dock. Set
 is explicitly required. Rebuilding is deterministic from the shaded application JARs, the
 function-specific Mechana icon variants, the current Java 25 `jpackage`, macOS's
 Swift compiler and WebKit framework, and a bundled runtime image.
-
-Mechana Reverb uses its own impulse-and-decaying-reflections icon rather than the
-Job Launcher's paper-plane artwork, while retaining the shared Mechana hexagon and
-color family.
 
 ## Server lifecycle
 
@@ -208,19 +136,9 @@ After installation, Finder-equivalent launches can be exercised with:
 open "/Applications/Mechana Server.app"
 open "/Applications/Mechana Worker Control.app"
 open "/Applications/Mechana Job Launcher.app"
-open "/Applications/Mechana Effects.app"
 ```
 
 Use Activity Monitor or `launchctl print gui/$(id -u)/dev.mechana.server` to
 inspect the background service. A second Server app launch must leave the same
 server PID visible in the dashboard. Quit Worker Control and Job Launcher from
 their application menus and confirm their processes disappear.
-
-## Future Windows standalone package
-
-The standalone DSP and Swing UI are portable, but this repository currently
-produces only native macOS Reverb bundles. A Windows 11 x64 package should be
-built natively on Windows with Java 25 `jpackage`, bundle its own runtime and the
-same sweep/profile library, use File Explorer for output reveal, and initially be
-distributed as a portable ZIP. Windows packaging is planning scope only in the
-current change.

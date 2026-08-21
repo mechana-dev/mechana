@@ -26,9 +26,7 @@ loaded through the root `AGENTS.md` and does not affect other repositories.
 - [OCR plugin](ocr-plugin.md): PDF rasterization, distributed Tesseract, and Markdown assembly
 - [Blender plugin](blender-plugin.md): distributed animation-frame rendering and movie assembly
 - [Audio reverb plugin](audio-reverb-plugin.md): pure-Java partitioned convolution and WAV artifact workflow
-- [Native echo engine](audio-echo-engine.md): reusable delay-loop DSP and behavioral device models
-- [Native Leslie engine](audio-leslie-engine.md): real-time two-rotor moving-speaker model
-- [Mechana Audio](mechana-audio.md): future product/repository boundary, public integration contract, packaging, and migration checkpoint
+- [Mechana Audio](mechana-audio.md): implemented repository boundary and future generic integration adapter
 - [Glossary](glossary.md): shared terminology
 
 ## Maintenance
