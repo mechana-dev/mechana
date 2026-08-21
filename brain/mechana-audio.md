@@ -1,8 +1,8 @@
 # Mechana Audio product architecture
 
-Status: **accepted future direction; not yet implemented**
+Status: **extraction checkpoint prepared; repository creation and migration pending**
 
-Last reviewed: 2026-08-18
+Last reviewed: 2026-08-21
 
 Mechana Audio is the tentative name for a future repository and product in the
 Mechana family. It will give the production audio subsystem a clean commercial
@@ -115,6 +115,12 @@ engine testable without JUCE, supports alternate adapters, and reduces licensing
 coupling during a future commercial transition.
 
 ## Migration checkpoint
+
+The final monorepo checkpoint is recorded by annotated tag
+`architecture-baseline-1.3`. The tag intentionally excludes the unmerged benchmark
+launch-stability work in PR #69. Production audio remains authoritative in this
+repository until the private `mechana-dev/mechana-audio` repository exists, the
+history-preserving extraction is pushed, and independent verification passes.
 
 Do not extract the repository now. First complete and consolidate the current
 shared native audio core and Octave Fuzz architecture into a coherent subsystem.

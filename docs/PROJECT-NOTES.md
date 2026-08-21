@@ -2272,3 +2272,18 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Echo seek restarts now isolate playback generations and wait boundedly for the
   replaced thread, preventing its late broken pipe or cleanup from affecting the
   replacement preview. Added a regression that reproduces that exact stale-write race.
+
+## 2026-08-21 — Record the Mechana Audio extraction checkpoint
+
+- Designated annotated tag `architecture-baseline-1.3` as the last Mechana
+  monorepo checkpoint before production audio moves to Mechana Audio.
+- Included merged Echo additive-Mix PR #68 and preview-seek stability PR #70.
+  Benchmark launch-stability PR #69 remains intentionally unmerged pending its
+  native Intel release-artifact validation and is not part of the checkpoint.
+- The checkpoint retains production audio as authoritative in Mechana until the
+  private `mechana-dev/mechana-audio` repository is created, history is pushed,
+  and the extracted repository passes independent verification. No source removal
+  is authorized before those conditions are met.
+- The extraction must omit private calibration/reference media, including the
+  tracked measured `scott-rvb-first-pass-ir.wav`; prior Apache-2.0 grants remain
+  effective and no proprietary relicensing is implied by a private repository.
