@@ -80,6 +80,15 @@ class EchoProcessorTest {
 				"later repeat generations should be darker");
 	}
 
+	@Test
+	void analogMemoryCentersTheWetPathButRetainsStereoDry() {
+		EchoSettings settings = new EchoSettings(EchoSettings.Model.ANALOG, 10, 0, 1, 80, 4_500, 0.16, 0, 0, false);
+		double[][] audio = new double[2][300];
+		audio[0][0] = 0.8;
+		new EchoProcessor(10_000, 2).process(audio, audio[0].length, settings);
+		assertEquals(audio[0][100], audio[1][100], 1.0e-12);
+	}
+
 	private static double[][] alternatingBurst(int frames, int burstFrames) {
 		double[][] audio = new double[1][frames];
 		for (int index = 0; index < burstFrames; index++)

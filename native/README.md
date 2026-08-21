@@ -10,9 +10,9 @@ delay, feedback, repeat filtering, saturation, modulation, stereo routing, and
 neutral plus initial tape/BBD-style behavioral defaults. The temporary Echo
 adapter builds a separate AU; it does not use convolution. `apps/mechana-effects`
 builds a live-input macOS application with separate Reverb and Echo tabs.
-Analog Memory applies control-relative two-pole bandwidth loss, asymmetric soft
-limiting, and deterministic composite clock motion once per feedback generation;
-modulation rate and depth changes are smoothed.
+Analog Memory combines gentler recursive bandwidth loss with a stronger two-pole
+output-reconstruction filter, asymmetric soft limiting, deterministic composite clock
+motion, and a mono-centered normal wet path. Modulation rate and depth changes are smoothed.
 
 `audio-core` is the shared, JUCE-free foundation for real-time effects. It
 provides parameter smoothing, gain/equal-power mix and peak helpers, reusable
@@ -75,6 +75,15 @@ hardened runtime and secure timestamps, and may limit packaging to `arm64` or
 `x86_64`. After the one-time `notarytool` Keychain profile setup, run
 `packaging/macos/notarize-native-effects.sh <architecture>` to submit all five
 archives, staple supported bundles, rebuild their ZIPs, and validate the result.
+
+For local Echo AU development, package the current arm64 checkout and then run
+`packaging/macos/install-echo-au-development.sh`. The installer rejects stale
+artifacts by comparing the embedded commit and Echo DSP hash with the checkout,
+automatically selects an available Apple Development identity (or honors
+`MACOS_DEVELOPMENT_SIGNING_IDENTITY`), removes quarantine metadata, atomically
+replaces the user-level component, refreshes Audio Component registration, and
+runs the complete `auval -v aufx Echo Mchn` suite. This is the supported way to
+avoid validating an older component left in `~/Library/Audio/Plug-Ins/Components`.
 
 The build downloads the pinned JUCE 9.0.0 source into the ignored build tree.
 JUCE is not vendored and no JUCE type crosses into `reverb-core`. The AU component

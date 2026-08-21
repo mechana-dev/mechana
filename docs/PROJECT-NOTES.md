@@ -2215,3 +2215,27 @@ cloud providers remain future direction; see `brain/current-state.md` and
   `1478/1159 Hz` to `1428/902 Hz` (reference `1100/958 Hz`); HF energy ratio changed
   from `-29.0/-47.2 dB` to `-30.7/-60.2 dB` (reference `-45.7/-58.2 dB`). These are
   program-material diagnostics, not hard conformance targets or repository assets.
+
+## 2026-08-18 19:40 EDT — Rebalance Analog Memory first-repeat voicing
+
+- Split the overly coupled bandwidth model into gentler recursive user filtering and
+  a stronger two-pole BBD output-reconstruction stage. This darkens the first repeat
+  decisively without forcing the late tail far below the reference bandwidth.
+- Centered the normal Analog Memory wet path to reflect its mono hardware inspiration;
+  stereo dry and explicit ping-pong remain unchanged.
+- Private Watchtower measurements moved first/tenth centroid to `1063/855 Hz`
+  (reference `1100/958`) and HF ratio to `-40.2/-61.4 dB` (reference
+  `-45.7/-58.2`). Tail stereo correlation reached `1.000`, matching the effectively
+  mono reference, while mean decay remained `-8.15 dB/window` versus `-7.84`.
+## 2026-08-18 20:10 EDT — Make Echo AU development installation verifiable
+
+- Traced the apparent `auval` discovery problem to a stale user-installed Echo AU:
+  Apple validation worked, but it was exercising a different binary with no embedded
+  build marker rather than the newly packaged refinement.
+- Signed the current arm64 component with the available Apple Development identity,
+  installed it at user scope, refreshed Audio Component Registrar, verified commit
+  `832b42adec8797dc5170d26cfabfac8e42099662`, and passed Apple's complete Echo AU
+  validation including mono/stereo and all exercised sample rates.
+- Added a development installer that refuses stale packages, verifies build identity,
+  clears quarantine, performs atomic replacement with rollback, refreshes discovery,
+  and treats complete `auval` success as part of installation.

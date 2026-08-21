@@ -9,7 +9,8 @@ package dev.mechana.localreverb;
 final class EchoProcessor {
 	private final double[][] delay;
 	private final double[] lowPass;
-	private final double[] bbdLowPass;
+	private final double[] reconstructionOne;
+	private final double[] reconstructionTwo;
 	private final double[] highPassInput;
 	private final double[] highPassOutput;
 	private final int sampleRate;
@@ -29,7 +30,8 @@ final class EchoProcessor {
 		this.sampleRate = sampleRate;
 		delay = new double[channels][sampleRate * 4 + 4];
 		lowPass = new double[channels];
-		bbdLowPass = new double[channels];
+		reconstructionOne = new double[channels];
+		reconstructionTwo = new double[channels];
 		highPassInput = new double[channels];
 		highPassOutput = new double[channels];
 	}
@@ -38,8 +40,8 @@ final class EchoProcessor {
 		double baseDelay = settings.delayMilliseconds() * sampleRate / 1_000;
 		double depth = settings.modulationDepthMilliseconds() * sampleRate / 1_000;
 		double lowPassCoefficient = Math.exp(-2 * Math.PI * Math.max(1, settings.highCutHertz()) / sampleRate);
-		double bbdCutoff = Math.min(settings.highCutHertz() * 1.75, 12_000);
-		double bbdLowPassCoefficient = Math.exp(-2 * Math.PI * Math.max(1, bbdCutoff) / sampleRate);
+		double reconstructionCutoff = Math.min(settings.highCutHertz() * 0.55, 3_200);
+		double reconstructionCoefficient = Math.exp(-2 * Math.PI * Math.max(1, reconstructionCutoff) / sampleRate);
 		double highPassCoefficient = 1 / (1 + 2 * Math.PI * Math.max(1, settings.lowCutHertz()) / sampleRate);
 		double feedback = EchoSettings.feedbackCoefficient(settings.feedback());
 		double mixCoefficient = 1 - Math.exp(-1 / (0.01 * sampleRate));
@@ -76,15 +78,11 @@ final class EchoProcessor {
 				repeated[channel] = interpolate(delay[channel], writePosition - delaySamples);
 			for (int channel = 0; channel < audio.length; channel++) {
 				int sourceChannel = settings.pingPong() && audio.length == 2 ? 1 - channel : channel;
-				double repeat = repeated[sourceChannel];
+				double repeat = settings.model() == EchoSettings.Model.ANALOG && audio.length == 2
+						&& !settings.pingPong() ? 0.5 * (repeated[0] + repeated[1]) : repeated[sourceChannel];
 				if (settings.highCutHertz() > 0) {
 					lowPass[channel] = (1 - lowPassCoefficient) * repeat + lowPassCoefficient * lowPass[channel];
 					repeat = lowPass[channel];
-					if (settings.model() == EchoSettings.Model.ANALOG) {
-						bbdLowPass[channel] = (1 - bbdLowPassCoefficient) * repeat
-								+ bbdLowPassCoefficient * bbdLowPass[channel];
-						repeat = bbdLowPass[channel];
-					}
 				}
 				if (settings.lowCutHertz() > 0) {
 					double filtered = highPassCoefficient * (highPassOutput[channel] + repeat - highPassInput[channel]);
@@ -100,9 +98,17 @@ final class EchoProcessor {
 							? (Math.tanh(repeat * drive + bias) - Math.tanh(bias)) / (drive * smallSignalGain)
 							: Math.tanh(repeat * drive) / drive;
 				}
+				double wetOutput = repeat;
+				if (settings.model() == EchoSettings.Model.ANALOG && settings.highCutHertz() > 0) {
+					reconstructionOne[channel] = (1 - reconstructionCoefficient) * wetOutput
+							+ reconstructionCoefficient * reconstructionOne[channel];
+					reconstructionTwo[channel] = (1 - reconstructionCoefficient) * reconstructionOne[channel]
+							+ reconstructionCoefficient * reconstructionTwo[channel];
+					wetOutput = reconstructionTwo[channel];
+				}
 				double input = audio[channel][frame];
 				delay[channel][writePosition] = input + feedback * repeat;
-				audio[channel][frame] = input * (1 - smoothedMix) + repeat * smoothedMix;
+				audio[channel][frame] = input * (1 - smoothedMix) + wetOutput * smoothedMix;
 			}
 			smoothedMix += (settings.mix() - smoothedMix) * mixCoefficient;
 			writePosition = (writePosition + 1) % delay[0].length;
