@@ -2297,3 +2297,14 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - The extraction must omit private calibration/reference media, including the
   tracked measured `scott-rvb-first-pass-ir.wav`; prior Apache-2.0 grants remain
   effective and no proprietary relicensing is implied by a private repository.
+
+## 2026-08-21 — Finalize the Mechana Audio extraction checkpoint
+
+- Completed PR #69 native Intel validation, reconciled it with current `main`, and
+  reran repository-wide `mvn verify`, native CTest, arm64 and x86_64/Rosetta native
+  benchmarks, and `git diff --check` before merging it.
+- Designated annotated tag `architecture-baseline-1.4` as the authoritative last
+  monorepo checkpoint. The earlier 1.3 tag remains an immutable preparatory checkpoint.
+- The extraction baseline now includes PRs #67, #68, #69, #70, and #71. Source removal
+  remains gated on successful private-repository creation, history push, and independent
+  verification, and private calibration/reference media remains excluded.

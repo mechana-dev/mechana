@@ -117,13 +117,13 @@ coupling during a future commercial transition.
 ## Migration checkpoint
 
 The final monorepo checkpoint is recorded by annotated tag
-`architecture-baseline-1.3`. The tag intentionally excludes the unmerged benchmark
-launch-stability work in PR #69. Production audio remains authoritative in this
-repository until the private `mechana-dev/mechana-audio` repository exists, the
-history-preserving extraction is pushed, and independent verification passes.
+`architecture-baseline-1.4`. It supersedes the earlier preparatory 1.3 checkpoint
+by including PR #69 after native Intel release-artifact validation and repository-wide
+verification completed. Production audio remains authoritative in this repository
+until the private `mechana-dev/mechana-audio` repository exists, the history-preserving
+extraction is pushed, and independent verification passes.
 
-Do not extract the repository now. First complete and consolidate the current
-shared native audio core and Octave Fuzz architecture into a coherent subsystem.
+The shared native audio core and Octave Fuzz architecture are complete and consolidated.
 At migration time:
 
 1. Create and tag a clean Mechana checkpoint.
