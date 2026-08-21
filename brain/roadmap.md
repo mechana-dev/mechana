@@ -84,16 +84,12 @@ explicit superseding decision.
   provenance, secure distribution, operator policy, and production observability.
 - Client-side assembly may be added without changing artifact identity or lifecycle.
 
-## Future Mechana Audio extraction
+## Mechana Audio integration
 
-- Finish and consolidate the shared native audio core and Octave Fuzz architecture
-  before changing repository ownership.
-- At a clean tagged checkpoint, extract production native audio path history into
-  the future Mechana Audio repository, verify it independently, and remove the
-  migrated production paths here without maintaining duplicate source.
-- Add one descriptor-driven Java Mechana audio wrapper only after the released
-  engine's public integration contract is available. Keep production DSP in
-  Mechana Audio and dynamically expose its installed effect set.
-- Complete the ownership and third-party licensing audit and choose the future
-  product license before commercialization. See
-  [Mechana Audio](mechana-audio.md) for the full accepted direction.
+- The production audio stack was extracted at `architecture-baseline-1.4`; do not
+  reintroduce its DSP, Audio Units, standalone applications, or packaging here.
+- Add one descriptor-driven `mechana-plugin-audio` adapter after the released
+  engine contract is available. It must discover installed effects dynamically
+  and contain no DSP.
+- Keep the pure-Java distributed reverb plugin as a platform reference until the
+  generic adapter deliberately supersedes it. See [Mechana Audio](mechana-audio.md).

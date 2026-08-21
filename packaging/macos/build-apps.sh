@@ -12,7 +12,6 @@ APPS="${TARGET}/apps"
 SERVER_ICON="${TARGET}/MechanaServer.icns"
 WORKER_ICON="${TARGET}/MechanaWorkerControl.icns"
 JOB_ICON="${TARGET}/MechanaJobLauncher.icns"
-REVERB_ICON="${TARGET}/MechanaReverb.icns"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
 	print -u2 "macOS app images must be built on macOS."
@@ -26,11 +25,10 @@ for tool in mvn jpackage sips iconutil xcrun codesign; do
 done
 
 cd "${REPOSITORY}"
-mvn -pl macos-app-launcher,mechana-server,worker-host-agent,mechana-worker,worker-control-app,client-job-launcher,standalone-reverb-app,plugins/sleep-plugin -am package
+mvn -pl macos-app-launcher,mechana-server,worker-host-agent,mechana-worker,worker-control-app,client-job-launcher,plugins/sleep-plugin -am package
 
 rm -rf "${TARGET}"
-mkdir -p "${STAGING}/server" "${STAGING}/worker-control/deployment" "${STAGING}/job-launcher" \
-	"${STAGING}/standalone-reverb" "${APPS}"
+mkdir -p "${STAGING}/server" "${STAGING}/worker-control/deployment" "${STAGING}/job-launcher" "${APPS}"
 
 create_icon() {
 	local source="$1"
@@ -48,7 +46,6 @@ create_icon() {
 create_icon "${SCRIPT_DIR}/icons/mechana-server.png" "${SERVER_ICON}"
 create_icon "${SCRIPT_DIR}/icons/mechana-worker-control.png" "${WORKER_ICON}"
 create_icon "${SCRIPT_DIR}/icons/mechana-job-launcher.png" "${JOB_ICON}"
-create_icon "${SCRIPT_DIR}/icons/mechana-reverb.png" "${REVERB_ICON}"
 
 cp macos-app-launcher/target/mechana-macos-app-launcher.jar "${STAGING}/server/"
 cp mechana-server/target/mechana-server.jar "${STAGING}/server/"
@@ -62,10 +59,6 @@ cp worker-control-app/target/mechana-worker-control.jar "${STAGING}/worker-contr
 cp worker-host-agent/target/mechana-worker-host-agent.jar "${STAGING}/worker-control/deployment/"
 cp mechana-worker/target/mechana-worker.jar "${STAGING}/worker-control/deployment/"
 cp client-job-launcher/target/mechana-client-job-launcher.jar "${STAGING}/job-launcher/"
-cp standalone-reverb-app/target/mechana-standalone-reverb.jar "${STAGING}/standalone-reverb/"
-cp -R standalone-reverb-app/src/main/distribution/ir-profiles "${STAGING}/standalone-reverb/"
-cp -R standalone-reverb-app/src/main/distribution/capture "${STAGING}/standalone-reverb/"
-cp LICENSE NOTICE "${STAGING}/standalone-reverb/"
 
 jpackage --type app-image --dest "${APPS}" --input "${STAGING}/server" \
 	--name "Mechana Server" --main-jar mechana-macos-app-launcher.jar \
@@ -81,14 +74,6 @@ jpackage --type app-image --dest "${APPS}" --input "${STAGING}/job-launcher" \
 	--name "Mechana Job Launcher" --main-jar mechana-client-job-launcher.jar \
 	--main-class dev.mechana.launcher.ClientJobLauncherMain --icon "${JOB_ICON}" \
 	--mac-package-identifier dev.mechana.job-launcher --app-version 1.0.0
-jpackage --type app-image --dest "${APPS}" --input "${STAGING}/standalone-reverb" \
-	--name "Mechana Reverb" --main-jar mechana-standalone-reverb.jar \
-	--main-class dev.mechana.localreverb.StandaloneReverbMain --icon "${REVERB_ICON}" \
-	--mac-package-identifier dev.mechana.reverb --app-version 1.0.0
-
-/usr/bin/ditto -c -k --sequesterRsrc --keepParent "${APPS}/Mechana Reverb.app" \
-	"${TARGET}/Mechana-Reverb-macOS-arm64.zip"
-
 xcrun swiftc -O -target arm64-apple-macosx14.0 -framework Cocoa -framework WebKit \
 	"${SCRIPT_DIR}/MechanaServerApp.swift" \
 	-o "${APPS}/Mechana Server.app/Contents/MacOS/Mechana Server"

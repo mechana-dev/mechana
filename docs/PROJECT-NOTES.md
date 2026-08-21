@@ -2308,3 +2308,17 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - The extraction baseline now includes PRs #67, #68, #69, #70, and #71. Source removal
   remains gated on successful private-repository creation, history push, and independent
   verification, and private calibration/reference media remains excluded.
+
+## 2026-08-21 — Extract production audio to Mechana Audio
+
+- Created the private `mechana-dev/mechana-audio` repository from
+  `architecture-baseline-1.4` with path history preserved by `git filter-repo`.
+- Excluded the private measured Scott impulse response from all extracted history;
+  no Hendrix, EchoBoy, Watchtower, or other private calibration media was migrated.
+- Independently verified the pushed repository with all native core tests, arm64,
+  x86_64, and Rosetta benchmarks; full JUCE builds and packaging passed for both
+  architectures, and the freshly packaged arm64 Echo Audio Unit passed `auval`.
+- Removed the migrated native DSP, Audio Units, standalone product applications,
+  benchmarks, and audio-specific packaging from Mechana. Retained the pure-Java
+  distributed reverb plugin as a deliberate platform reference and documented the
+  future descriptor-driven `mechana-plugin-audio` adapter boundary.

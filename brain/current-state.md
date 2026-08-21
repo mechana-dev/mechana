@@ -52,10 +52,10 @@ Verified: 2026-08-09
 
 This file reports repository evidence, not desired future status.
 
-The accepted [Mechana Audio product/repository direction](mechana-audio.md) is
-planned only. Production native audio code has not been extracted, the public
-engine contract and generic Java wrapper are not implemented, and no final
-commercial/proprietary license has been chosen.
+The [Mechana Audio repository boundary](mechana-audio.md) is now implemented.
+Production native audio code and product packaging are authoritative in the
+private Mechana Audio repository. The generic Java wrapper is not implemented,
+and no final commercial/proprietary license has been chosen.
 
 ## 2026-08-06 long-running native-task reliability
 
@@ -76,152 +76,12 @@ commercial/proprietary license has been chosen.
 
 ## Present in the repository
 
-- A JUCE-free C++20 `leslie-core` provides a first real-time Classic Cabinet
-  moving-speaker model with a two-way crossover, independent horn/drum inertia,
-  Doppler and amplitude modulation, stereo microphone geometry, drive, smoothed
-  continuous parameters, and zero reported host latency. A separate JUCE Audio
-  Unit exposes Stop/Slow/Fast, Drive, Horn Balance, Mic Distance, Stereo Width,
-  Crossover, Wet, Dry, Bypass, and Reset. The compact native live-input host adds
-  a Leslie tab and processes only the selected effect. Its package is explicitly
-  named as a live host so it cannot replace the full file-oriented application.
-  The full application retains its shared file, Preview/AirPlay, Apply, output,
-  History, and IR-creation workflow and now includes a functional Leslie tab.
-  Leslie is registered separately in the four-rate native benchmark. This is an initial behavioral
-  model requiring listening calibration against a real cabinet, not a measured
-  clone or manufacturer-endorsed emulation. See `brain/audio-leslie-engine.md`.
-
-- A JUCE-free C++20 `echo-core` provides a zero-latency, allocation-free-after-prepare
-  real-time delay loop with fractional delay, feedback, repeat-path low/high cuts,
-  saturation, modulation, stereo ping-pong, wet/dry mix, bypass, and smoothed delay
-  changes. Neutral, Vintage Tape, and Analog Memory starting models are code-owned
-  parameter sets; the latter two are behavioral approximations rather than measured
-  captures or claims of exact hardware reproduction. Native tests cover repeat timing,
-  feedback decay, stereo routing, optional processing stability, model invariants,
-  and reported latency. A separate JUCE Audio Unit exposes the Echo engine, and a
-  live-input `Mechana Effects` macOS app presents Reverb and Echo on separate tabs.
-  The Echo tab supplies Echoplex-style Tape and Deluxe Memory Man-style Analog
-  development presets; these names describe intended character, not measured clones.
-  Their listening-calibrated starting Mix is 26%. Echo uses a shared, smoothed additive
-  mixer that leaves dry at unity and scales only the repeat, plus a shaped, strictly
-  sub-unity feedback mapping. Its repeat filtering
-  and unity-small-signal-gain coloration are inside the feedback loop, producing
-  progressive degradation without the former quiet-signal gain error. Analog Memory
-  adds a strong two-pole, control-relative output reconstruction filter and deterministic
-  low-frequency clock motion with subtle flutter and smoothed wander. Modulation rate
-  and depth changes are smoothed. Its normal wet path is mono-centered while stereo dry
-  and explicit ping-pong remain available. The file renderer mirrors this exact order. The Echo Audio
-  Unit displays Feedback, Mix, and modulation depth as percentages, migrates legacy
-  Wet/Dry state to the closest unity-dry Mix ratio, and reports a conservative host tail through -100 dB amplitude plus
-  one safety repeat, capped at 30 seconds.
-
-- An initial native Audio Unit POC under `native/` separates a JUCE-free C++20
-  reverb core from a thin JUCE 9 adapter. The core owns 32-bit float real/half-spectrum
-  FFT convolution, IR
-  sample-rate preparation, wet/dry mixing, and pre-delay and performs no allocation
-  after preparation. The adapter supplies AU host integration, ten automatable
-  parameters, project-state persistence, a functional editor, six bundled factory
-  IRs, and custom WAV import. Native preparation now covers sample-rate conversion,
-  early/late shaping, attack, decay shortening, wet EQ, and captured-response
-  calibration. Long responses use non-uniform 128/512/2048-sample partitions;
-  macOS builds use Accelerate/vDSP on both Apple Silicon and Intel. Response
-  preparation and caching run in the background, with click-free engine exchange
-  on the audio thread. Separate Apple Silicon and Intel development builds pass
-  the core numerical and long-response performance tests. It is not a release:
-  durable user-library management, smoothing, automatic peak-protection parity,
-  Universal packaging remains future work. Architecture-specific native release
-  packaging supports Developer ID signing, hardened runtime, secure timestamps,
-  Apple notarization, ticket stapling for the app and AU components, and local
-  validation. The benchmark app also stabilizes launches from temporary
-  Gatekeeper/archive locations by reopening an intact signed copy from user
-  Application Support, while release validation requires matching Developer ID
-  teams for the app and its nested executables. Native macOS deliverables declare macOS 12.0 as their minimum
-  deployment target for Intel Monterey compatibility. JUCE is
-  fetched only into the ignored build directory and is not part of the core.
-  A JUCE-free native benchmark with embedded deterministic audio now reports
-  per-effect preparation, average/p95/maximum block milliseconds, deadline use,
-  and median real-time load. Convolution Reverb and Modeled Echo are registered as
-  separate effects with separate four-sample-rate summary tables. The suite runs
-  both arm64 and x86_64 on Apple Silicon
-  and x86_64 on Intel; timings are informational rather than machine-independent
-  pass/fail thresholds.
-
-- A pure-Java `audio-convolution-reverb` POC accepts staged dry and IR WAV
-  artifacts, performs single-worker uniform partitioned FFT convolution, and
-  publishes a 24-bit WAV through server-local storage. The generic launcher
-  descriptor exposes WAV inputs, output name, wet/dry, pre-delay, wet-path
-  low-cut/high-cut EQ, neutral-bypass early/late levels, attack, decay shortening,
-  IR normalization, peak protection, and headroom. Both EQ
-  filters default off, so existing jobs and IR profiles retain their sound. IR normalization safely attenuates
-  peaks above -1 dBFS without boosting quieter measured responses. Standalone
-  library profiles have checksum-bound, non-destructive, stereo-linked energy
-  calibration metadata. Preview and Apply consume the same calibration scalar and
-  streaming look-ahead peak protector; factory, imported, and generated profiles
-  are calibrated automatically without rewriting their WAVs. A reusable
-  pure-Java helper and standalone-app workflow deconvolve recorded wet sweep
-  returns into aligned, tail-trimmed IRs. Multi-worker contribution assembly
-  remains future work.
-- Reverb dry-audio import accepts WAV/WAVE, M4A with AAC or ALAC, raw AAC,
-  fragmented or conventional MP4 containing AAC audio, and AIFF, and
-  converts them to a 24-bit WAV at the selected IR's sample rate before worker
-  staging. AAC/M4A decoding and resampling are pure Java. IR capture and
-  convolution inputs remain WAV-based.
-- A separate `standalone-reverb-app` module runs that exact plugin class through
-  a single-threaded local task context. Its Swing UI contains no server or worker
-  settings, retains reloadable per-job JSON state and human-readable reports in a
-  selected artifacts root, supports cancellation and Finder reveal, and packages
-  as a macOS app with a bundled Java runtime. The app can stream an existing dry
-  recording through the selected IR to the default system audio output with
-  play, pause/resume, and stop controls; this preview creates no job artifact and
-  retains the complete reverb tail. Wet/dry and pre-delay edits take effect during playback with short smoothed
-  transitions; wet low/high cuts also update during active playback. The pre-delay slider is limited to 0–200 ms (with a numeric
-  override). Preview preserves the dry recording's native sample rate and keeps
-  content-addressed, sample-rate-matched IR variants in the user's cache;
-  selecting a mono or stereo IR during playback prepares the needed variant in
-  the background and crossfades it into the active preview. Variants are generated
-  only on demand, and the status bar identifies that one-time work. IR generation
-  and the user-facing profile library continue to expose one master file. A new
-  packaged application build clears regular entries from its owned IR cache on
-  first launch; subsequent launches of that build retain them.
-- The standalone app maintains a canonical IR profile library under the user's
-  Application Support directory. Factory profiles, validated user imports, and
-  generated profiles appear in one selector with Add and Manage actions. Manage
-  opens the full library in a scrolling list, supports rename/delete for added profiles,
-  exports any profile, and keeps factory profiles read-only. Factory profiles may
-  be exported but cannot be revealed through Manage. Sweep generation uses temporary
-  storage, then offers library addition with an editable
-  derived name, explicit Save to File, or discard. Manage can rename or delete
-  user-added profiles but never factory profiles. Its
-  grouped slider/numeric UI provides separate neutral resets for mix/timing,
-  captured-response shaping, and wet EQ. Preview transport controls use conventional
-  play/pause/stop icons near the inputs and include a click-smoothed live bypass to
-  the unprocessed source. Changing the selected dry-audio file during playback
-  automatically restarts preview with that source after a short debounce. Local
-  history presents only timestamp, output filename, and a compact settings summary;
-  its always-visible toolbar enables playback, Finder reveal, and confirmed job
-  deletion when a row is selected. The dedicated Reverb icon also appears in the
-  window header. UI language calls the artifact root the Output folder and avoids
-  worker/runtime terminology.
-- The standalone consumer UI does not expose IR normalization, peak protection, or
-  headroom. IR peak safety and streaming peak protection are always enabled with
-  fixed 1 dB headroom; compatibility parameters remain in persisted jobs and the
-  general worker plugin contract.
-- Preview controls are left-aligned beneath the inputs and the offline Apply action
-  is isolated on the right. The Loop checkbox repeats the complete selected clip
-  plus its reverb tail until Stop; current live settings and selected IR carry into
-  subsequent iterations. A preview timeline shows elapsed/total source time and
-  supports drag or click seeking with hidden DSP pre-roll to rebuild convolution,
-  pre-delay, EQ, and limiter state before audible playback resumes. Seek restarts
-  are generation-isolated, so a closing audio helper from the replaced preview
-  cannot report a stale broken-pipe error or overwrite the replacement's state.
-  The native Core Audio helper confirms device initialization before Java sends
-  PCM, and replaced helpers terminate boundedly before the new session takes over.
-  Echo seek restarts use the same generation isolation as Reverb, so an old Echo
-  helper cannot surface a stale broken-pipe failure after its replacement starts.
-- Preview and Apply peak protection use the same stereo-linked streaming gain
-  limiter with 10 ms look-ahead and a smooth release. The normal Apply path no
-  longer substitutes a whole-file gain, allowing preview captures and 24-bit
-  renders to remain sonically equivalent apart from encoding and negligible
-  floating-point differences.
+- The pure-Java `audio-convolution-reverb` plugin remains as an intentional
+  distributed-platform reference. It accepts staged dry and IR WAV artifacts,
+  performs single-worker partitioned FFT convolution, and publishes a 24-bit WAV
+  through platform storage. Production DSP, Audio Units, standalone audio
+  applications, benchmarks, and audio packaging now live only in Mechana Audio.
+  Multi-worker contribution assembly remains future platform work.
 
 - A multi-module Maven build with API, protocol, coordinator, worker, runtime,
   server, and client modules plus a nested `plugins/` reactor containing sleep,
