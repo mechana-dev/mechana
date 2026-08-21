@@ -23,6 +23,7 @@ public:
         const auto wet = smoother_.next();
         return { 1.0F - wet, wet };
     }
+    [[nodiscard]] DryWetGains nextAdditive() noexcept { return { 1.0F, smoother_.next() }; }
     [[nodiscard]] float currentMix() const noexcept { return smoother_.current(); }
 
 private:

@@ -43,16 +43,17 @@ sources guide a credible product-owned model, not a proprietary implementation c
 
 On the approved files, the original reference measured -7.84 dB per 350 ms tail window
 and the old Mechana render -2.73 dB. The calibrated engine measured -8.00 dB, with its
-tail centroid falling from about 1481 Hz to 1011 Hz over ten windows. The new 26% linear
-Mix has 74% dry gain by definition; unlike the old independent controls, it cannot also
-match a reference direct gain near 89% without separate makeup gain.
+tail centroid falling from about 1481 Hz to 1011 Hz over ten windows. The 26% additive
+Mix now retains 100% dry gain and adds the repeat at 26%, preventing the direct signal
+from dropping when Echo is engaged. Summed peaks may exceed unity and are a separate
+headroom/peak-protection concern.
 
 The file-oriented Mechana Effects application mirrors these native Echo semantics.
 Its standalone regression suite locks the 36% Feedback coefficient,
-unity-small-signal Analog Memory coloration, linear Mix endpoints, and smoothed Mix
+unity-small-signal Analog Memory coloration, additive Mix endpoints, and smoothed Mix
 automation so an app release cannot silently fall back to raw feedback. Existing app
 preferences containing separate Wet and Dry values migrate to
-`Mix = Wet / (Wet + Dry)`; new and reset Analog Memory settings use 26% Mix.
+`Mix = Wet / Dry`, clamped to 100%; new and reset Analog Memory settings use 26% Mix.
 
 Native release packaging rebuilds the Echo AU from the selected architecture build
 immediately before staging. Each signed component contains `MechanaBuild.txt` with the

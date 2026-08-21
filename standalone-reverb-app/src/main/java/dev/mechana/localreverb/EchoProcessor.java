@@ -108,7 +108,7 @@ final class EchoProcessor {
 				}
 				double input = audio[channel][frame];
 				delay[channel][writePosition] = input + feedback * repeat;
-				audio[channel][frame] = input * (1 - smoothedMix) + wetOutput * smoothedMix;
+				audio[channel][frame] = input + wetOutput * smoothedMix;
 			}
 			smoothedMix += (settings.mix() - smoothedMix) * mixCoefficient;
 			writePosition = (writePosition + 1) % delay[0].length;

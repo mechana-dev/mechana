@@ -41,7 +41,7 @@ class EchoFileRendererTest {
 			assertTrue(reader.format().frames() > 100);
 			double[][] samples = new double[1][(int) reader.format().frames()];
 			assertEquals(reader.format().frames(), reader.read(samples, 0, samples[0].length));
-			assertEquals(0, samples[0][0], 1.0e-4);
+			assertEquals(1, samples[0][0], 1.0e-4);
 			assertEquals(1, samples[0][10], 1.0e-4);
 			assertEquals(EchoSettings.feedbackCoefficient(0.5), samples[0][20], 1.0e-4);
 		}
