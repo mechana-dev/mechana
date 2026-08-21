@@ -2239,3 +2239,10 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added a development installer that refuses stale packages, verifies build identity,
   clears quarantine, performs atomic replacement with rollback, refreshes discovery,
   and treats complete `auval` success as part of installation.
+## 2026-08-21 01:17:41 EDT — Isolate preview seek generations
+
+- Prevented a scrub restart from reactivating the cancellation state of the preview
+  it replaces. Stale Core Audio helper failures, cleanup, and completion callbacks
+  can no longer surface a `Broken pipe` dialog or overwrite the replacement session.
+- Added a regression that holds the replaced sink past the restart timeout, then
+  releases its simulated broken pipe while the replacement preview remains active.

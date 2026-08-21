@@ -50,6 +50,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	private static final double NORMALIZED_IR_PEAK = Math.pow(10, -1.0 / 20);
 	private final AtomicBoolean stopped = new AtomicBoolean(true);
 	private final AtomicLong irLoadSequence = new AtomicLong();
+	private final AtomicLong playbackSequence = new AtomicLong();
 	private final ImpulseResponseCache impulseResponseCache;
 	private final Object pauseLock = new Object();
 	private volatile AudioSinkFactory audioSinkFactory = javaSoundSink();
@@ -158,6 +159,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 				return;
 			}
 		stopped.set(false);
+		long playback = playbackSequence.incrementAndGet();
 		paused = false;
 		selectedIrPath = settings.irPath();
 		selectedCalibrationGain = settings.irCalibrationGain();
@@ -165,22 +167,25 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 				settings.highCutHertz(), settings.earlyLevel(), settings.lateLevel(), settings.attackMilliseconds(),
 				settings.decayLengthPercent(), settings.normalizeIr(), settings.peakProtection(),
 				settings.headroomDecibels());
-		Thread thread = Thread.ofVirtual().name("mechana-reverb-preview").start(() -> {
+		Thread thread = Thread.ofVirtual().name("mechana-reverb-preview").unstarted(() -> {
 			state.accept(State.PREPARING);
 			try {
-				streamRepeated(settings, audioSinkFactory, state, -1, startFraction);
-				if (!stopped.get())
+				streamRepeated(settings, audioSinkFactory, state, -1, startFraction, playback);
+				if (!cancelled(playback))
 					state.accept(State.FINISHED);
 			} catch (IOException | RuntimeException playbackFailure) {
-				if (!stopped.get())
+				if (!cancelled(playback))
 					failure.accept(rootMessage(playbackFailure));
 			} finally {
-				stopped.set(true);
-				activeSink = null;
-				playbackThread = null;
+				if (playbackSequence.compareAndSet(playback, playback + 1)) {
+					stopped.set(true);
+					activeSink = null;
+					playbackThread = null;
+				}
 			}
 		});
 		playbackThread = thread;
+		thread.start();
 	}
 
 	void onPosition(Consumer<Position> listener) {
@@ -234,6 +239,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	}
 
 	void stop() {
+		playbackSequence.incrementAndGet();
 		stopped.set(true);
 		irLoadSequence.incrementAndGet();
 		pendingBank = null;
@@ -298,16 +304,21 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 	}
 
 	private void streamRepeated(Settings settings, AudioSinkFactory sinkFactory, Consumer<State> state,
-			int maximumIterations, double firstStartFraction) throws IOException {
+			int maximumIterations, double firstStartFraction, long playback) throws IOException {
 		int iteration = 0;
 		do {
-			stream(settings, sinkFactory, state, iteration == 0 ? firstStartFraction : 0);
+			stream(settings, sinkFactory, state, iteration == 0 ? firstStartFraction : 0, playback);
 			iteration++;
-		} while (!stopped.get() && looping && (maximumIterations < 0 || iteration < maximumIterations));
+		} while (!cancelled(playback) && looping && (maximumIterations < 0 || iteration < maximumIterations));
 	}
 
 	private void stream(Settings settings, AudioSinkFactory sinkFactory, Consumer<State> state, double startFraction)
 			throws IOException {
+		stream(settings, sinkFactory, state, startFraction, playbackSequence.get());
+	}
+
+	private void stream(Settings settings, AudioSinkFactory sinkFactory, Consumer<State> state, double startFraction,
+			long playback) throws IOException {
 		Path temporaryDirectory = Files.createTempDirectory("mechana-reverb-preview-");
 		Path converted = temporaryDirectory.resolve("dry.wav");
 		try {
@@ -332,25 +343,30 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 				long preRollFrame = Math.max(0, startFrame - ir.length() - preDelay - format.sampleRate());
 				source.seekFrame(preRollFrame);
 				try (AudioSink sink = sinkFactory.open(format.sampleRate(), outputChannels)) {
+					if (cancelled(playback))
+						return;
 					activeSink = sink;
 					sink.start();
 					state.accept(State.PLAYING);
 					process(source, format, new ConvolutionBank(ir, outputChannels), outputChannels, outputFrames,
-							preRollFrame, startFrame, sink);
-					if (!stopped.get())
+							preRollFrame, startFrame, sink, playback);
+					if (!cancelled(playback))
 						sink.drain();
 				}
 			}
 		} finally {
-			previewSampleRate = 0;
-			pendingBank = null;
+			if (playbackSequence.get() == playback) {
+				previewSampleRate = 0;
+				pendingBank = null;
+			}
 			Files.deleteIfExists(converted);
 			Files.deleteIfExists(temporaryDirectory);
 		}
 	}
 
 	private void process(WavFile.Reader source, WavFile.Format format, ConvolutionBank initialBank, int outputChannels,
-			long outputFrames, long preRollFrame, long audibleStartFrame, AudioSink sink) throws IOException {
+			long outputFrames, long preRollFrame, long audibleStartFrame, AudioSink sink, long playback)
+			throws IOException {
 		VariableDelayLine[] delays = new VariableDelayLine[outputChannels];
 		WetEqualizer[] equalizers = new WetEqualizer[outputChannels];
 		for (int channel = 0; channel < outputChannels; channel++)
@@ -378,9 +394,9 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		ConvolutionBank transitionBank = null;
 		int crossfadeFrame = 0;
 		int crossfadeFrames = Math.max(1, format.sampleRate() * IR_CROSSFADE_MILLISECONDS / 1000);
-		while (outputPosition < requiredOutputFrames + limiter.latencyFrames() && !stopped.get()) {
-			awaitResume();
-			if (stopped.get())
+		while (outputPosition < requiredOutputFrames + limiter.latencyFrames() && !cancelled(playback)) {
+			awaitResume(playback);
+			if (cancelled(playback))
 				break;
 			for (double[] channel : input)
 				Arrays.fill(channel, 0);
@@ -534,9 +550,9 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 		return ImpulseResponseShaper.shape(ir, new ImpulseResponseShaper.Options(early, late, attack, decay));
 	}
 
-	private void awaitResume() throws IOException {
+	private void awaitResume(long playback) throws IOException {
 		synchronized (pauseLock) {
-			while (paused && !stopped.get())
+			while (paused && !cancelled(playback))
 				try {
 					pauseLock.wait();
 				} catch (InterruptedException interrupted) {
@@ -544,6 +560,10 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 					throw new IOException("Preview interrupted", interrupted);
 				}
 		}
+	}
+
+	private boolean cancelled(long playback) {
+		return stopped.get() || playbackSequence.get() != playback;
 	}
 
 	private static double dryEndEnvelope(long frame, long totalFrames, int sampleRate) {
@@ -606,7 +626,7 @@ final class ReverbPreviewPlayer implements AutoCloseable {
 				settings.headroomDecibels());
 		player.streamRepeated(settings, (sampleRate, channels) -> new MemoryAudioSink(output, () -> {
 		}), ignored -> {
-		}, iterations, 0);
+		}, iterations, 0, player.playbackSequence.get());
 		return output.toByteArray();
 	}
 
