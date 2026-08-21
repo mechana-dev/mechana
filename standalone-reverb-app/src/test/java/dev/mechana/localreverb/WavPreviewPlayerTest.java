@@ -50,7 +50,7 @@ class WavPreviewPlayerTest {
 		assertEquals(null, failure.get());
 		byte[] pcm = played.toByteArray();
 		assertTrue(pcm.length > 200, "Preview must stream beyond the dry source to preserve the tail");
-		assertEquals(8_192, sample(pcm, 0), 1);
+		assertEquals(16_384, sample(pcm, 0), 1);
 		assertEquals(8_192, sample(pcm, 10), 1);
 		assertEquals(Math.round(8_192 * EchoSettings.feedbackCoefficient(0.5)), sample(pcm, 20), 1);
 	}

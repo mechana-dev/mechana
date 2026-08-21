@@ -19,7 +19,7 @@ class EchoProcessorTest {
 		audio[0][0] = 0.5;
 		new EchoProcessor(10_000, 1).process(audio, audio[0].length, settings);
 		double feedback = EchoSettings.feedbackCoefficient(0.5);
-		assertEquals(0, audio[0][0], 1.0e-9);
+		assertEquals(0.5, audio[0][0], 1.0e-9);
 		assertEquals(0.5, audio[0][100], 1.0e-6);
 		assertEquals(0.5 * feedback, audio[0][200], 1.0e-6);
 	}
@@ -27,7 +27,7 @@ class EchoProcessorTest {
 	@Test
 	void matchesNativeFeedbackCalibrationAndLegacyMixMigration() {
 		assertEquals(0.419, EchoSettings.feedbackCoefficient(0.36), 0.01);
-		assertEquals(0.26 / 1.08, EchoSettings.mixFromLegacy(0.26, 0.82), 1.0e-12);
+		assertEquals(0.26 / 0.82, EchoSettings.mixFromLegacy(0.26, 0.82), 1.0e-12);
 		assertEquals(0, EchoSettings.mixFromLegacy(0, 0), 0);
 	}
 
@@ -42,8 +42,18 @@ class EchoProcessorTest {
 		double[][] automated = new double[1][200];
 		java.util.Arrays.fill(automated[0], 0.5);
 		processor.process(automated, automated[0].length, wet);
-		assertTrue(automated[0][0] > 0.49, "Mix automation jumped instead of smoothing");
-		assertTrue(automated[0][199] < automated[0][0], "Mix did not move toward its wet target");
+		assertEquals(0.5, automated[0][0], 1.0e-12, "Mix automation attenuated dry before the first repeat");
+		assertEquals(0.5, automated[0][199], 1.0e-12, "Mix automation attenuated unity dry");
+	}
+
+	@Test
+	void additiveMixRetainsDryAndScalesOnlyTheRepeat() {
+		EchoSettings settings = new EchoSettings(EchoSettings.Model.TAPE, 10, 0, 0.5, 0, 0, 0, 0, 0, false);
+		double[][] audio = new double[1][200];
+		audio[0][0] = 0.5;
+		new EchoProcessor(10_000, 1).process(audio, audio[0].length, settings);
+		assertEquals(0.5, audio[0][0], 1.0e-12);
+		assertEquals(0.25, audio[0][100], 1.0e-9);
 	}
 
 	@Test

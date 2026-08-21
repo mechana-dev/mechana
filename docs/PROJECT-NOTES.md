@@ -2239,3 +2239,13 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added a development installer that refuses stale packages, verifies build identity,
   clears quarantine, performs atomic replacement with rollback, refreshes discovery,
   and treats complete `auval` success as part of installation.
+
+## 2026-08-21 00:42:30 EDT — Make Echo Mix additive
+
+- Changed native and file-rendered Echo mixing to retain the direct signal at unity
+  while Mix scales only the delayed signal. Before the first repeat arrives, engaged
+  Echo now produces the exact dry input at every nonzero Mix setting.
+- Preserved 10 ms Mix smoothing, updated legacy Wet/Dry migration to a unity-dry
+  `Wet / Dry` ratio, and added native and Java regressions for additive endpoints.
+- Kept output headroom and peak protection as a separate follow-up concern; additive
+  dry plus Echo can exceed unity on correlated peaks.

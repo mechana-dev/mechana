@@ -317,7 +317,7 @@ final class StandaloneReverbFrame extends JFrame {
 		addRow(panel, c, "Echo model", echoModel);
 		addRow(panel, c, "Delay (1–1500 ms slider)", sliderWithOverride(echoDelaySlider, echoDelay));
 		addRow(panel, c, "Feedback (0–0.95 slider)", sliderWithOverride(echoFeedbackSlider, echoFeedback));
-		addRow(panel, c, "Mix (0% dry – 100% wet)", sliderWithOverride(echoMixSlider, echoMix));
+		addRow(panel, c, "Mix (Echo level; dry stays full)", sliderWithOverride(echoMixSlider, echoMix));
 		addSection(panel, c, "Repeat color");
 		addRow(panel, c, "Low-cut (Hz, 0 = off)", sliderWithOverride(echoLowCutSlider, echoLowCut));
 		addRow(panel, c, "High-cut (Hz, 0 = off)", sliderWithOverride(echoHighCutSlider, echoHighCut));

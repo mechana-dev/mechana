@@ -8,6 +8,8 @@
 #include <mechana/echo/Models.h>
 #include <mechana/echo/Tail.h>
 
+#include <algorithm>
+
 namespace {
 constexpr std::array modelNames { "Echoplex-style Tape", "Deluxe Memory Man-style Analog" };
 
@@ -173,8 +175,8 @@ void MechanaEchoAudioProcessor::setStateInformation(const void* data, const int 
             if (wetNode.isValid() && dryNode.isValid()) {
                 const auto wet = static_cast<float>(wetNode.getProperty("value", 0.0F));
                 const auto dry = static_cast<float>(dryNode.getProperty("value", 1.0F));
-                const auto sum = wet + dry;
-                migratedMix = sum > 0.0F ? wet / sum : 0.0F;
+                migratedMix = dry > 0.0F ? std::clamp(wet / dry, 0.0F, 1.0F)
+                                         : std::clamp(wet, 0.0F, 1.0F);
             }
         }
         parameters_.replaceState(restored);

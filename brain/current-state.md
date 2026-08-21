@@ -101,8 +101,9 @@ commercial/proprietary license has been chosen.
   live-input `Mechana Effects` macOS app presents Reverb and Echo on separate tabs.
   The Echo tab supplies Echoplex-style Tape and Deluxe Memory Man-style Analog
   development presets; these names describe intended character, not measured clones.
-  Their listening-calibrated starting Mix is 26%. Echo uses a shared, smoothed linear
-  dry/wet mixer and a shaped, strictly sub-unity feedback mapping. Its repeat filtering
+  Their listening-calibrated starting Mix is 26%. Echo uses a shared, smoothed additive
+  mixer that leaves dry at unity and scales only the repeat, plus a shaped, strictly
+  sub-unity feedback mapping. Its repeat filtering
   and unity-small-signal-gain coloration are inside the feedback loop, producing
   progressive degradation without the former quiet-signal gain error. Analog Memory
   adds a strong two-pole, control-relative output reconstruction filter and deterministic
@@ -110,7 +111,7 @@ commercial/proprietary license has been chosen.
   and depth changes are smoothed. Its normal wet path is mono-centered while stereo dry
   and explicit ping-pong remain available. The file renderer mirrors this exact order. The Echo Audio
   Unit displays Feedback, Mix, and modulation depth as percentages, migrates legacy
-  Wet/Dry state to the closest normalized Mix ratio, and reports a conservative host tail through -100 dB amplitude plus
+  Wet/Dry state to the closest unity-dry Mix ratio, and reports a conservative host tail through -100 dB amplitude plus
   one safety repeat, capped at 30 seconds.
 
 - An initial native Audio Unit POC under `native/` separates a JUCE-free C++20

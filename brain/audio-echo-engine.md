@@ -42,15 +42,16 @@ disabling High Cut disables both paths. Analog Memory centers the normal wet pat
 match its mono hardware inspiration while dry stereo and explicit ping-pong remain
 available. Noise and clock feedthrough are not currently synthesized.
 Modulation depth and rate are smoothed, and the fixed seed makes reset renders
-repeatable. A shared linear Mix primitive supplies `dry = 1 - mix`, `wet = mix` with
-10 ms smoothing; output peak protection remains a separate concern.
+repeatable. Echo uses the shared smoothed Mix primitive additively: `dry = 1`,
+`wet = mix`, with a 10 ms ramp. Engaging Echo therefore never attenuates the direct
+signal before a repeat arrives; output headroom and peak protection remain separate concerns.
 
 A separate JUCE
 Audio Unit adapter exposes the two colored models, automatable controls, host-state
 persistence, and a custom editor. Feedback, Mix, and modulation depth are presented
 as percentages. Legacy Wet/Dry IDs remain non-automatable metadata parameters so old
-Logic state can migrate to `mix = wet / (wet + dry)` without shifting prior parameter
-indices. A single linear control cannot preserve legacy makeup gain exactly. The AU
+Logic state can migrate to the closest unity-dry ratio, `mix = wet / dry`, clamped to
+the supported range, without shifting prior parameter indices. The AU
 conservatively reports decay through
 -100 dB amplitude plus one safety repeat, capped at 30 seconds, so hosts that honor
 effect tails do not stop an otherwise orderly quiet decay at an audible boundary.
