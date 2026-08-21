@@ -2246,3 +2246,11 @@ cloud providers remain future direction; see `brain/current-state.md` and
   can no longer surface a `Broken pipe` dialog or overwrite the replacement session.
 - Added a regression that holds the replaced sink past the restart timeout, then
   releases its simulated broken pipe while the replacement preview remains active.
+
+## 2026-08-21 01:36:15 EDT — Handshake Core Audio preview startup
+
+- Traced the remaining Intel/Rosetta seek failure to the replacement native helper
+  exiting while the Java producer was already writing PCM. The helper now confirms
+  that its Core Audio device and buffers are ready before Java returns the sink.
+- Made helper cleanup wait boundedly for process termination, preventing rapid seeks
+  from overlapping the old and replacement Core Audio device lifecycles.
