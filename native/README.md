@@ -75,6 +75,11 @@ hardened runtime and secure timestamps, and may limit packaging to `arm64` or
 `x86_64`. After the one-time `notarytool` Keychain profile setup, run
 `packaging/macos/notarize-native-effects.sh <architecture>` to submit all five
 archives, staple supported bundles, rebuild their ZIPs, and validate the result.
+The benchmark launcher detects Gatekeeper/App Translocation and archive-preview
+temporary locations, copies its intact signed bundle to user Application Support,
+and reopens from there before executing nested benchmarks. Packaging signs every
+nested benchmark before the app, verifies a common Developer ID team and hardened
+runtime for release identities, and rejects AppleDouble metadata in the ZIP.
 
 For local Echo AU development, package the current arm64 checkout and then run
 `packaging/macos/install-echo-au-development.sh`. The installer rejects stale

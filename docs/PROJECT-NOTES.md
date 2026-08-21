@@ -2239,3 +2239,13 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added a development installer that refuses stale packages, verifies build identity,
   clears quarantine, performs atomic replacement with rollback, refreshes discovery,
   and treats complete `auval` success as part of installation.
+
+## 2026-08-21 01:10:00 EDT — Stabilize and verify the benchmark application
+
+- Diagnosed an Intel benchmark launcher crash whose report showed the app executing
+  from `/private/var/folders` and a force-unmounted backing vnode. The launcher now
+  copies a temporarily hosted bundle to user Application Support and reopens the
+  stable copy before starting benchmark processes.
+- Changed benchmark ZIP creation to suppress and reject AppleDouble metadata.
+- Added release gates requiring a Developer ID Application signature, hardened
+  runtime, and one matching team identity across the app and every nested benchmark.

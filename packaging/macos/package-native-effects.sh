@@ -31,6 +31,7 @@ create_benchmark_app() {
 <key>CFBundleExecutable</key><string>Run Benchmarks</string>
 <key>CFBundleIdentifier</key><string>dev.mechana.effect-benchmarks.${architecture}</string>
 <key>CFBundleName</key><string>Mechana Effect Benchmarks</string>
+<key>CFBundleDisplayName</key><string>Mechana Effect Benchmarks</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>1.0</string>
 <key>CFBundleVersion</key><string>1</string>
@@ -38,6 +39,30 @@ create_benchmark_app() {
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 EOF
+}
+
+validate_benchmark_app() {
+	local app="$1"
+	local architecture="$2"
+	local resources="${app}/Contents/Resources/${architecture}"
+	/usr/bin/plutil -lint "${app}/Contents/Info.plist"
+	/usr/bin/codesign --verify --deep --strict --verbose=2 "${app}"
+	for benchmark in "${resources}"/mechana_*_benchmark(N); do
+		/usr/bin/codesign --verify --strict --verbose=2 "${benchmark}"
+	done
+	if [[ "${SIGNING_IDENTITY}" != "-" ]]; then
+		local app_details app_team
+		app_details="$(/usr/bin/codesign -dvvv "${app}" 2>&1)"
+		print -r -- "${app_details}" | grep -q '^Authority=Developer ID Application:'
+		print -r -- "${app_details}" | grep -q 'flags=.*runtime'
+		app_team="$(print -r -- "${app_details}" | sed -n 's/^TeamIdentifier=//p')"
+		[[ -n "${app_team}" && "${app_team}" != "not set" ]]
+		for benchmark in "${resources}"/mechana_*_benchmark(N); do
+			local benchmark_team=""
+			benchmark_team="$(/usr/bin/codesign -dvvv "${benchmark}" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+			[[ "${benchmark_team}" == "${app_team}" ]]
+		done
+	fi
 }
 
 sign_path() {
@@ -102,6 +127,7 @@ package_architecture() {
 	sign_path "${staging}/benchmarks/Run Benchmarks.app/Contents/Resources/${architecture}/mechana_reverb_benchmark"
 	sign_path "${staging}/benchmarks/Run Benchmarks.app/Contents/Resources/${architecture}/mechana_octave_fuzz_benchmark"
 	sign_path "${staging}/benchmarks/Run Benchmarks.app"
+	validate_benchmark_app "${staging}/benchmarks/Run Benchmarks.app" "${architecture}"
 	/usr/bin/ditto -c -k --keepParent "${staging}/echo-au/Mechana Echo.component" \
 		"${archives}/Mechana-Echo-AU-macOS-${suffix}.zip"
 	shasum -a 256 "${archives}/Mechana-Echo-AU-macOS-${suffix}.zip" \
@@ -112,8 +138,13 @@ package_architecture() {
 		"${archives}/Mechana-Reverb-AU-macOS-${suffix}.zip"
 	/usr/bin/ditto -c -k --keepParent "${staging}/octave-fuzz-au/Mechana Octave Fuzz.component" \
 		"${archives}/Mechana-Octave-Fuzz-AU-macOS-${suffix}.zip"
-	/usr/bin/ditto -c -k --keepParent "${staging}/benchmarks" \
-		"${archives}/Mechana-Effect-Benchmarks-macOS-${suffix}.zip"
+	(cd "${staging}" && COPYFILE_DISABLE=1 /usr/bin/zip -qry --symlinks \
+		"${archives}/Mechana-Effect-Benchmarks-macOS-${suffix}.zip" benchmarks)
+	/usr/bin/unzip -tq "${archives}/Mechana-Effect-Benchmarks-macOS-${suffix}.zip"
+	if /usr/bin/zipinfo -1 "${archives}/Mechana-Effect-Benchmarks-macOS-${suffix}.zip" | grep -q '/\._'; then
+		print -u2 "Benchmark archive contains AppleDouble metadata"
+		return 1
+	fi
 }
 
 cmake -E remove_directory "${TARGET}"

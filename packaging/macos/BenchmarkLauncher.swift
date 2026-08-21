@@ -7,8 +7,21 @@ import AppKit
 final class BenchmarkLauncher: NSObject, NSApplicationDelegate {
     private var process: Process?
     private let outputView = NSTextView()
+    private var awaitingStableRelaunch = false
+
+    static func main() {
+        let application = NSApplication.shared
+        let delegate = BenchmarkLauncher()
+        delegate.awaitingStableRelaunch = delegate.relaunchFromStableLocationIfNeeded()
+        application.delegate = delegate
+        application.run()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if awaitingStableRelaunch {
+            return
+        }
+
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 920, height: 680),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -36,6 +49,65 @@ final class BenchmarkLauncher: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    private func relaunchFromStableLocationIfNeeded() -> Bool {
+        let executableURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardized
+        let enclosingBundle = executableURL.deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = enclosingBundle.pathExtension == "app" ? enclosingBundle : Bundle.main.bundleURL
+        let temporaryRoot = URL(fileURLWithPath: NSTemporaryDirectory()).resolvingSymlinksInPath().path
+        let sourcePath = source.resolvingSymlinksInPath().path
+        let executablePath = executableURL.path
+        let hostedTemporarily = [sourcePath, executablePath].contains {
+            $0.hasPrefix(temporaryRoot + "/") || $0.contains("/var/folders/") || $0.contains("/AppTranslocation/")
+        }
+        guard hostedTemporarily else {
+            return false
+        }
+
+        do {
+            let applicationSupport = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let identifier = Bundle.main.bundleIdentifier ?? "dev.mechana.effect-benchmarks"
+            let installDirectory = applicationSupport
+                .appendingPathComponent("Mechana", isDirectory: true)
+                .appendingPathComponent("Effect Benchmarks", isDirectory: true)
+                .appendingPathComponent(identifier, isDirectory: true)
+            try FileManager.default.createDirectory(at: installDirectory, withIntermediateDirectories: true)
+
+            let destination = installDirectory.appendingPathComponent("Mechana Effect Benchmarks.app", isDirectory: true)
+            let staging = installDirectory.appendingPathComponent(
+                ".Mechana Effect Benchmarks.installing-\(UUID().uuidString).app",
+                isDirectory: true
+            )
+            try FileManager.default.copyItem(at: source, to: staging)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.moveItem(at: staging, to: destination)
+
+            let configuration = NSWorkspace.OpenConfiguration()
+            NSWorkspace.shared.openApplication(at: destination, configuration: configuration) { _, error in
+                if let error {
+                    let alert = NSAlert(error: error)
+                    alert.messageText = "Unable to reopen Mechana Effect Benchmarks"
+                    alert.runModal()
+                }
+                NSApp.terminate(nil)
+            }
+            return true
+        } catch {
+            let alert = NSAlert(error: error)
+            alert.messageText = "Unable to install Mechana Effect Benchmarks in a stable location"
+            alert.informativeText = "Extract the ZIP before opening the app, or move it to Applications and try again."
+            alert.runModal()
+            return false
+        }
     }
 
     private func runBenchmarks() {
