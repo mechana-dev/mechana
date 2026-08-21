@@ -96,7 +96,34 @@ final class MacAudioOutput {
 		if (device.uid() != null)
 			command.add(device.uid());
 		Process process = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start();
-		return new CoreAudioSink(process, new BufferedOutputStream(process.getOutputStream(), 131_072));
+		try {
+			awaitReady(process);
+			return new CoreAudioSink(process, new BufferedOutputStream(process.getOutputStream(), 131_072));
+		} catch (IOException failure) {
+			process.destroyForcibly();
+			throw failure;
+		}
+	}
+
+	private static void awaitReady(Process process) throws IOException {
+		long deadline = System.nanoTime() + COMMAND_TIMEOUT.toNanos();
+		while (System.nanoTime() < deadline) {
+			if (process.getInputStream().available() > 0) {
+				String response = new String(process.getInputStream().readNBytes(6), StandardCharsets.UTF_8);
+				if ("READY\n".equals(response))
+					return;
+				throw new IOException("The selected macOS audio output returned an invalid startup response");
+			}
+			if (!process.isAlive())
+				throw new IOException("The selected macOS audio output could not be opened");
+			try {
+				Thread.sleep(10);
+			} catch (InterruptedException interrupted) {
+				Thread.currentThread().interrupt();
+				throw new IOException("Audio playback was interrupted", interrupted);
+			}
+		}
+		throw new IOException("Timed out while opening the selected macOS audio output");
 	}
 
 	private static Path helperPath() {
@@ -165,6 +192,13 @@ final class MacAudioOutput {
 			}
 			if (process.isAlive())
 				process.destroy();
+			try {
+				if (!process.waitFor(1, TimeUnit.SECONDS))
+					process.destroyForcibly();
+			} catch (InterruptedException interrupted) {
+				Thread.currentThread().interrupt();
+				process.destroyForcibly();
+			}
 		}
 
 		private void signal(String signal) {

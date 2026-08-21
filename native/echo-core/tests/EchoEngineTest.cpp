@@ -58,7 +58,7 @@ int main() {
         parameters.mix = 1.0F;
         parameters.feedback = 0.5F;
         auto output = render(1, parameters);
-        require(std::abs(output[0][0]) < 1.0e-6F, "100% wet mix leaked dry impulse");
+        require(std::abs(output[0][0] - 1.0F) < 1.0e-6F, "100% Mix must retain unity dry signal");
         require(std::abs(output[0][100] - 1.0F) < 1.0e-5F, "first echo timing or gain changed");
         const auto coefficient = mechana::echo::feedbackCoefficient(0.5F);
         require(std::abs(output[0][200] - coefficient) < 1.0e-5F, "feedback mapping changed");
@@ -71,8 +71,8 @@ int main() {
                 "0% mix must be dry only");
         parameters.mix = 0.5F;
         output = render(1, parameters);
-        require(std::abs(output[0][0] - 0.5F) < 1.0e-6F && std::abs(output[0][100] - 0.5F) < 1.0e-5F,
-                "50% mix must use a linear crossfade");
+        require(std::abs(output[0][0] - 1.0F) < 1.0e-6F && std::abs(output[0][100] - 0.5F) < 1.0e-5F,
+                "50% Mix must retain unity dry and add half-level Echo");
 
         mechana::audio::DryWetMixer mixer;
         mixer.prepare(1'000.0, 10.0);
@@ -80,11 +80,11 @@ int main() {
         mixer.setMix(1.0F);
         auto previousWet = 0.0F;
         for (int sample = 0; sample < 200; ++sample) {
-            const auto gains = mixer.next();
+            const auto gains = mixer.nextAdditive();
             require(gains.wet >= previousWet && gains.wet - previousWet < 0.1F,
                     "Mix automation was not click-smoothed");
-            require(std::abs(gains.dry + gains.wet - 1.0F) < 1.0e-6F,
-                    "smoothed Mix violated linear coefficient sum");
+            require(std::abs(gains.dry - 1.0F) < 1.0e-6F,
+                    "smoothed additive Mix attenuated the dry signal");
             previousWet = gains.wet;
         }
         require(previousWet > 0.99F, "Mix smoothing did not converge");

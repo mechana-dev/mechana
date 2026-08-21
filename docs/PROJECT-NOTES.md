@@ -2239,6 +2239,15 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added a development installer that refuses stale packages, verifies build identity,
   clears quarantine, performs atomic replacement with rollback, refreshes discovery,
   and treats complete `auval` success as part of installation.
+## 2026-08-21 00:42:30 EDT — Make Echo Mix additive
+
+- Changed native and file-rendered Echo mixing to retain the direct signal at unity
+  while Mix scales only the delayed signal. Before the first repeat arrives, engaged
+  Echo now produces the exact dry input at every nonzero Mix setting.
+- Preserved 10 ms Mix smoothing, updated legacy Wet/Dry migration to a unity-dry
+  `Wet / Dry` ratio, and added native and Java regressions for additive endpoints.
+- Kept output headroom and peak protection as a separate follow-up concern; additive
+  dry plus Echo can exceed unity on correlated peaks.
 
 ## 2026-08-21 01:10:00 EDT — Stabilize and verify the benchmark application
 
@@ -2249,3 +2258,42 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Changed benchmark ZIP creation to suppress and reject AppleDouble metadata.
 - Added release gates requiring a Developer ID Application signature, hardened
   runtime, and one matching team identity across the app and every nested benchmark.
+
+## 2026-08-21 01:17:41 EDT — Isolate preview seek generations
+
+- Prevented a scrub restart from reactivating the cancellation state of the preview
+  it replaces. Stale Core Audio helper failures, cleanup, and completion callbacks
+  can no longer surface a `Broken pipe` dialog or overwrite the replacement session.
+- Added a regression that holds the replaced sink past the restart timeout, then
+  releases its simulated broken pipe while the replacement preview remains active.
+
+## 2026-08-21 01:36:15 EDT — Handshake Core Audio preview startup
+
+- Traced the remaining Intel/Rosetta seek failure to the replacement native helper
+  exiting while the Java producer was already writing PCM. The helper now confirms
+  that its Core Audio device and buffers are ready before Java returns the sink.
+- Made helper cleanup wait boundedly for process termination, preventing rapid seeks
+  from overlapping the old and replacement Core Audio device lifecycles.
+
+## 2026-08-21 01:45:00 EDT — Isolate Echo preview seek generations
+
+- The remaining MBA reproduction was specific to Echo preview, which uses the
+  direct modeled-audio player rather than the Reverb preview player fixed earlier.
+- Echo seek restarts now isolate playback generations and wait boundedly for the
+  replaced thread, preventing its late broken pipe or cleanup from affecting the
+  replacement preview. Added a regression that reproduces that exact stale-write race.
+
+## 2026-08-21 — Record the Mechana Audio extraction checkpoint
+
+- Designated annotated tag `architecture-baseline-1.3` as the last Mechana
+  monorepo checkpoint before production audio moves to Mechana Audio.
+- Included merged Echo additive-Mix PR #68 and preview-seek stability PR #70.
+  Benchmark launch-stability PR #69 remains intentionally unmerged pending its
+  native Intel release-artifact validation and is not part of the checkpoint.
+- The checkpoint retains production audio as authoritative in Mechana until the
+  private `mechana-dev/mechana-audio` repository is created, history is pushed,
+  and the extracted repository passes independent verification. No source removal
+  is authorized before those conditions are met.
+- The extraction must omit private calibration/reference media, including the
+  tracked measured `scott-rvb-first-pass-ir.wav`; prior Apache-2.0 grants remain
+  effective and no proprietary relicensing is implied by a private repository.

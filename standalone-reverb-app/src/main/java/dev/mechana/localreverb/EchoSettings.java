@@ -46,8 +46,9 @@ record EchoSettings(Model model, double delayMilliseconds, double feedback, doub
 	}
 
 	static double mixFromLegacy(double wet, double dry) {
-		double total = Math.max(0, wet) + Math.max(0, dry);
-		return total > 0 ? Math.max(0, wet) / total : 0;
+		double nonnegativeWet = Math.max(0, wet);
+		double nonnegativeDry = Math.max(0, dry);
+		return nonnegativeDry > 0 ? Math.min(1, nonnegativeWet / nonnegativeDry) : Math.min(1, nonnegativeWet);
 	}
 
 	private static boolean range(double value, double minimum, double maximum) {
