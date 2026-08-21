@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /**
@@ -22,43 +23,60 @@ import java.util.function.Consumer;
 final class WavPreviewPlayer implements AutoCloseable {
 	private static final int BLOCK = 1_024;
 	private final AtomicBoolean stopped = new AtomicBoolean(true);
+	private final AtomicLong generation = new AtomicLong();
 	private final Object pauseLock = new Object();
 	private volatile boolean paused;
 	private volatile boolean looping;
 	private volatile boolean bypassed;
 	private volatile EchoSettings liveSettings = EchoSettings.defaults(EchoSettings.Model.TAPE);
 	private volatile ReverbPreviewPlayer.AudioSink sink;
+	private volatile Thread playbackThread;
 	private volatile ReverbPreviewPlayer.AudioSinkFactory sinkFactory = ReverbPreviewPlayer.javaSoundSink();
 	private volatile Consumer<ReverbPreviewPlayer.Position> positionListener = ignored -> {
 	};
 
 	void play(Path source, EchoSettings settings, double startFraction, Consumer<ReverbPreviewPlayer.State> state,
 			Consumer<String> failure) {
+		Thread previous = playbackThread;
 		stop();
+		if (previous != null)
+			try {
+				previous.join(1_000);
+			} catch (InterruptedException interrupted) {
+				Thread.currentThread().interrupt();
+				failure.accept("Could not stop the previous preview");
+				return;
+			}
+		long session = generation.incrementAndGet();
 		liveSettings = Objects.requireNonNull(settings, "settings");
 		stopped.set(false);
 		paused = false;
-		Thread.ofVirtual().name("mechana-echo-preview").start(() -> {
+		Thread thread = Thread.ofVirtual().name("mechana-echo-preview").unstarted(() -> {
 			state.accept(ReverbPreviewPlayer.State.PREPARING);
 			try {
 				double position = startFraction;
 				do {
-					stream(source, position, state);
+					stream(source, position, state, session);
 					position = 0;
-				} while (looping && !stopped.get());
-				if (!stopped.get())
+				} while (looping && active(session));
+				if (active(session))
 					state.accept(ReverbPreviewPlayer.State.FINISHED);
 			} catch (IOException | RuntimeException problem) {
-				if (!stopped.get())
+				if (active(session))
 					failure.accept(problem.getMessage());
 			} finally {
-				stopped.set(true);
-				sink = null;
+				if (generation.get() == session) {
+					stopped.set(true);
+					sink = null;
+					playbackThread = null;
+				}
 			}
 		});
+		playbackThread = thread;
+		thread.start();
 	}
 
-	private void stream(Path sourcePath, double startFraction, Consumer<ReverbPreviewPlayer.State> state)
+	private void stream(Path sourcePath, double startFraction, Consumer<ReverbPreviewPlayer.State> state, long session)
 			throws IOException {
 		Path temporaryDirectory = Files.createTempDirectory("mechana-echo-preview-");
 		Path converted = temporaryDirectory.resolve("dry.wav");
@@ -75,11 +93,13 @@ final class WavPreviewPlayer implements AutoCloseable {
 				reader.seekFrame(position);
 				EchoProcessor processor = new EchoProcessor(format.sampleRate(), format.channels());
 				try (ReverbPreviewPlayer.AudioSink output = sinkFactory.open(format.sampleRate(), format.channels())) {
+					if (!active(session))
+						return;
 					sink = output;
 					output.start();
 					state.accept(ReverbPreviewPlayer.State.PLAYING);
-					process(reader, processor, output, format, position, audibleStart, totalFrames);
-					if (!stopped.get())
+					process(reader, processor, output, format, position, audibleStart, totalFrames, session);
+					if (active(session))
 						output.drain();
 				}
 			}
@@ -90,10 +110,11 @@ final class WavPreviewPlayer implements AutoCloseable {
 	}
 
 	private void process(WavFile.Reader reader, EchoProcessor processor, ReverbPreviewPlayer.AudioSink output,
-			WavFile.Format format, long position, long audibleStart, long totalFrames) throws IOException {
+			WavFile.Format format, long position, long audibleStart, long totalFrames, long session)
+			throws IOException {
 		double[][] samples = new double[format.channels()][BLOCK];
 		byte[] pcm = new byte[BLOCK * format.channels() * 2];
-		while (!stopped.get() && position < totalFrames) {
+		while (active(session) && position < totalFrames) {
 			waitWhilePaused();
 			int count = (int) Math.min(BLOCK, totalFrames - position);
 			for (double[] channel : samples)
@@ -172,6 +193,7 @@ final class WavPreviewPlayer implements AutoCloseable {
 	}
 
 	void stop() {
+		generation.incrementAndGet();
 		synchronized (pauseLock) {
 			stopped.set(true);
 			paused = false;
@@ -180,6 +202,13 @@ final class WavPreviewPlayer implements AutoCloseable {
 		ReverbPreviewPlayer.AudioSink active = sink;
 		if (active != null)
 			active.stop();
+		Thread thread = playbackThread;
+		if (thread != null)
+			thread.interrupt();
+	}
+
+	private boolean active(long session) {
+		return !stopped.get() && generation.get() == session;
 	}
 
 	boolean isActive() {

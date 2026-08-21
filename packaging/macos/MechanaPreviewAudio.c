@@ -152,13 +152,17 @@ static int play(const double sample_rate, const UInt32 channels, const char *dev
         }
     }
     const UInt32 capacity = 32768;
+    AudioQueueBufferRef buffers[3] = {NULL, NULL, NULL};
     for (int index = 0; index < 3; ++index) {
-        AudioQueueBufferRef buffer = NULL;
-        if (AudioQueueAllocateBuffer(queue, capacity, &buffer) != noErr) {
+        if (AudioQueueAllocateBuffer(queue, capacity, &buffers[index]) != noErr) {
             AudioQueueDispose(queue, true);
             return 5;
         }
-        fill_buffer(NULL, queue, buffer);
+    }
+    fputs("READY\n", stdout);
+    fflush(stdout);
+    for (int index = 0; index < 3; ++index) {
+        fill_buffer(NULL, queue, buffers[index]);
         if (playback_finished)
             break;
     }

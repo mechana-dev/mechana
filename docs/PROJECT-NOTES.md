@@ -2239,7 +2239,6 @@ cloud providers remain future direction; see `brain/current-state.md` and
 - Added a development installer that refuses stale packages, verifies build identity,
   clears quarantine, performs atomic replacement with rollback, refreshes discovery,
   and treats complete `auval` success as part of installation.
-
 ## 2026-08-21 00:42:30 EDT — Make Echo Mix additive
 
 - Changed native and file-rendered Echo mixing to retain the direct signal at unity
@@ -2249,3 +2248,27 @@ cloud providers remain future direction; see `brain/current-state.md` and
   `Wet / Dry` ratio, and added native and Java regressions for additive endpoints.
 - Kept output headroom and peak protection as a separate follow-up concern; additive
   dry plus Echo can exceed unity on correlated peaks.
+
+## 2026-08-21 01:17:41 EDT — Isolate preview seek generations
+
+- Prevented a scrub restart from reactivating the cancellation state of the preview
+  it replaces. Stale Core Audio helper failures, cleanup, and completion callbacks
+  can no longer surface a `Broken pipe` dialog or overwrite the replacement session.
+- Added a regression that holds the replaced sink past the restart timeout, then
+  releases its simulated broken pipe while the replacement preview remains active.
+
+## 2026-08-21 01:36:15 EDT — Handshake Core Audio preview startup
+
+- Traced the remaining Intel/Rosetta seek failure to the replacement native helper
+  exiting while the Java producer was already writing PCM. The helper now confirms
+  that its Core Audio device and buffers are ready before Java returns the sink.
+- Made helper cleanup wait boundedly for process termination, preventing rapid seeks
+  from overlapping the old and replacement Core Audio device lifecycles.
+
+## 2026-08-21 01:45:00 EDT — Isolate Echo preview seek generations
+
+- The remaining MBA reproduction was specific to Echo preview, which uses the
+  direct modeled-audio player rather than the Reverb preview player fixed earlier.
+- Echo seek restarts now isolate playback generations and wait boundedly for the
+  replaced thread, preventing its late broken pipe or cleanup from affecting the
+  replacement preview. Added a regression that reproduces that exact stale-write race.

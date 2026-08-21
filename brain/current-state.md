@@ -207,7 +207,13 @@ commercial/proprietary license has been chosen.
   plus its reverb tail until Stop; current live settings and selected IR carry into
   subsequent iterations. A preview timeline shows elapsed/total source time and
   supports drag or click seeking with hidden DSP pre-roll to rebuild convolution,
-  pre-delay, EQ, and limiter state before audible playback resumes.
+  pre-delay, EQ, and limiter state before audible playback resumes. Seek restarts
+  are generation-isolated, so a closing audio helper from the replaced preview
+  cannot report a stale broken-pipe error or overwrite the replacement's state.
+  The native Core Audio helper confirms device initialization before Java sends
+  PCM, and replaced helpers terminate boundedly before the new session takes over.
+  Echo seek restarts use the same generation isolation as Reverb, so an old Echo
+  helper cannot surface a stale broken-pipe failure after its replacement starts.
 - Preview and Apply peak protection use the same stereo-linked streaming gain
   limiter with 10 ms look-ahead and a smooth release. The normal Apply path no
   longer substitutes a whole-file gain, allowing preview captures and 24-bit
