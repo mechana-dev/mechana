@@ -2322,3 +2322,23 @@ cloud providers remain future direction; see `brain/current-state.md` and
   benchmarks, and audio-specific packaging from Mechana. Retained the pure-Java
   distributed reverb plugin as a deliberate platform reference and documented the
   future descriptor-driven `mechana-plugin-audio` adapter boundary.
+
+## 2026-08-21 — Verify the post-extraction product boundary
+
+- Regression-tested private Mechana Audio commit
+  `1e95ae98bfa14dee58aa28abf192d1a3280806e4` against the authoritative
+  `architecture-baseline-1.4` monorepo checkpoint at
+  `670459b41b1a861cdd25763c3e9db9afa4b01576` in isolated checkouts.
+- Both states built the Java Mechana Effects product and full native target graph
+  for arm64 and x86_64. All product Java tests passed, and all 16 native old/new,
+  architecture, and effect CTest combinations passed.
+- Deterministic Java renders for Reverb, Echo, Leslie, and Octave Fuzz were
+  byte-for-byte identical. Echo, Leslie, and Octave Fuzz Audio Unit executables
+  were also byte-for-byte identical per architecture.
+- The only intentional production-content difference is removal of the private
+  measured `scott-rvb-first-pass-ir.wav` and its Reverb preset entry. The five
+  distributable factory IRs and generated capture sweep are unchanged.
+- Confirmed that production DSP, Audio Units, standalone products, benchmarks,
+  and audio packaging are authoritative only in Mechana Audio. Mechana retains
+  the pure-Java distributed reverb reference plugin without duplicating the
+  production product stack.
